@@ -31,6 +31,13 @@ argon2 = { version = "0.5", default-features = false, features = ["alloc", "pass
 tower-sessions = { version = "0.15", default-features = false, features = ["memory-store"] }
 # Validation (M3)
 validator = { version = "0.19", features = ["derive"] }
+# Signed URLs (AUTH-012) — HMAC-SHA256 signatures over a canonical payload.
+# `hmac`/`sha2`/`hex` are already in the lock (via `jsonwebtoken`); `subtle`
+# supplies the constant-time comparison used for signature checks.
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+subtle = "2"
 # Macros (M0)
 syn = { version = "2", features = ["full"] }
 quote = "1"

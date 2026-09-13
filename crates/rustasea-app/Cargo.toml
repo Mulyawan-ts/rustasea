@@ -24,6 +24,16 @@ tower-http = { workspace = true, features = ["fs"] }
 # `tower_sessions::cookie::Cookie` parses the session cookie the auth
 # middleware reads; `rustasea-auth` builds the guard over the same 0.15 line.
 tower-sessions = { workspace = true }
+# `rustasea-mail` supplies the `Mailable`/`Mailer` contracts the email
+# verification flow (AUTH-014) renders and delivers through. The `rustasea`
+# facade does not re-export it, so it is a direct dependency.
+rustasea-mail = { path = "../rustasea-mail" }
+# `chrono` stamps the `email_verified_at` timestamp (RFC 3339).
+chrono = { workspace = true }
+# `sha2` + `hex` derive the `{hash}` segment of a signed verification URL
+# (SHA-256 of the user's email, lowercase hex).
+sha2 = { workspace = true }
+hex = { workspace = true }
 
 [dev-dependencies]
 # `ServiceExt::oneshot` drives the compiled router in route tests.

@@ -28,6 +28,18 @@ mod settings_flows;
 /// module so `settings_flows.rs` stays under the 500-line cap.
 mod settings_password;
 
+/// Registration-flow tests (AUTH-009), split into a sibling module so
+/// `tests.rs` stays well under the 500-line cap.
+mod registration;
+
+/// Password-confirmation (AUTH-011) and email-verification (AUTH-014) flow
+/// tests, split into a sibling module so `tests.rs` stays under the cap.
+mod confirmation_verification;
+
+/// Password-reset flow (AUTH-013) tests, split into a sibling module so
+/// `tests.rs` stays under the cap.
+mod password_reset;
+
 /// Build the served router with a throwaway state.
 fn app() -> Router {
     compile(table(), Arc::new(AppState::new("testing", true)))
@@ -193,20 +205,21 @@ async fn unverified_dashboard_redirects_to_verification_notice() {
     );
 }
 
-/// The POST flows that are genuinely still stubbed answer `501` with a clear
-/// message — no panic and no faked success. `/login` and `/logout` are now
-/// implemented, so they are covered separately below. Each request carries the
-/// CSRF token + a same-origin signal so the gate lets it reach the handler.
+/// The formerly-stubbed POST flows are now real: `/confirm-password`
+/// (AUTH-011) and `/email/verification-notification` (AUTH-014) no longer
+/// answer `501`. With no session guard/provider wired into the throwaway state
+/// they fail closed — the handlers redirect unauthenticated requests to
+/// `/login` — but the placeholder `501` is gone. Each request carries the CSRF
+/// token + a same-origin signal so the gate lets it reach the handler.
+///
+/// This replaces the previous `remaining_unimplemented_post_flows_return_501`
+/// assertion: the two flows it pinned as unimplemented are now implemented, so
+/// the old expectation is obsolete rather than a behaviour we still want.
 #[tokio::test]
-async fn remaining_unimplemented_post_flows_return_501() {
-    for uri in [
-        "/register",
-        "/confirm-password",
-        "/email/verification-notification",
-    ] {
-        let (status, _, body) = call(app(), csrf_same_origin(method_request("POST", uri))).await;
-        assert_eq!(status, StatusCode::NOT_IMPLEMENTED, "POST {uri}");
-        assert!(body.contains("not implemented"), "POST {uri} body: {body}");
+async fn formerly_stubbed_post_flows_are_no_longer_501() {
+    for uri in ["/confirm-password", "/email/verification-notification"] {
+        let (status, _, _) = call(app(), csrf_same_origin(method_request("POST", uri))).await;
+        assert_ne!(status, StatusCode::NOT_IMPLEMENTED, "POST {uri}");
     }
 }
 

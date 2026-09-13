@@ -1,36 +1,46 @@
-//! Auth routes — login, logout, registration, and password confirmation.
+//! Auth routes — login, logout, registration, password confirmation, and
+//! email verification.
 //!
-//! `POST /login` and `POST /logout` are implemented:
+//! `POST /login`, `POST /logout`, and `POST /register` are implemented here.
+//! Login throttles via the named `login` limiter, verifies against the async
+//! [`UserProvider`] seam, then sets the hardened session cookie and `303` →
+//! `[fortify].home`. Logout destroys the stored session and clears the cookie.
+//! Registration validates, creates the user, auto-logs them in, and `303` →
+//! `[fortify].home`, gated by `[fortify].features.registration` (off → `404`).
 //!
-//! * **Login** throttles first (named `login` limiter), verifies the submitted
-//!   credentials against the async [`UserProvider`] seam, and — on success —
-//!   sets the hardened session cookie and answers `303 See Other` → the
-//!   configured `[fortify].home`.
-//! * **Logout** destroys the stored session and clears the session cookie.
-//!
-//! The remaining POST routes (`/register`, `/confirm-password`,
-//! `/email/verification-notification`) still answer `501 Not Implemented`: no
-//! flow is faked, so a caller cannot mistake the scaffold for a working
-//! authentication surface.
+//! The password-confirmation flow (AUTH-011) lives in [`confirmation`] and the
+//! email-verification flow (AUTH-014) in [`verification`] — both split into
+//! submodules to keep this file under the 500-line cap. Every flow is real; no
+//! POST route answers a placeholder `501`.
 //!
 //! [`UserProvider`]: rustasea::auth::UserProvider
+
+/// Password-confirmation flow (AUTH-011).
+pub(crate) mod confirmation;
+/// Password-reset flow (AUTH-013).
+pub(crate) mod password_reset;
+/// Email-verification flow (AUTH-014).
+pub(crate) mod verification;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 
 use axum::extract::ConnectInfo;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
-use axum::response::{Html, Response};
+use axum::response::{Html, IntoResponse, Response};
 
+use rustasea::auth::verify::{Argon2Verifier, PasswordVerifier};
 use rustasea::auth::{
-    AuthError, Credentials, Guard, Limit, LimiterInput, RateLimiterRegistry, SessionCookieConfig,
-    SessionGuard, ThrottleConfig, ThrottleDecision, LOGIN,
+    AuthError, Credentials, Guard, Limit, LimiterInput, NewUserRecord, RateLimiterRegistry,
+    SessionCookieConfig, SessionGuard, ThrottleConfig, ThrottleDecision, LOGIN,
 };
 use rustasea::http::AppState;
 use rustasea::router::Router as RouteTable;
+use rustasea::validation::serde_json::{Map, Value};
+use rustasea::validation::{ErrorBag, PasswordPolicy, Rules, ValidationContext, ValidationError};
 
 use super::helpers::{field, fortify_config, json_error, parse_form, see_other, user_provider};
-use super::{not_implemented, session_id_from_headers};
+use super::session_id_from_headers;
 
 /// Login page markup (placeholder form).
 const LOGIN_HTML: &str = r#"<!DOCTYPE html>
@@ -57,26 +67,6 @@ const REGISTER_HTML: &str = r#"<!DOCTYPE html>
 <p><a href="/login">Already registered?</a></p>
 </main></body></html>"#;
 
-/// Password-confirmation page markup (placeholder form).
-const CONFIRM_HTML: &str = r#"<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Confirm password</title></head>
-<body><main><h1>Confirm password</h1>
-<form method="post" action="/confirm-password">
-<label>Password <input type="password" name="password" required></label>
-<button type="submit">Confirm</button>
-</form>
-</main></body></html>"#;
-
-/// Email-verification notice markup (placeholder).
-const VERIFY_EMAIL_HTML: &str = r#"<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Verify your email</title></head>
-<body><main><h1>Verify your email</h1>
-<p>We sent a verification link to your email address. Follow it to continue.</p>
-<form method="post" action="/email/verification-notification">
-<button type="submit">Resend verification email</button>
-</form>
-</main></body></html>"#;
-
 /// Detail used for both the unknown-email and wrong-password `422` responses.
 ///
 /// The two failure modes are deliberately byte-identical so a caller cannot
@@ -88,6 +78,15 @@ const MISSING_CREDENTIALS: &str = "The username and password fields are required
 
 /// Detail for a `500` when the auth backend cannot be resolved (fail closed).
 const AUTH_UNAVAILABLE: &str = "Authentication is temporarily unavailable.";
+
+/// Detail for a `500` when registration cannot be hashed or persisted.
+const REGISTER_UNAVAILABLE: &str = "Registration is temporarily unavailable.";
+
+/// Detail for the `404` returned when `[fortify].features.registration` is off.
+///
+/// The kit removes the register routes entirely when the feature is disabled;
+/// RustaSea's table is static, so a `404` is the closest honest analogue.
+const REGISTRATION_DISABLED: &str = "Registration is disabled.";
 
 /// Detail for a `500` when the named `login` limiter is not registered.
 const THROTTLE_MISCONFIGURED: &str = "Rate limiting is misconfigured.";
@@ -106,54 +105,52 @@ pub fn register(table: &mut RouteTable) {
         .named("register");
     table.post_action("/register", register_submit);
     table
-        .get_action("/confirm-password", confirm_page)
+        .get_action("/confirm-password", confirmation::confirm_page)
         .named("password.confirm");
-    table.post_action("/confirm-password", confirm_submit);
+    table.post_action("/confirm-password", confirmation::confirm_submit);
     table
-        .get_action("/verify-email", verify_email_page)
+        .get_action("/verify-email", verification::verify_email_page)
         .named("verification.notice");
-    table.post_action("/email/verification-notification", verify_email_resend);
+    table.post_action(
+        "/email/verification-notification",
+        verification::verify_email_resend,
+    );
+    table
+        .get_action(
+            "/email/verify/{user_id}/{hash}",
+            verification::verify_email_confirm,
+        )
+        .named("verification.verify");
+    table
+        .get_action("/forgot-password", password_reset::forgot_password_page)
+        .named("password.request");
+    table
+        .post_action("/forgot-password", password_reset::forgot_password_submit)
+        .named("password.email");
+    table
+        .get_action(
+            "/reset-password/{token}",
+            password_reset::reset_password_page,
+        )
+        .named("password.reset");
+    table
+        .post_action("/reset-password", password_reset::reset_password_submit)
+        .named("password.store");
 }
 
-/// GET /login — render the login form.
-///
-/// The markup is a static string: this scaffold ships no template directory
-/// (`resources/views/` has no `login.html`), so the page cannot render a
-/// submitted-error message yet. The gap is deliberate and out of scope here —
-/// the POST handler still answers with a machine-readable JSON error.
+/// GET /login — render the login form (static markup; no template dir ships).
 async fn login_page() -> Html<&'static str> {
     Html(LOGIN_HTML)
 }
 
 /// POST /login — throttle, verify credentials, set the session cookie.
 ///
-/// # Flow
-///
-/// 1. Resolve the [`SessionGuard`] from [`AppState`]; absent → `500` (fail
-///    closed, never a silent allow).
-/// 2. Parse the urlencoded body. The username field is `[fortify].username`
-///    (default `email`), so the field name is read from config rather than
-///    hardcoded.
-/// 3. Throttle via the named `login` limiter, keyed on the normalized username
-///    + peer IP. Denied → `429` with `Retry-After`.
-/// 4. Verify against the async [`UserProvider`]. On success, set the session
-///    cookie and `303 See Other` → `[fortify].home`.
-///
-/// # Status codes
-///
-/// * `303` — success; POST → GET redirect so the browser does not re-POST.
-/// * `422` — missing fields, or bad credentials (unknown email and wrong
-///   password are byte-identical).
-/// * `429` — rate limited (`Retry-After` header + JSON body).
-/// * `500` — auth backend unavailable or the limiter is misconfigured.
-///
-/// # Peer IP
-///
-/// The throttle bucket key is resolved by [`peer_ip`], which honours
-/// `X-Forwarded-For` **only** when the deployment declares trusted proxies
-/// (`AppState::security.trusted_proxies`; empty by default). With no trusted
-/// proxies the connection peer ([`ConnectInfo<SocketAddr>`]) is used verbatim,
-/// so a client that is not behind a trusted proxy cannot spoof its bucket.
+/// Resolve the [`SessionGuard`] (`500` if absent); parse the body (username
+/// field from `[fortify].username`); throttle via the named `login` limiter
+/// (`429` when denied); verify against the async [`UserProvider`], then set the
+/// session cookie and `303` → `[fortify].home`. Unknown email and wrong
+/// password are byte-identical (`422`). The throttle key is [`peer_ip`], which
+/// honours `X-Forwarded-For` only when the deployment trusts proxies.
 ///
 /// [`UserProvider`]: rustasea::auth::UserProvider
 async fn login_submit(
@@ -243,21 +240,13 @@ async fn login_submit(
 
 /// POST /logout — destroy the session and clear the session cookie.
 ///
-/// The session id is read from the request's session cookie; if present and a
-/// guard is wired, [`Guard::logout`] destroys the stored record. Errors are
-/// ignored (a missing/forged id, or a store hiccup, must never panic — the
-/// cookie is cleared regardless, so the browser ends up logged out).
-///
-/// # Why there is no `regenerateToken()` step
-///
-/// Laravel's third logout step, `Session::regenerateToken()`, rotates a
-/// session-stored CSRF token. RustaSea has no such token: it uses origin-aware
-/// [`PreventRequestForgery`](rustasea::auth::PreventRequestForgery)
-/// (`Sec-Fetch-Site` + an allow-list) rather than a per-session CSRF token, so
-/// there is nothing to regenerate. A cheap correct analogue would be rotating
-/// the session id via [`Guard::refresh`] before clearing the cookie, but that
-/// is unnecessary once the record is destroyed and the cookie cleared, so it is
-/// intentionally not forced here.
+/// The session id is read from the request cookie; if present and a guard is
+/// wired, [`Guard::logout`] destroys the stored record. Errors are ignored (a
+/// missing/forged id or a store hiccup must never panic — the cookie is cleared
+/// regardless). Laravel's `Session::regenerateToken()` has no analogue here:
+/// RustaSea uses origin-aware
+/// [`PreventRequestForgery`](rustasea::auth::PreventRequestForgery) rather than
+/// a per-session CSRF token, so there is nothing to rotate.
 async fn logout(
     axum::extract::Extension(state): axum::extract::Extension<Arc<AppState>>,
     headers: HeaderMap,
@@ -282,43 +271,188 @@ async fn logout(
     response
 }
 
-/// GET /register — render the registration form.
-async fn register_page() -> Html<&'static str> {
-    Html(REGISTER_HTML)
+/// GET /register — render the form (gated like [`register_submit`]).
+async fn register_page() -> Response {
+    if registration_off() {
+        return not_found();
+    }
+    Html(REGISTER_HTML).into_response()
 }
 
-/// POST /register — unimplemented registration flow.
-async fn register_submit() -> Response {
-    not_implemented("Registration")
+/// POST /register — validate, create, auto-login, `303` home
+/// (`CreateNewUser::create` parity).
+///
+/// Gated by `[fortify].features.registration` (off → `404`; the kit removes the
+/// routes, a static table cannot, so `404` is the closest honest analogue).
+/// Email is `unique:users,email` with **no** `ignore_id` — any owner conflicts —
+/// answered from a pre-awaited [`find_by_email`](UserProvider::find_by_email)
+/// probe (the sync [`ValidationContext`] cannot await). Failure → `422`
+/// [`ErrorBag`]; success → hash, [`UserProvider::create`] with
+/// `email_verified_at = None` (a fresh user lands on `/verify-email`),
+/// auto-login, cookie, `303` → `[fortify].home`. A persisted race
+/// ([`AuthError::UserExists`]) → `422` `email`. No `register` limiter (kit
+/// parity). [`UserProvider`]: rustasea::auth::UserProvider
+async fn register_submit(
+    axum::extract::Extension(state): axum::extract::Extension<Arc<AppState>>,
+    body: axum::body::Bytes,
+) -> Response {
+    if registration_off() {
+        return not_found();
+    }
+    let Some(guard) = state.auth::<SessionGuard>() else {
+        return fail_closed(AUTH_UNAVAILABLE);
+    };
+    let config = fortify_config();
+    let fields = parse_form(&body);
+    let name = field(&fields, "name").unwrap_or_default().to_string();
+    let raw_email = field(&fields, "email").unwrap_or_default().trim();
+    let email = if config.lowercase_usernames {
+        raw_email.to_lowercase()
+    } else {
+        raw_email.to_string()
+    };
+    let password = field(&fields, "password").unwrap_or_default().to_string();
+
+    // A missing field is an absent key (fails `required`), not `""`.
+    let mut payload = Map::new();
+    for key in ["name", "password", "password_confirmation"] {
+        if let Some(value) = field(&fields, key) {
+            payload.insert(key.to_string(), Value::String(value.to_string()));
+        }
+    }
+    if field(&fields, "email").is_some() {
+        payload.insert("email".to_string(), Value::String(email.clone()));
+    }
+    // Pre-await the one uniqueness probe the sync context cannot await; a
+    // lookup error becomes `None` (unavailable), which `is_unique` fails closed.
+    let provider = user_provider();
+    let context = RegistrationContext {
+        queried_email: email.clone(),
+        unique: provider
+            .find_by_email(&email)
+            .await
+            .ok()
+            .map(|found| found.is_none()),
+    };
+    let rules = Rules::new()
+        .password_policy(PasswordPolicy::production())
+        .field("name", "required|string|max:255")
+        .field("email", "required|string|email|max:255|unique:users,email")
+        .field("password", "required|string|password|confirmed");
+    if let Err(bag) = rules.validate_with(&Value::Object(payload), &context) {
+        return validation_error(bag);
+    }
+    let Ok(hash) = Argon2Verifier::new().hash(&password) else {
+        return fail_closed(REGISTER_UNAVAILABLE);
+    };
+    match provider
+        .create(NewUserRecord::new(name, email.clone(), hash))
+        .await
+    {
+        Ok(_) => {}
+        // A collision the probe missed (a concurrent write): same shape as `unique`.
+        Err(AuthError::UserExists { .. }) => {
+            return field_error("email", "unique", "The email has already been taken.");
+        }
+        Err(_) => return fail_closed(REGISTER_UNAVAILABLE),
+    }
+    let credentials = Credentials { email, password };
+    match guard
+        .login_with_provider(provider.as_ref(), &credentials)
+        .await
+    {
+        Ok(token) => {
+            let cookie = guard.cookie().build_cookie(token.access_token);
+            let mut response = see_other(&config.home);
+            if let Ok(value) = HeaderValue::try_from(cookie.to_string()) {
+                response.headers_mut().append(header::SET_COOKIE, value);
+            }
+            response
+        }
+        Err(_) => fail_closed(REGISTER_UNAVAILABLE),
+    }
 }
 
-/// GET /confirm-password — render the password-confirmation form.
-async fn confirm_page() -> Html<&'static str> {
-    Html(CONFIRM_HTML)
+/// `500` fail-closed response.
+fn fail_closed(detail: &str) -> Response {
+    json_error(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "AuthError::Unavailable",
+        detail,
+    )
 }
 
-/// POST /confirm-password — unimplemented confirmation flow.
-async fn confirm_submit() -> Response {
-    not_implemented("Password confirmation")
+/// Whether registration is disabled (test override included).
+fn registration_off() -> bool {
+    #[cfg(test)]
+    if REGISTRATION_OFF.load(std::sync::atomic::Ordering::SeqCst) {
+        return true;
+    }
+    !fortify_config().features.registration
 }
 
-/// GET /verify-email — render the verification notice.
-async fn verify_email_page() -> Html<&'static str> {
-    Html(VERIFY_EMAIL_HTML)
+/// Test-only registration-disable flag; see [`set_registration_disabled`].
+#[cfg(test)]
+static REGISTRATION_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Force the registration feature gate off (tests serialize via the lock).
+#[cfg(test)]
+pub(crate) fn set_registration_disabled(off: bool) {
+    REGISTRATION_OFF.store(off, std::sync::atomic::Ordering::SeqCst);
 }
 
-/// POST /email/verification-notification — unimplemented resend flow.
-async fn verify_email_resend() -> Response {
-    not_implemented("Verification email resend")
+/// `404` returned when registration is disabled.
+fn not_found() -> Response {
+    json_error(
+        StatusCode::NOT_FOUND,
+        "RegistrationDisabled",
+        REGISTRATION_DISABLED,
+    )
+}
+
+/// `422` carrying an [`ErrorBag`] in the documented shape (`api-validation.md`).
+fn validation_error(bag: ErrorBag) -> Response {
+    (
+        StatusCode::UNPROCESSABLE_ENTITY,
+        axum::Json(bag.into_json_body()),
+    )
+        .into_response()
+}
+
+/// `422` with a single field error in the [`validation_error`] shape.
+fn field_error(field: &str, code: &str, message: &str) -> Response {
+    let mut bag = ErrorBag::new();
+    bag.add(field, ValidationError::new(code, message));
+    validation_error(bag)
+}
+
+/// [`ValidationContext`] adapter over the pre-awaited registration probe.
+/// Registration passes **no** `ignore_id`, so **any** existing owner conflicts.
+/// Fail-closed: an unavailable probe or a mismatched value yields `None`.
+struct RegistrationContext {
+    /// The email the probe was resolved for; other values fail closed.
+    queried_email: String,
+    /// `Some(true)` = free, `Some(false)` = owned, `None` = unavailable.
+    unique: Option<bool>,
+}
+
+impl ValidationContext for RegistrationContext {
+    fn is_unique(
+        &self,
+        table: &str,
+        column: &str,
+        value: &str,
+        _ignore_id: Option<&str>,
+    ) -> Option<bool> {
+        (table == "users" && column == "email" && value == self.queried_email)
+            .then_some(self.unique)
+            .flatten()
+    }
 }
 
 /// Process-wide named-limiter registry, built once from `[fortify.limiters]`.
-///
-/// The registry is shared so its in-memory buckets accumulate across requests
-/// (a per-request registry would reset the window and never throttle). It is a
-/// module static because the router bootstrap is out of this change's scope and
-/// [`AppState`] carries a single type-erased auth slot already used by the
-/// guard.
+/// Shared so its in-memory buckets accumulate across requests; a per-request
+/// registry would reset the window and never throttle.
 fn login_registry() -> &'static RateLimiterRegistry {
     static REGISTRY: OnceLock<RateLimiterRegistry> = OnceLock::new();
     REGISTRY.get_or_init(|| RateLimiterRegistry::from_fortify_config(&fortify_config().limiters))
@@ -326,25 +460,9 @@ fn login_registry() -> &'static RateLimiterRegistry {
 
 /// Resolve the throttle peer key from connection info and `X-Forwarded-For`.
 ///
-/// # Trust decision
-///
-/// The app does not hand-roll the proxy decision: it delegates to the crate's
-/// single source of truth, [`ThrottleConfig::key_for_peer`], so the login
-/// handler and the [`ThrottleLayer`](rustasea::auth::ThrottleLayer) middleware
-/// can never disagree about when `X-Forwarded-For` is honoured. Concretely:
-///
-/// * **No trusted proxies** (`trusted_proxies` empty — the default) →
-///   `X-Forwarded-For` is **ignored** and the connection peer wins, so a client
-///   that is not behind a trusted proxy cannot spoof its throttle bucket.
-/// * **Trusted proxies configured** → the first hop of `X-Forwarded-For` is
-///   used, falling back to the connection peer when the header is absent or
-///   empty.
-///
-/// The connection peer is [`ConnectInfo<SocketAddr>`] when the router provides
-/// it, otherwise the [`UNKNOWN_PEER`] constant — so the throttle always gets a
-/// finite bucket instead of failing open. A deployment behind a proxy that is
-/// *not* in `trusted_proxies` must have that proxy strip client-supplied
-/// `X-Forwarded-For`, since this handler will ignore the header entirely.
+/// Delegates to [`ThrottleConfig::key_for_peer`]: with no trusted proxies
+/// `X-Forwarded-For` is ignored and the connection peer wins; with trusted
+/// proxies the first forwarded hop is used, falling back to the peer.
 pub(crate) fn peer_ip(
     headers: &HeaderMap,
     connect: Option<ConnectInfo<SocketAddr>>,

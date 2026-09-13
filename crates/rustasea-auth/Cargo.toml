@@ -16,9 +16,14 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 jsonwebtoken = { workspace = true }
 argon2 = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+subtle = { workspace = true }
 tower = { workspace = true }
 axum = { workspace = true }
 tower-sessions = { workspace = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time"] }
+subtle = { workspace = true }

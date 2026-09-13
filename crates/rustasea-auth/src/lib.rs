@@ -20,8 +20,10 @@ pub mod csrf;
 pub mod error;
 pub mod guard;
 pub mod jwt;
+pub mod password_reset;
 pub mod session;
 pub mod session_cookie;
+pub mod signed_url;
 pub mod throttle;
 pub mod users;
 pub mod verification;
@@ -37,8 +39,13 @@ pub use csrf::{CsrfLayer, PreventRequestForgery, SecFetchSite};
 pub use error::{AuthConfigError, AuthError, CsrfError, SerializationError, ThrottleError};
 pub use guard::{Auth, AuthManager, AuthUser, Credentials, Guard, GuardRegistrar, Token};
 pub use jwt::{JwtClaims, JwtConfig, JwtGuard};
+pub use password_reset::{
+    generate_token, DenyAllResetStore, MemoryPasswordResetStore, PasswordResetRecord,
+    PasswordResetStore, RESET_TOKEN_LEN,
+};
 pub use session::{DeserializationAllowList, SessionGuard, SessionPolicy, SessionUser};
 pub use session_cookie::SessionCookieConfig;
+pub use signed_url::{SignedUrlError, SignedUrlSigner};
 pub use throttle::defaults::{
     kit_limiters, login_definition, normalize_username, passkeys_definition, two_factor_definition,
     LOGIN, PASSKEYS, TWO_FACTOR,

@@ -243,18 +243,6 @@ pub(crate) fn resources_root() -> PathBuf {
         .join("resources")
 }
 
-/// Minimal `501 Not Implemented` response for flows that are not wired yet.
-///
-/// Shared by the concern tables so an unimplemented POST flow returns a clear,
-/// non-panicking response instead of a `todo!()`.
-pub(crate) fn not_implemented(flow: &str) -> Response {
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        format!("{flow} is not implemented in this scaffold yet."),
-    )
-        .into_response()
-}
-
 /// Register the named middleware the concern tables declare.
 fn register_middleware(table: &mut RouteTable) {
     table.register_middleware(AUTH, |method_router| {

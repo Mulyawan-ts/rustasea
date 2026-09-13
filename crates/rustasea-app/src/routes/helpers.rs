@@ -178,11 +178,12 @@ pub(crate) fn json_error(status: StatusCode, code: &str, detail: &str) -> Respon
 
 /// Whether `(method, path)` is a mutating route gated by the CSRF guard.
 ///
-/// Matched by exact method + path so the guard is scoped to the seven known
-/// write routes and can never leak onto unrelated routes — the guard runs as a
-/// global axum layer (see [`super::with_csrf`]), so this predicate *is* the
-/// scope. Covers the implemented writes (`/login`, `/logout`, the settings
-/// `PATCH`/`PUT`) and the still-`501` POST stubs, for consistency.
+/// Matched by exact method + path so the guard is scoped to the known write
+/// routes and can never leak onto unrelated routes — the guard runs as a global
+/// axum layer (see [`super::with_csrf`]), so this predicate *is* the scope.
+/// Covers the implemented writes (`/login`, `/logout`, the settings
+/// `PATCH`/`PUT`, the password-reset writes) and the still-`501` POST stubs, for
+/// consistency.
 pub(crate) fn csrf_protected(method: &axum::http::Method, path: &str) -> bool {
     matches!(
         (method.as_str(), path),
@@ -191,6 +192,8 @@ pub(crate) fn csrf_protected(method: &axum::http::Method, path: &str) -> bool {
             | ("POST", "/register")
             | ("POST", "/confirm-password")
             | ("POST", "/email/verification-notification")
+            | ("POST", "/forgot-password")
+            | ("POST", "/reset-password")
             | ("PATCH", "/settings/profile")
             | ("PUT", "/settings/password")
     )

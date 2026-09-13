@@ -100,6 +100,9 @@ fn app_with_seeded_user() -> Router {
 /// full flow — throttle, credential check, session cookie, `303` → `/dashboard`.
 #[tokio::test]
 async fn same_origin_login_still_authenticates_and_sets_cookie() {
+    // This test installs a process-wide provider, so it must serialize with
+    // every other provider-installing module through the shared lock.
+    let _lock = super::settings_flows::PROVIDER_LOCK.lock().await;
     let request = same_origin(post_form(
         "/login",
         "email=csrf-positive@example.com&password=s3cr3t-pass",
