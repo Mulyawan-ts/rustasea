@@ -5634,8 +5634,11 @@ name = "rustasea-testing"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "axum 0.7.9",
  "chrono",
  "dotenvy",
+ "http-body-util",
+ "rustasea-auth",
  "rustasea-cache",
  "rustasea-config",
  "rustasea-foundation",
@@ -5645,6 +5648,7 @@ dependencies = [
  "testcontainers",
  "thiserror 1.0.69",
  "tokio",
+ "tower",
  "uuid",
 ]
 

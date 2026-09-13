@@ -41,6 +41,17 @@ path = "lib.rs"
 name = "@@app_name@@"
 path = "main.rs"
 
+# `tests/feature/mod.rs` and `tests/unit/mod.rs` are the suite crate roots;
+# cargo does not auto-discover `tests/<dir>/mod.rs`, so both targets are
+# declared explicitly.
+[[test]]
+name = "feature"
+path = "tests/feature/mod.rs"
+
+[[test]]
+name = "unit"
+path = "tests/unit/mod.rs"
+
 [dependencies]
 rustasea = { version = "0.1", features = ["view"] }
 rustasea-view = "0.1"
@@ -57,6 +68,8 @@ default = []
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
+# `tower::ServiceExt::oneshot` drives the route-table smoke tests.
+tower = { version = "0.5", features = ["util"] }
 "##;
 
 const REACT_CARGO: &str = r##"[package]
@@ -73,6 +86,17 @@ path = "lib.rs"
 [[bin]]
 name = "@@app_name@@"
 path = "main.rs"
+
+# `tests/feature/mod.rs` and `tests/unit/mod.rs` are the suite crate roots;
+# cargo does not auto-discover `tests/<dir>/mod.rs`, so both targets are
+# declared explicitly.
+[[test]]
+name = "feature"
+path = "tests/feature/mod.rs"
+
+[[test]]
+name = "unit"
+path = "tests/unit/mod.rs"
 
 [dependencies]
 rustasea = { version = "0.1", features = ["inertia", "wasm-dioxus"] }
@@ -91,6 +115,8 @@ default = []
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
+# `tower::ServiceExt::oneshot` drives the route-table smoke tests.
+tower = { version = "0.5", features = ["util"] }
 "##;
 
 const VUE_CARGO: &str = r##"[package]
@@ -107,6 +133,17 @@ path = "lib.rs"
 [[bin]]
 name = "@@app_name@@"
 path = "main.rs"
+
+# `tests/feature/mod.rs` and `tests/unit/mod.rs` are the suite crate roots;
+# cargo does not auto-discover `tests/<dir>/mod.rs`, so both targets are
+# declared explicitly.
+[[test]]
+name = "feature"
+path = "tests/feature/mod.rs"
+
+[[test]]
+name = "unit"
+path = "tests/unit/mod.rs"
 
 [dependencies]
 rustasea = { version = "0.1", features = ["inertia", "wasm-leptos"] }
@@ -125,6 +162,8 @@ default = []
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
+# `tower::ServiceExt::oneshot` drives the route-table smoke tests.
+tower = { version = "0.5", features = ["util"] }
 "##;
 
 const LIVEWIRE_CARGO: &str = r##"[package]
@@ -141,6 +180,17 @@ path = "lib.rs"
 [[bin]]
 name = "@@app_name@@"
 path = "main.rs"
+
+# `tests/feature/mod.rs` and `tests/unit/mod.rs` are the suite crate roots;
+# cargo does not auto-discover `tests/<dir>/mod.rs`, so both targets are
+# declared explicitly.
+[[test]]
+name = "feature"
+path = "tests/feature/mod.rs"
+
+[[test]]
+name = "unit"
+path = "tests/unit/mod.rs"
 
 [dependencies]
 rustasea = { version = "0.1", features = ["view", "broadcast"] }
@@ -159,6 +209,8 @@ default = []
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
+# `tower::ServiceExt::oneshot` drives the route-table smoke tests.
+tower = { version = "0.5", features = ["util"] }
 "##;
 
 const RUSTASEA_TOML: &str = r##"# Application manifest consumed by RustaSea tooling.
