@@ -1,17 +1,33 @@
-//! Unit tests for typed `auth.toml` / `session.toml` parsing and guard wiring.
+//! Unit tests for typed `auth.toml` parsing, guard wiring, and the `AUTH_*`
+//! environment bridge.
 //!
-//! Uses throw-away temp directories fed to
+//! Session-specific coverage (cookie mapping, driver validation, and the
+//! `SESSION_*` environment bridge) lives in `config/session/tests.rs`. Uses
+//! throw-away temp directories fed to
 //! [`rustasea_config::ConfigLoader::load_from_dir`] so the real `config/`
-//! directory is never touched and the tests are hermetic.
+//! directory is never touched and the tests are hermetic. Environment-mutating
+//! cases hold the crate-wide [`ENV_LOCK`] so the process-global `AUTH_*` /
+//! `SESSION_*` variables stay deterministic under parallel execution.
 use super::*;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
-use tower_sessions::cookie::SameSite;
 
-/// Serializes tests that read or mutate process-global `SESSION_*` variables.
-static ENV_LOCK: Mutex<()> = Mutex::new(());
+/// Every `AUTH_*` variable the [`AuthConfig::apply_env`] bridge reads.
+const AUTH_ENV_KEYS: &[&str] = &[
+    "AUTH_GUARD",
+    "AUTH_PASSWORD_BROKER",
+    "AUTH_MODEL",
+    "AUTH_PASSWORD_RESET_TOKEN_TABLE",
+    "AUTH_PASSWORD_TIMEOUT",
+];
+
+/// Remove every `AUTH_*` override variable this module reads.
+fn clear_auth_env() {
+    for key in AUTH_ENV_KEYS {
+        std::env::remove_var(key);
+    }
+}
 
 /// Unique temporary directory removed when dropped.
 struct TempConfigDir {
@@ -74,25 +90,13 @@ expire = 60
 throttle = 60
 "#;
 
-/// Canonical `session.toml` body used across the positive tests.
+/// Minimal `session.toml` body so the loader always has both tables.
 const SESSION_TOML: &str = r#"
 [session]
 driver = "memory"
 lifetime = 120
-expire_on_close = false
-encrypt = false
-files = "storage/framework/sessions"
-connection = "default"
-table = "sessions"
-store = "default"
-lottery = [2, 100]
 cookie = "rustasea-session"
-path = "/"
-domain = ""
-secure = false
-http_only = true
 same_site = "lax"
-partitioned = false
 serialization = "json"
 "#;
 
@@ -109,6 +113,7 @@ fn loader_with(auth: &str, session: &str) -> (TempConfigDir, ConfigLoader) {
 #[test]
 fn parses_both_tomls_into_full_shape() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear_auth_env();
     let (_dir, loader) = loader_with(AUTH_TOML, SESSION_TOML);
 
     let auth = AuthConfig::from_loader(&loader).expect("auth parses");
@@ -124,177 +129,25 @@ fn parses_both_tomls_into_full_shape() {
     );
     assert_eq!(auth.passwords["users"].expire, 60);
     assert_eq!(auth.passwords["users"].throttle, 60);
-
-    let session = SessionConfig::from_loader(&loader).expect("session parses");
-    assert_eq!(session.driver, "memory");
-    assert_eq!(session.lifetime_minutes, 120);
-    assert_eq!(session.lottery, [2, 100]);
-    assert_eq!(session.cookie_name, "rustasea-session");
-    assert_eq!(session.same_site, "lax");
-    assert_eq!(session.serialization, "json");
 }
 
-/// A missing `[auth]` / `[session]` table yields the documented defaults.
+/// A missing `[auth]` table yields the documented defaults.
 #[test]
-fn missing_tables_yield_defaults() {
+fn missing_table_yields_defaults() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let (_dir, loader) = loader_with("# empty\n", "# empty\n");
+    clear_auth_env();
+    let (_dir, loader) = loader_with("# empty\n", SESSION_TOML);
     let auth = AuthConfig::from_loader(&loader).expect("auth defaults");
-    let session = SessionConfig::from_loader(&loader).expect("session defaults");
     assert_eq!(auth.default_guard(), "web");
     assert_eq!(auth.password_timeout, 10_800);
     assert!(auth.guards.is_empty());
-    assert_eq!(session.driver, "memory");
-    assert_eq!(session.lifetime_minutes, 120);
-    assert_eq!(session.cookie_name, "rustasea-session");
-}
-
-/// The session cookie is built with every configured flag.
-#[test]
-fn builds_cookie_from_config() {
-    let session = SessionConfig {
-        secure: true,
-        http_only: true,
-        same_site: "strict".to_string(),
-        path: "/app".to_string(),
-        domain: Some("example.com".to_string()),
-        ..SessionConfig::default()
-    };
-    let cookie = session.to_cookie_config().expect("cookie config");
-    assert_eq!(cookie.name, "rustasea-session");
-    assert!(cookie.secure);
-    assert!(cookie.http_only);
-    assert_eq!(cookie.same_site, SameSite::Strict);
-    assert_eq!(cookie.path, "/app");
-    assert_eq!(cookie.domain.as_deref(), Some("example.com"));
-
-    let built = cookie.build_cookie("sid");
-    assert_eq!(built.name(), "rustasea-session");
-    assert_eq!(built.secure(), Some(true));
-    assert_eq!(built.http_only(), Some(true));
-    assert_eq!(built.same_site(), Some(SameSite::Strict));
-    assert_eq!(built.path(), Some("/app"));
-    assert_eq!(built.domain(), Some("example.com"));
-}
-
-/// An empty domain string normalizes to host-only (`None`).
-#[test]
-fn empty_domain_is_host_only() {
-    let session = SessionConfig {
-        domain: Some(String::new()),
-        ..SessionConfig::default()
-    };
-    assert_eq!(session.normalized_domain(), None);
-    assert_eq!(
-        session.to_cookie_config().expect("cookie").domain,
-        None,
-        "blank domain must not be emitted"
-    );
-}
-
-/// The TTL is derived from the minute lifetime.
-#[test]
-fn ttl_derives_from_lifetime_minutes() {
-    let session = SessionConfig {
-        lifetime_minutes: 120,
-        ..SessionConfig::default()
-    };
-    assert_eq!(session.ttl_secs(), 7_200);
-
-    let session = SessionConfig {
-        lifetime_minutes: 0,
-        ..SessionConfig::default()
-    };
-    assert_eq!(session.ttl_secs(), 0);
-}
-
-/// `same_site` maps lax/strict/none case-insensitively.
-#[test]
-fn same_site_maps_all_variants() {
-    for (raw, expected) in [
-        ("lax", SameSite::Lax),
-        ("Strict", SameSite::Strict),
-        ("NONE", SameSite::None),
-    ] {
-        let session = SessionConfig {
-            same_site: raw.to_string(),
-            ..SessionConfig::default()
-        };
-        assert_eq!(session.same_site().expect("valid"), expected);
-    }
-}
-
-/// The policy prefix is derived from the cookie name with a `-session-` marker.
-#[test]
-fn policy_prefix_carries_session_marker() {
-    let session = SessionConfig::default();
-    let policy = session.to_policy().expect("policy");
-    assert_eq!(policy.prefix, "rustasea-session-");
-    assert!(policy.validate_prefix().is_ok());
-    assert_eq!(policy.user_key(), "rustasea-session-user");
-}
-
-/// An unrecognised `same_site` string is a typed error.
-#[test]
-fn invalid_same_site_is_typed_error() {
-    let session = SessionConfig {
-        same_site: "weird".to_string(),
-        ..SessionConfig::default()
-    };
-    let err = session.same_site().expect_err("rejected");
-    assert_eq!(err, AuthConfigError::InvalidSameSite("weird".to_string()));
-    assert_eq!(err.code(), "AuthConfigError::InvalidSameSite");
-    assert_eq!(
-        session.to_cookie_config().expect_err("rejected"),
-        AuthConfigError::InvalidSameSite("weird".to_string())
-    );
-}
-
-/// A non-`json` serialization is a typed error.
-#[test]
-fn non_json_serialization_is_typed_error() {
-    let session = SessionConfig {
-        serialization: "msgpack".to_string(),
-        ..SessionConfig::default()
-    };
-    let err = session.to_policy().expect_err("rejected");
-    assert_eq!(
-        err,
-        AuthConfigError::UnsupportedSerialization("msgpack".to_string())
-    );
-}
-
-/// A cookie name without the `-session-` marker is rejected by `to_policy`.
-#[test]
-fn cookie_name_without_marker_is_typed_error() {
-    let session = SessionConfig {
-        cookie_name: "rustasea_sess".to_string(),
-        ..SessionConfig::default()
-    };
-    assert!(matches!(
-        session.to_policy().expect_err("rejected"),
-        AuthConfigError::Invalid(_)
-    ));
-}
-
-/// An unimplemented session driver is rejected at load time.
-#[test]
-fn unimplemented_session_driver_is_typed_error() {
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let session_toml = SESSION_TOML.replace("driver = \"memory\"", "driver = \"redis\"");
-    let (_dir, loader) = loader_with(AUTH_TOML, &session_toml);
-    let err = SessionConfig::from_loader(&loader).expect_err("rejected");
-    assert_eq!(
-        err,
-        AuthConfigError::UnsupportedSessionDriver("redis".to_string())
-    );
-    assert_eq!(err.code(), "AuthConfigError::UnsupportedSessionDriver");
 }
 
 /// `provider_for` resolves the guard's declared provider.
 #[test]
 fn provider_for_resolves_declared_provider() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear_auth_env();
     let (_dir, loader) = loader_with(AUTH_TOML, SESSION_TOML);
     let auth = AuthConfig::from_loader(&loader).expect("auth parses");
     let provider = auth.provider_for("web").expect("provider resolves");
@@ -305,6 +158,7 @@ fn provider_for_resolves_declared_provider() {
 #[test]
 fn missing_guard_provider_is_typed_error() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear_auth_env();
     let auth_toml = r#"
 [auth.defaults]
 guard = "web"
@@ -330,6 +184,7 @@ provider = "users"
 #[test]
 fn guard_without_provider_is_typed_error() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear_auth_env();
     let auth_toml = r#"
 [auth.guards.api]
 driver = "token"
@@ -350,6 +205,7 @@ driver = "token"
 #[test]
 fn unknown_guard_is_typed_error() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear_auth_env();
     let (_dir, loader) = loader_with(AUTH_TOML, SESSION_TOML);
     let auth = AuthConfig::from_loader(&loader).expect("auth parses");
     assert_eq!(
@@ -358,76 +214,63 @@ fn unknown_guard_is_typed_error() {
     );
 }
 
-/// Every documented `SESSION_*` variable overrides its file counterpart.
+/// Every documented `AUTH_*` variable overrides its file counterpart.
 #[test]
-fn session_env_overrides_win_over_the_file() {
+fn auth_env_overrides_win_over_the_file() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    std::env::set_var("SESSION_DRIVER", "memory");
-    std::env::set_var("SESSION_LIFETIME", "45");
-    std::env::set_var("SESSION_COOKIE", "tenant-session");
-    std::env::set_var("SESSION_SECURE", "true");
-    std::env::set_var("SESSION_SAME_SITE", "strict");
+    clear_auth_env();
+    std::env::set_var("AUTH_GUARD", "api");
+    std::env::set_var("AUTH_PASSWORD_BROKER", "admins");
+    std::env::set_var("AUTH_MODEL", "App\\Models\\Admin");
+    std::env::set_var("AUTH_PASSWORD_RESET_TOKEN_TABLE", "admin_password_resets");
+    std::env::set_var("AUTH_PASSWORD_TIMEOUT", "3600");
 
     let (_dir, loader) = loader_with(AUTH_TOML, SESSION_TOML);
-    let session = SessionConfig::from_loader(&loader).expect("session parses");
+    let auth = AuthConfig::from_loader(&loader).expect("auth parses");
+    clear_auth_env();
 
-    std::env::remove_var("SESSION_DRIVER");
-    std::env::remove_var("SESSION_LIFETIME");
-    std::env::remove_var("SESSION_COOKIE");
-    std::env::remove_var("SESSION_SECURE");
-    std::env::remove_var("SESSION_SAME_SITE");
-
-    assert_eq!(session.driver, "memory");
-    assert_eq!(session.lifetime_minutes, 45);
-    assert_eq!(session.cookie_name, "tenant-session");
-    assert!(session.secure);
-    assert_eq!(session.same_site, "strict");
+    assert_eq!(auth.default_guard(), "api");
+    assert_eq!(auth.default_password_broker(), "admins");
+    assert_eq!(
+        auth.providers["users"].model.as_deref(),
+        Some("App\\Models\\Admin")
+    );
+    assert_eq!(auth.passwords["users"].table, "admin_password_resets");
+    assert_eq!(auth.password_timeout, 3_600);
 }
 
-/// A blank `SESSION_*` value is ignored and the file value survives.
+/// A blank `AUTH_*` value is ignored and the file value survives.
 #[test]
-fn session_blank_env_is_ignored() {
+fn auth_blank_env_is_ignored() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    std::env::set_var("SESSION_LIFETIME", "   ");
-    std::env::set_var("SESSION_COOKIE", "");
-    std::env::set_var("SESSION_SAME_SITE", "  ");
+    clear_auth_env();
+    std::env::set_var("AUTH_GUARD", "   ");
+    std::env::set_var("AUTH_MODEL", "");
+    std::env::set_var("AUTH_PASSWORD_TIMEOUT", "  ");
 
     let (_dir, loader) = loader_with(AUTH_TOML, SESSION_TOML);
-    let session = SessionConfig::from_loader(&loader).expect("session parses");
+    let auth = AuthConfig::from_loader(&loader).expect("auth parses");
+    clear_auth_env();
 
-    std::env::remove_var("SESSION_LIFETIME");
-    std::env::remove_var("SESSION_COOKIE");
-    std::env::remove_var("SESSION_SAME_SITE");
-
-    assert_eq!(session.lifetime_minutes, 120);
-    assert_eq!(session.cookie_name, "rustasea-session");
-    assert_eq!(session.same_site, "lax");
+    assert_eq!(auth.default_guard(), "web");
+    assert_eq!(
+        auth.providers["users"].model.as_deref(),
+        Some("App\\Models\\User")
+    );
+    assert_eq!(auth.password_timeout, 10_800);
 }
 
-/// A non-integer `SESSION_LIFETIME` is a typed invalid-config error.
+/// A non-integer `AUTH_PASSWORD_TIMEOUT` is a typed invalid-config error.
 #[test]
-fn session_lifetime_non_integer_is_typed_error() {
+fn auth_password_timeout_non_integer_is_typed_error() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    std::env::set_var("SESSION_LIFETIME", "soon");
+    clear_auth_env();
+    std::env::set_var("AUTH_PASSWORD_TIMEOUT", "soon");
 
     let (_dir, loader) = loader_with(AUTH_TOML, SESSION_TOML);
-    let err = SessionConfig::from_loader(&loader).expect_err("rejected");
+    let err = AuthConfig::from_loader(&loader).expect_err("rejected");
+    clear_auth_env();
 
-    std::env::remove_var("SESSION_LIFETIME");
-    assert!(matches!(err, AuthConfigError::Invalid(_)), "got {err}");
-    assert_eq!(err.code(), "AuthConfigError::Invalid");
-}
-
-/// A non-boolean `SESSION_SECURE` is a typed invalid-config error.
-#[test]
-fn session_secure_non_bool_is_typed_error() {
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    std::env::set_var("SESSION_SECURE", "maybe");
-
-    let (_dir, loader) = loader_with(AUTH_TOML, SESSION_TOML);
-    let err = SessionConfig::from_loader(&loader).expect_err("rejected");
-
-    std::env::remove_var("SESSION_SECURE");
     assert!(matches!(err, AuthConfigError::Invalid(_)), "got {err}");
     assert_eq!(err.code(), "AuthConfigError::Invalid");
 }

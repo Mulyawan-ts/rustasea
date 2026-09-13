@@ -59,12 +59,13 @@ const REQUIRED_CORE: &[&str] = &[
     "config/mail.toml",
     "config/services.toml",
     "config/storage.toml",
+    "config/fortify.toml",
     "config/mongo.toml",
     "storage/app/.gitkeep",
     "storage/logs/.gitkeep",
 ];
 
-/// The ten Laravel-parity config files every variant must emit (CFG-010).
+/// The eleven Laravel-parity config files every variant must emit (CFG-010, CFG-011).
 ///
 /// `config/mongo.toml` is the standalone MongoDB surface and `inertia.toml` is
 /// variant-specific, so both are asserted separately.
@@ -79,6 +80,7 @@ const REQUIRED_CONFIGS: &[&str] = &[
     "config/mail.toml",
     "config/services.toml",
     "config/storage.toml",
+    "config/fortify.toml",
 ];
 
 /// Monotonic counter keeping parallel tests on distinct temp paths.
@@ -350,14 +352,26 @@ fn assert_config_surface(files: &[rustasea_scaffold::RenderedFile], variant: &st
     assert!(find("config/mail.toml").contains("default = \"log\""));
     assert!(find("config/database.toml").contains("driver = \"sqlite\""));
     assert!(find("config/storage.toml").contains("default = \"local\""));
+    assert!(find("config/fortify.toml").contains("home = \"/dashboard\""));
     assert!(find("config/mongo.toml").contains("uri = \"mongodb://localhost:27017\""));
 }
 
 #[test]
-fn every_variant_emits_all_ten_configs() {
+fn every_variant_emits_all_twelve_configs() {
     for variant in StarterKitVariant::ALL {
         let files = Scaffold::new("my-app", variant).render().expect("render");
         assert_config_surface(&files, variant.as_str());
+
+        // Twelve `config/*.toml` files, plus `inertia.toml` for react/vue.
+        let config_count = files
+            .iter()
+            .filter(|file| file.path.starts_with("config/") && file.path.ends_with(".toml"))
+            .count();
+        let expected = if variant.uses_inertia() { 13 } else { 12 };
+        assert_eq!(
+            config_count, expected,
+            "unexpected config count for {variant}"
+        );
     }
 }
 
@@ -393,6 +407,22 @@ fn generated_env_example_covers_the_config_surface() {
         "CACHE_PREFIX=",
         "QUEUE_CONNECTION=",
         "SESSION_DRIVER=",
+        "SESSION_SECURE_COOKIE=",
+        "SESSION_EXPIRE_ON_CLOSE=",
+        "SESSION_ENCRYPT=",
+        "SESSION_PARTITIONED_COOKIE=",
+        "SESSION_HTTP_ONLY=",
+        "SESSION_CONNECTION=",
+        "SESSION_TABLE=",
+        "SESSION_STORE=",
+        "SESSION_PATH=",
+        "SESSION_DOMAIN=",
+        "AUTH_GUARD=",
+        "AUTH_PASSWORD_BROKER=",
+        "AUTH_MODEL=",
+        "AUTH_PASSWORD_RESET_TOKEN_TABLE=",
+        "AUTH_PASSWORD_TIMEOUT=",
+        "PASSKEYS_USER_HANDLE_SECRET=",
         "DB_CONNECTION=",
         "DATABASE_URL=",
         "REDIS_URL=",

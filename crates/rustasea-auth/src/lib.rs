@@ -28,7 +28,9 @@ pub mod verification;
 pub mod verify;
 
 pub use config::{
-    AuthConfig, AuthDefaults, ConfigResult, GuardConfig, PasswordBrokerConfig, ProviderConfig,
+    AuthConfig, AuthDefaults, ConfigResult, FortifyConfig, FortifyFeaturesConfig,
+    FortifyLimiterConfig, FortifyPasskeyFeatureConfig, FortifyPasskeysConfig,
+    FortifyTwoFactorConfig, GuardConfig, PasswordBrokerConfig, ProviderConfig, ResolvedPasskeys,
     SessionConfig,
 };
 pub use csrf::{CsrfLayer, PreventRequestForgery, SecFetchSite};

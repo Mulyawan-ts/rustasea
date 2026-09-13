@@ -32,6 +32,13 @@
 //! the typed config onto the guard's runtime types, and [`SessionConfig::ttl_secs`]
 //! converts the Laravel-style minute `lifetime` into the seconds the guard
 //! advertises on issued tokens.
+//!
+//! ## Environment bridge
+//!
+//! The loader's `__` separator means single-underscore variables never reach the
+//! nested `[auth]` / `[session]` tables, so the documented `AUTH_*` and
+//! `SESSION_*` names are read directly by [`AuthConfig::apply_env`] and
+//! [`SessionConfig::apply_env`] (the only path for `.env` parity).
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
@@ -40,8 +47,13 @@ use rustasea_config::ConfigLoader;
 
 use crate::error::AuthConfigError;
 
+mod fortify;
 mod session;
 
+pub use fortify::{
+    FortifyConfig, FortifyFeaturesConfig, FortifyLimiterConfig, FortifyPasskeyFeatureConfig,
+    FortifyPasskeysConfig, FortifyTwoFactorConfig, ResolvedPasskeys,
+};
 pub use session::SessionConfig;
 
 /// Result alias for configuration parsing / validation.
@@ -160,7 +172,8 @@ impl Default for AuthConfig {
 }
 
 impl AuthConfig {
-    /// Deserialize `[auth]` from a layered [`ConfigLoader`].
+    /// Deserialize `[auth]` from a layered [`ConfigLoader`] and apply the
+    /// documented environment overrides.
     ///
     /// A missing `[auth]` table yields [`AuthConfig::default`] (tolerated,
     /// matching the loader's missing-file policy); a table that exists but does
@@ -168,18 +181,60 @@ impl AuthConfig {
     ///
     /// # Errors
     ///
-    /// [`AuthConfigError::Invalid`] when `[auth]` exists but is malformed.
+    /// [`AuthConfigError::Invalid`] when `[auth]` exists but is malformed, or
+    /// when a documented `AUTH_*` override is not a non-negative integer.
     pub fn from_loader(loader: &ConfigLoader) -> ConfigResult<Self> {
-        match loader.get_key::<AuthConfig>("auth") {
-            Ok(config) => Ok(config),
+        let mut config = match loader.get_key::<AuthConfig>("auth") {
+            Ok(config) => config,
             Err(error) => {
                 if loader.inner().get_table("auth").is_err() {
-                    Ok(AuthConfig::default())
+                    AuthConfig::default()
                 } else {
-                    Err(AuthConfigError::Invalid(error.to_string()))
+                    return Err(AuthConfigError::Invalid(error.to_string()));
                 }
             }
+        };
+        config.apply_env()?;
+        Ok(config)
+    }
+
+    /// Apply the documented single-underscore `AUTH_*` environment overrides.
+    ///
+    /// `AUTH_GUARD` replaces `auth.defaults.guard`, `AUTH_PASSWORD_BROKER`
+    /// replaces `auth.defaults.passwords`, `AUTH_MODEL` replaces the `users`
+    /// provider's model (`auth.providers.users.model`),
+    /// `AUTH_PASSWORD_RESET_TOKEN_TABLE` replaces the `users` broker's table
+    /// (`auth.passwords.users.table`), and `AUTH_PASSWORD_TIMEOUT` replaces the
+    /// top-level `password_timeout` (seconds). The environment wins over the
+    /// file and a blank value is ignored; the loader's `__` separator means
+    /// single-underscore variables never reach the nested `[auth]` table, so
+    /// this bridge is the only path for `.env` parity.
+    ///
+    /// # Errors
+    ///
+    /// [`AuthConfigError::Invalid`] when `AUTH_PASSWORD_TIMEOUT` is not a
+    /// non-negative integer.
+    pub fn apply_env(&mut self) -> ConfigResult<()> {
+        if let Some(guard) = env_non_empty("AUTH_GUARD") {
+            self.defaults.guard = guard;
         }
+        if let Some(broker) = env_non_empty("AUTH_PASSWORD_BROKER") {
+            self.defaults.passwords = broker;
+        }
+        if let Some(model) = env_non_empty("AUTH_MODEL") {
+            self.providers.entry("users".to_string()).or_default().model = Some(model);
+        }
+        if let Some(table) = env_non_empty("AUTH_PASSWORD_RESET_TOKEN_TABLE") {
+            self.passwords.entry("users".to_string()).or_default().table = table;
+        }
+        if let Some(timeout) = env_non_empty("AUTH_PASSWORD_TIMEOUT") {
+            self.password_timeout = timeout.parse::<u64>().map_err(|_| {
+                AuthConfigError::Invalid(format!(
+                    "AUTH_PASSWORD_TIMEOUT {timeout:?} is not a non-negative integer"
+                ))
+            })?;
+        }
+        Ok(())
     }
 
     /// Name of the default guard (`auth.defaults.guard`).
@@ -224,6 +279,18 @@ impl AuthConfig {
             })
     }
 }
+
+/// Read an environment variable, treating unset or blank values as absent.
+fn env_non_empty(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+}
+
+/// Serializes tests that read or mutate process-global `AUTH_*` / `SESSION_*`
+/// variables across the `config` test modules.
+#[cfg(test)]
+pub(crate) static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[cfg(test)]
 mod tests;

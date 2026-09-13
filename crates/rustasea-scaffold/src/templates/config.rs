@@ -3,11 +3,11 @@
 //! The config loader auto-discovers every `config/*.toml` (ADR-0002 decision 8),
 //! so the starter kit ships one file per concern. The templates mirror the
 //! workspace-root `config/*.toml` files that are the source of truth for the
-//! Laravel 13.x parity surface (tasks CFG-001..CFG-009): `app`, `auth`, `cache`,
-//! `database`, `queue`, `session`, `logging`, `mail`, `services`, `storage`, and
-//! the standalone `mongo` connection. Long explanatory comment blocks are
-//! trimmed, but every default a generated app needs to parse is preserved.
-//! `inertia.toml` is emitted only for the react/vue variants.
+//! Laravel 13.x parity surface (tasks CFG-001..CFG-011): `app`, `auth`, `cache`,
+//! `database`, `queue`, `session`, `logging`, `mail`, `services`, `storage`,
+//! `fortify`, and the standalone `mongo` connection. Long explanatory comment
+//! blocks are trimmed, but every default a generated app needs to parse is
+//! preserved. `inertia.toml` is emitted only for the react/vue variants.
 
 use crate::variant::StarterKitVariant;
 
@@ -15,7 +15,7 @@ use super::TemplateFile;
 
 /// Config templates for `variant`.
 ///
-/// Emits the ten Laravel-parity configs plus the standalone `mongo.toml`
+/// Emits the eleven Laravel-parity configs plus the standalone `mongo.toml`
 /// surface, then appends `inertia.toml` for the Inertia variants. Order is
 /// deterministic so generated trees diff cleanly.
 pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
@@ -30,6 +30,7 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
         ("config/mail.toml", MAIL),
         ("config/services.toml", SERVICES),
         ("config/storage.toml", STORAGE),
+        ("config/fortify.toml", FORTIFY),
         ("config/mongo.toml", MONGO),
     ];
     if variant.uses_inertia() {
@@ -326,6 +327,44 @@ root = "storage/archive"
 visibility = "local"
 throw = false
 report = false
+"##;
+
+/// Fortify-equivalent auth feature surface (Laravel Fortify `config/fortify.php`).
+///
+/// Passkeys and two-factor authentication are inert parity: the keys parse but
+/// no runtime wiring consumes them yet.
+const FORTIFY: &str = r##"# Fortify-equivalent auth features — mirrors Laravel Fortify config/fortify.php.
+# FORTIFY_* environment variables override these (env wins).
+[fortify]
+guard = "web"
+passwords = "users"
+username = "email"
+email = "email"
+lowercase_usernames = true
+home = "/dashboard"
+prefix = ""
+middleware = ["web"]
+views = true
+
+[fortify.limiters]
+login = "login"
+
+[fortify.passkeys]
+# PASSKEYS_USER_HANDLE_SECRET overrides; falls back to app.key when blank.
+user_handle_secret = ""
+timeout = 60000
+
+[fortify.features]
+registration = true
+reset_passwords = true
+email_verification = true
+
+[fortify.features.two_factor_authentication]
+confirm = true
+confirm_password = true
+
+[fortify.features.passkeys]
+confirm_password = true
 "##;
 
 /// Standalone MongoDB connection surface (`config/mongo.toml`).

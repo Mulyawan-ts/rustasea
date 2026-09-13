@@ -1,0 +1,75 @@
+# Fortify-equivalent auth feature configuration (M3). Loaded by rustasea-config
+# and parsed into the typed `rustasea_auth::FortifyConfig`
+# (`FortifyConfig::from_loader`).
+#
+# Mirrors the shape of Laravel Fortify's `config/fortify.php` so the two are
+# directly comparable: `[fortify]` holds the guard/password-broker selectors and
+# route surface, `[fortify.limiters]` names the rate limiters, `[fortify.passkeys]`
+# carries the WebAuthn relying-party settings, and `[fortify.features]` toggles the
+# built-in auth features.
+#
+# Passkeys and two-factor authentication are INERT parity surface: the keys parse
+# and validate, but no runtime wiring consumes them yet (same posture as the
+# recognised-but-unimplemented logging channels). Environment overrides below win
+# over this file.
+
+[fortify]
+# Guard used for the Fortify routes; must name an `[auth.guards.*]` entry.
+guard = "web"                 # env: FORTIFY_GUARD
+# Password broker used for reset flows; must name an `[auth.passwords.*]` broker.
+passwords = "users"           # env: FORTIFY_PASSWORDS
+# Request field carrying the username. env: FORTIFY_USERNAME
+username = "email"
+# Request field carrying the email. env: FORTIFY_EMAIL
+email = "email"
+# Lowercase usernames before lookup. env: FORTIFY_LOWERCASE_USERNAMES
+lowercase_usernames = true
+# Post-auth / post-reset redirect target. env: FORTIFY_HOME
+home = "/dashboard"
+# Route prefix prepended to every Fortify route. env: FORTIFY_PREFIX
+prefix = ""
+# Subdomain the Fortify routes are bound to; unset means "no subdomain".
+# env: FORTIFY_DOMAIN
+# domain = "example.com"
+# Middleware applied to the Fortify routes. env: FORTIFY_MIDDLEWARE (comma-separated)
+middleware = ["web"]
+# Serve Fortify's built-in view routes. env: FORTIFY_VIEWS
+views = true
+
+[fortify.limiters]
+# Rate limiter applied to the login route. env: FORTIFY_LIMITERS_LOGIN
+login = "login"
+# Rate limiter applied to the two-factor challenge route (uncomment when 2FA lands).
+# two-factor = "two-factor"
+# Rate limiter applied to the passkey routes (uncomment when passkeys land).
+# passkeys = "passkeys"
+
+[fortify.passkeys]
+# WebAuthn relying party. When unset the consumer derives them from `app.url`.
+# relying_party_id = "localhost"
+# allowed_origins = ["http://localhost:8000"]
+# HMAC key for user handles. env: PASSKEYS_USER_HANDLE_SECRET; falls back to
+# `app.key` when blank.
+user_handle_secret = ""
+# Ceremony timeout, in milliseconds.
+timeout = 60000
+
+[fortify.features]
+# Allow user registration. env: FORTIFY_REGISTRATION
+registration = true
+# Allow password resets. env: FORTIFY_RESET_PASSWORDS
+reset_passwords = true
+# Require email verification. env: FORTIFY_EMAIL_VERIFICATION
+email_verification = true
+
+[fortify.features.two_factor_authentication]
+# Require password confirmation before enabling 2FA.
+confirm = true
+# Require password confirmation before disabling 2FA.
+confirm_password = true
+# Number of previous one-time codes accepted; uncomment to pin a window.
+# window = 0
+
+[fortify.features.passkeys]
+# Require password confirmation before managing passkeys.
+confirm_password = true

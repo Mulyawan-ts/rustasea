@@ -72,8 +72,32 @@ QUEUE_CONNECTION=database
 SESSION_DRIVER=memory
 SESSION_LIFETIME=120
 SESSION_COOKIE=rustasea-session
+# `SESSION_SECURE_COOKIE` is accepted as an alias of `SESSION_SECURE` (Laravel
+# / starter-kit naming); when both are set, the explicit `SESSION_SECURE` wins.
 SESSION_SECURE=false
+SESSION_SECURE_COOKIE=false
 SESSION_SAME_SITE=lax
+SESSION_EXPIRE_ON_CLOSE=false
+SESSION_ENCRYPT=false
+SESSION_PARTITIONED_COOKIE=false
+SESSION_HTTP_ONLY=true
+SESSION_CONNECTION=default
+SESSION_TABLE=sessions
+SESSION_STORE=default
+SESSION_PATH=/
+SESSION_DOMAIN=
+
+# --- Auth (config/auth.toml) ---
+AUTH_GUARD=web
+AUTH_PASSWORD_BROKER=users
+AUTH_MODEL=App\Models\User
+AUTH_PASSWORD_RESET_TOKEN_TABLE=password_reset_tokens
+# Seconds before a sensitive action re-confirms the password (Laravel parity).
+AUTH_PASSWORD_TIMEOUT=10800
+
+# --- Fortify (config/fortify.toml) ---
+# Passkeys are inert parity today; the secret falls back to APP_KEY when blank.
+PASSKEYS_USER_HANDLE_SECRET=
 
 # --- Database (config/database.toml) ---
 DB_CONNECTION=sqlite

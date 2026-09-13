@@ -303,6 +303,7 @@ generated app (`crates/rustasea-scaffold/src/templates/config.rs`).
 | `config/database.toml` | Named SQL/Redis connections, pool tuning, migrations (`config/database.php`) | `DATABASE_URL`, `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `REDIS_*`, `MONGODB_URI`, `MONGODB_DATABASE` |
 | `config/queue.toml` | Default connection, driver connections, batching, failed jobs (`config/queue.php`) | `QUEUE_CONNECTION` |
 | `config/session.toml` | Session driver, lifetime, cookie policy (`config/session.php`) | `SESSION_DRIVER`, `SESSION_LIFETIME`, `SESSION_COOKIE`, `SESSION_SECURE`, `SESSION_SAME_SITE` |
+| `config/fortify.toml` | Fortify-equivalent auth features: guard/broker selectors, route surface, limiters, passkeys, and feature toggles (Laravel Fortify `config/fortify.php`; passkeys and 2FA are inert parity) | `FORTIFY_GUARD`, `FORTIFY_PASSWORDS`, `FORTIFY_USERNAME`, `FORTIFY_EMAIL`, `FORTIFY_LOWERCASE_USERNAMES`, `FORTIFY_HOME`, `FORTIFY_PREFIX`, `FORTIFY_DOMAIN`, `FORTIFY_MIDDLEWARE`, `FORTIFY_VIEWS`, `FORTIFY_LIMITERS_LOGIN`, `FORTIFY_REGISTRATION`, `FORTIFY_RESET_PASSWORDS`, `FORTIFY_EMAIL_VERIFICATION`, `PASSKEYS_USER_HANDLE_SECRET` (`crates/rustasea-auth/src/config/fortify.rs:211`, `:303`, `:333`, `:395`) |
 | `config/logging.toml` | Default channel, deprecations, named channels (`config/logging.php`) | `LOG_CHANNEL`, `LOG_LEVEL`, `LOG_STACK`, `LOG_DAILY_DAYS` |
 | `config/mail.toml` | Default mailer, sender, named mailers (`config/mail.php`) | `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` |
 | `config/services.toml` | Third-party credentials: Postmark, Resend, AWS SES, Slack (`config/services.php`) | `POSTMARK_API_KEY`, `RESEND_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `SLACK_BOT_USER_OAUTH_TOKEN`, `SLACK_BOT_USER_DEFAULT_CHANNEL` |
@@ -335,6 +336,7 @@ rustasea/                          # workspace root
 │   ├── mail.toml
 │   ├── services.toml
 │   ├── storage.toml
+│   ├── fortify.toml
 │   └── mongo.toml
 ├── routes/
 │   └── web.rs                     # route definitions

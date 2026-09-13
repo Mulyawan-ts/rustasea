@@ -182,7 +182,7 @@ impl SessionConfig {
     /// # Errors
     ///
     /// [`AuthConfigError::Invalid`] on malformed TOML or an unparsable
-    /// `SESSION_LIFETIME` / `SESSION_SECURE`, or
+    /// `SESSION_LIFETIME` / boolean override, or
     /// [`AuthConfigError::UnsupportedSessionDriver`] when `driver` is not
     /// `memory`.
     pub fn from_loader(loader: &ConfigLoader) -> ConfigResult<Self> {
@@ -205,15 +205,26 @@ impl SessionConfig {
     ///
     /// `SESSION_DRIVER` replaces the backing store, `SESSION_LIFETIME` the
     /// lifetime in minutes, `SESSION_COOKIE` the cookie name, `SESSION_SECURE`
-    /// the HTTPS-only flag, and `SESSION_SAME_SITE` the `SameSite` policy. The
-    /// environment wins over the file and a blank value is ignored; the loader's
-    /// `__` separator means single-underscore variables never reach the nested
+    /// the HTTPS-only flag, and `SESSION_SAME_SITE` the `SameSite` policy.
+    /// `SESSION_EXPIRE_ON_CLOSE`, `SESSION_ENCRYPT`, `SESSION_PARTITIONED_COOKIE`,
+    /// and `SESSION_HTTP_ONLY` replace their boolean counterparts;
+    /// `SESSION_CONNECTION`, `SESSION_TABLE`, `SESSION_STORE`, `SESSION_PATH`,
+    /// and `SESSION_DOMAIN` replace their string counterparts. The environment
+    /// wins over the file and a blank value is ignored; the loader's `__`
+    /// separator means single-underscore variables never reach the nested
     /// `[session]` table, so this bridge is the only path for `.env` parity.
+    ///
+    /// `SESSION_SECURE_COOKIE` is accepted as an alias of `SESSION_SECURE` for
+    /// Laravel / starter-kit parity; when both are set the explicit
+    /// `SESSION_SECURE` wins.
     ///
     /// # Errors
     ///
     /// [`AuthConfigError::Invalid`] when `SESSION_LIFETIME` is not a
-    /// non-negative integer or `SESSION_SECURE` is not a recognised boolean.
+    /// non-negative integer or any boolean override (`SESSION_SECURE`,
+    /// `SESSION_SECURE_COOKIE`, `SESSION_EXPIRE_ON_CLOSE`, `SESSION_ENCRYPT`,
+    /// `SESSION_PARTITIONED_COOKIE`, `SESSION_HTTP_ONLY`) is not a recognised
+    /// boolean.
     pub fn apply_env(&mut self) -> ConfigResult<()> {
         if let Some(driver) = env_non_empty("SESSION_DRIVER") {
             self.driver = driver;
@@ -229,14 +240,39 @@ impl SessionConfig {
             self.cookie_name = cookie;
         }
         if let Some(secure) = env_non_empty("SESSION_SECURE") {
-            self.secure = parse_bool(&secure).ok_or_else(|| {
-                AuthConfigError::Invalid(format!(
-                    "SESSION_SECURE {secure:?} is not a recognised boolean"
-                ))
-            })?;
+            self.secure = parse_bool("SESSION_SECURE", &secure)?;
+        } else if let Some(secure) = env_non_empty("SESSION_SECURE_COOKIE") {
+            self.secure = parse_bool("SESSION_SECURE_COOKIE", &secure)?;
         }
         if let Some(same_site) = env_non_empty("SESSION_SAME_SITE") {
             self.same_site = same_site;
+        }
+        if let Some(expire_on_close) = env_non_empty("SESSION_EXPIRE_ON_CLOSE") {
+            self.expire_on_close = parse_bool("SESSION_EXPIRE_ON_CLOSE", &expire_on_close)?;
+        }
+        if let Some(encrypt) = env_non_empty("SESSION_ENCRYPT") {
+            self.encrypt = parse_bool("SESSION_ENCRYPT", &encrypt)?;
+        }
+        if let Some(partitioned) = env_non_empty("SESSION_PARTITIONED_COOKIE") {
+            self.partitioned = parse_bool("SESSION_PARTITIONED_COOKIE", &partitioned)?;
+        }
+        if let Some(http_only) = env_non_empty("SESSION_HTTP_ONLY") {
+            self.http_only = parse_bool("SESSION_HTTP_ONLY", &http_only)?;
+        }
+        if let Some(connection) = env_non_empty("SESSION_CONNECTION") {
+            self.connection = connection;
+        }
+        if let Some(table) = env_non_empty("SESSION_TABLE") {
+            self.table = table;
+        }
+        if let Some(store) = env_non_empty("SESSION_STORE") {
+            self.store = store;
+        }
+        if let Some(path) = env_non_empty("SESSION_PATH") {
+            self.path = path;
+        }
+        if let Some(domain) = env_non_empty("SESSION_DOMAIN") {
+            self.domain = Some(domain);
         }
         Ok(())
     }
@@ -346,12 +382,17 @@ fn env_non_empty(key: &str) -> Option<String> {
         .filter(|value| !value.trim().is_empty())
 }
 
-/// Parse the usual truthy/falsy spellings (`true`/`1`/`on`/`yes` and their
-/// negations, case-insensitive); `None` when the value is unrecognised.
-fn parse_bool(value: &str) -> Option<bool> {
+/// Parse a truthy/falsy environment override, mapping an unrecognised value to a
+/// typed [`AuthConfigError::Invalid`] that names the offending variable.
+fn parse_bool(key: &str, value: &str) -> ConfigResult<bool> {
     match value.trim().to_ascii_lowercase().as_str() {
-        "1" | "true" | "on" | "yes" => Some(true),
-        "0" | "false" | "off" | "no" => Some(false),
-        _ => None,
+        "1" | "true" | "on" | "yes" => Ok(true),
+        "0" | "false" | "off" | "no" => Ok(false),
+        _ => Err(AuthConfigError::Invalid(format!(
+            "{key} {value:?} is not a recognised boolean"
+        ))),
     }
 }
+
+#[cfg(test)]
+mod tests;
