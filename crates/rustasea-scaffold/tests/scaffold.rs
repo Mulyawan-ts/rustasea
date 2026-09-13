@@ -2,8 +2,8 @@
 //!
 //! Positive coverage: every variant generates the shared core plus its own
 //! `resources/` tree and `Cargo.toml` feature set. Negative coverage: unknown
-//! variants and invalid names are rejected with typed errors.
-
+//! variants and invalid names are rejected. Storage-layout coverage lives in
+//! `tests/storage_layout.rs` (STG-002).
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -64,14 +64,15 @@ const REQUIRED_CORE: &[&str] = &[
     "config/storage.toml",
     "config/fortify.toml",
     "config/mongo.toml",
-    "storage/app/.gitkeep",
-    "storage/logs/.gitkeep",
+    "storage/app/.gitignore",
+    "storage/app/public/.gitignore",
+    "storage/logs/.gitignore",
+    "storage/framework/.gitignore",
+    "storage/archive/.gitignore",
 ];
 
 /// The eleven Laravel-parity config files every variant must emit (CFG-010, CFG-011).
-///
-/// `config/mongo.toml` is the standalone MongoDB surface and `inertia.toml` is
-/// variant-specific, so both are asserted separately.
+/// `config/mongo.toml` (standalone) and `inertia.toml` (variant-specific) are separate.
 const REQUIRED_CONFIGS: &[&str] = &[
     "config/app.toml",
     "config/auth.toml",

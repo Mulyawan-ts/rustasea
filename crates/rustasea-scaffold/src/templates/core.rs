@@ -21,8 +21,14 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
         ("bootstrap/app.rs", BOOTSTRAP_APP),
         ("bootstrap/providers.rs", BOOTSTRAP_PROVIDERS),
         ("bootstrap/commands.rs", BOOTSTRAP_COMMANDS),
-        ("storage/app/.gitkeep", ""),
-        ("storage/logs/.gitkeep", ""),
+        ("storage/app/.gitignore", STORAGE_APP_GITIGNORE),
+        (
+            "storage/app/public/.gitignore",
+            STORAGE_APP_PUBLIC_GITIGNORE,
+        ),
+        ("storage/logs/.gitignore", STORAGE_LOGS_GITIGNORE),
+        ("storage/framework/.gitignore", STORAGE_FRAMEWORK_GITIGNORE),
+        ("storage/archive/.gitignore", STORAGE_ARCHIVE_GITIGNORE),
     ];
     if variant.uses_askama() {
         files.push(("askama.toml", ASKAMA_TOML));
@@ -137,10 +143,35 @@ SLACK_BOT_USER_DEFAULT_CHANNEL=
 const GITIGNORE: &str = r##"/target
 /.env
 /database/*.sqlite
-/storage/logs/*
-!/storage/logs/.gitkeep
-/storage/app/*
-!/storage/app/.gitkeep
+"##;
+
+// Storage layout uses the laravel/livewire-starter-kit convention: each runtime
+// directory ships its own self-contained `.gitignore` so the directory itself is
+// tracked while its runtime contents are ignored. This keeps the generated tree
+// aligned with the RustaSea repo root without a central storage negation block.
+const STORAGE_APP_GITIGNORE: &str = r##"*
+!public/
+!.gitignore
+"##;
+
+const STORAGE_APP_PUBLIC_GITIGNORE: &str = r##"*
+!.gitignore
+"##;
+
+const STORAGE_LOGS_GITIGNORE: &str = r##"*
+!.gitignore
+"##;
+
+// The `down` file is the maintenance-mode marker consumed by
+// `rustasea-foundation`'s `MAINTENANCE_MARKER` (`storage/framework/down`).
+const STORAGE_FRAMEWORK_GITIGNORE: &str = r##"# Maintenance-mode marker (rustasea-foundation MAINTENANCE_MARKER); all other
+# storage/framework content is runtime state and must stay untracked.
+*
+!.gitignore
+"##;
+
+const STORAGE_ARCHIVE_GITIGNORE: &str = r##"*
+!.gitignore
 "##;
 
 const README: &str = r##"# @@app_pascal@@
