@@ -30,19 +30,84 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
     files
 }
 
-const ENV_EXAMPLE: &str = r##"APP_NAME=@@app_name@@
+const ENV_EXAMPLE: &str = r##"# Copy to `.env` and adjust per environment. Environment variables always win
+# over `config/*.toml` (the loader applies the process environment last; nested
+# keys use the `__` separator). Every variable below is read by a generated
+# config file or its typed consumer.
+
+# --- Application (config/app.toml) ---
+APP_NAME=@@app_name@@
 APP_ENV=local
+APP_DEBUG=true
 APP_URL=http://localhost:3000
 APP_KEY=
+APP_LOCALE=en
+APP_FALLBACK_LOCALE=en
+APP_MAINTENANCE_DRIVER=file
+APP_MAINTENANCE_STORE=database
 
-# Database (sqlite by default; override for Postgres/MySQL).
-DB_CONNECTION=sqlite
-DB_DATABASE=database/database.sqlite
+# --- Logging (config/logging.toml) ---
+LOG_CHANNEL=stack
+LOG_LEVEL=debug
+LOG_STACK=daily,stderr
+LOG_DAILY_DAYS=14
 
-# Session (browser starter kits authenticate with session cookies + CSRF).
-SESSION_DRIVER=cookie
+# --- Mail (config/mail.toml) ---
+MAIL_MAILER=log
+MAIL_HOST=127.0.0.1
+MAIL_PORT=2525
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_FROM_ADDRESS=hello@example.com
+MAIL_FROM_NAME=@@app_pascal@@
+
+# --- Cache (config/cache.toml) ---
+CACHE_PREFIX=rustasea-cache-
+
+# --- Queue (config/queue.toml) ---
+QUEUE_CONNECTION=database
+
+# --- Session (config/session.toml) ---
+# Browser starter kits authenticate with session cookies + CSRF.
+SESSION_DRIVER=memory
 SESSION_LIFETIME=120
+SESSION_COOKIE=rustasea-session
 SESSION_SECURE=false
+SESSION_SAME_SITE=lax
+
+# --- Database (config/database.toml) ---
+DB_CONNECTION=sqlite
+DB_URL=sqlite://database.sqlite?mode=rwc
+DATABASE_URL=
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=database/database.sqlite
+DB_USERNAME=rustasea
+DB_PASSWORD=secret
+
+# --- Redis (config/database.toml + config/cache.toml) ---
+REDIS_URL=redis://127.0.0.1:6379/0
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_USERNAME=
+REDIS_PASSWORD=
+REDIS_DB=0
+REDIS_CACHE_DB=1
+
+# --- MongoDB (config/mongo.toml + config/database.toml) ---
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DATABASE=rustasea
+
+# --- Third-party services (config/services.toml + config/storage.toml) ---
+# NEVER commit real secrets.
+POSTMARK_API_KEY=
+RESEND_API_KEY=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=us-east-1
+AWS_BUCKET=
+SLACK_BOT_USER_OAUTH_TOKEN=
+SLACK_BOT_USER_DEFAULT_CHANNEL=
 "##;
 
 const GITIGNORE: &str = r##"/target
@@ -66,6 +131,7 @@ cargo rustasea new @@app_name@@ --variant @@variant@@
 
 - `app/` — domain actions, concerns, HTTP controllers/middleware/requests, models, providers
 - `bootstrap/` — application kernel wiring (providers, commands)
+- `config/` — typed TOML configuration, auto-discovered by the loader (`config/*.toml`)
 - `routes/` — `web`, `auth`, `settings`, and `console` route tables
 - `database/` — migrations, factories, seeders
 - `resources/` — presentation layer for the `@@variant@@` variant

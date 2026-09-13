@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Status](https://img.shields.io/badge/status-alpha-yellow.svg)](#roadmap)
 
-> **Last updated:** 2026-09-12
+> **Last updated:** 2026-09-13
 
 ---
 
@@ -270,6 +270,47 @@ database = "rustasea"
 
 ---
 
+## Configuration
+
+RustaSea reads typed configuration from TOML files in `config/`. The loader
+(`rustasea_config::ConfigLoader`) **auto-discovers every `config/*.toml`**
+(ADR-0002 decision 8): `app.toml` is always applied first as the base layer,
+the remaining files are merged in sorted order, and the process environment is
+applied last — so **environment variables always win over the files**
+(`crates/rustasea-config/src/lib.rs:38`, `discover_toml_files` at `:95`).
+
+Two env conventions are supported:
+
+- **Nested keys** use the `__` separator (`config::Environment::default()
+  .separator("__")`, `crates/rustasea-config/src/lib.rs:52`) — e.g.
+  `SERVICES__POSTMARK__KEY` sets `[services.postmark].key`.
+- **Single-underscore Laravel-style vars** are applied directly by the typed
+  consumers where wired: `APP_*` → `AppConfig` (`crates/rustasea-foundation/src/config.rs:165`),
+  `LOG_*` → `LoggingConfig`, `MAIL_*` → `MailConfig`, and
+  `POSTMARK_API_KEY` / `RESEND_API_KEY` / `AWS_ACCESS_KEY_ID` /
+  `AWS_SECRET_ACCESS_KEY` / `SLACK_BOT_*` → `ServicesConfig`
+  (`crates/rustasea-config/src/services.rs`).
+
+The workspace-root `config/*.toml` files are the source of truth for the
+Laravel 13.x parity surface, and the scaffolder mirrors them into every
+generated app (`crates/rustasea-scaffold/src/templates/config.rs`).
+
+| File | Purpose | Key env vars |
+|---|---|---|
+| `config/app.toml` | Application identity, locale, encryption key, maintenance mode (`config/app.php`) | `APP_NAME`, `APP_ENV`, `APP_DEBUG`, `APP_URL`, `APP_KEY`, `APP_LOCALE`, `APP_FALLBACK_LOCALE`, `APP_MAINTENANCE_DRIVER`, `APP_MAINTENANCE_STORE` |
+| `config/auth.toml` | Guards, providers, password-reset brokers (`config/auth.php`) | — (file only) |
+| `config/cache.toml` | Default store, key prefix, store definitions (`config/cache.php`) | `CACHE_PREFIX`, `REDIS_URL` |
+| `config/database.toml` | Named SQL/Redis connections, pool tuning, migrations (`config/database.php`) | `DATABASE_URL`, `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `REDIS_*`, `MONGODB_URI`, `MONGODB_DATABASE` |
+| `config/queue.toml` | Default connection, driver connections, batching, failed jobs (`config/queue.php`) | `QUEUE_CONNECTION` |
+| `config/session.toml` | Session driver, lifetime, cookie policy (`config/session.php`) | `SESSION_DRIVER`, `SESSION_LIFETIME`, `SESSION_COOKIE`, `SESSION_SECURE`, `SESSION_SAME_SITE` |
+| `config/logging.toml` | Default channel, deprecations, named channels (`config/logging.php`) | `LOG_CHANNEL`, `LOG_LEVEL`, `LOG_STACK`, `LOG_DAILY_DAYS` |
+| `config/mail.toml` | Default mailer, sender, named mailers (`config/mail.php`) | `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` |
+| `config/services.toml` | Third-party credentials: Postmark, Resend, AWS SES, Slack (`config/services.php`) | `POSTMARK_API_KEY`, `RESEND_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `SLACK_BOT_USER_OAUTH_TOKEN`, `SLACK_BOT_USER_DEFAULT_CHANNEL` |
+| `config/storage.toml` | Default disk, read-through routing, disk definitions (`config/filesystems.php`) | `AWS_*` (for the S3 disk) |
+| `config/mongo.toml` | Standalone MongoDB connection (`MongoConfig`) | `MONGODB_URI`, `MONGODB_DATABASE` |
+
+---
+
 ## Proposed Directory Structure
 
 Workspace with one crate per milestone domain. Application code lives in `app/` (mirrors Laravel/Goravel conventions).
@@ -285,11 +326,16 @@ rustasea/                          # workspace root
 │   └── commands.rs                # CLI command registry
 ├── config/
 │   ├── app.toml
-│   ├── database.toml
+│   ├── auth.toml
 │   ├── cache.toml
+│   ├── database.toml
 │   ├── queue.toml
+│   ├── session.toml
+│   ├── logging.toml
+│   ├── mail.toml
+│   ├── services.toml
 │   ├── storage.toml
-│   └── auth.toml
+│   └── mongo.toml
 ├── routes/
 │   └── web.rs                     # route definitions
 ├── database/
