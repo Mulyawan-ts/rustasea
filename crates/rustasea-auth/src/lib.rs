@@ -15,6 +15,7 @@
 #![deny(clippy::expect_used)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod config;
 pub mod csrf;
 pub mod error;
 pub mod guard;
@@ -26,8 +27,12 @@ pub mod users;
 pub mod verification;
 pub mod verify;
 
+pub use config::{
+    AuthConfig, AuthDefaults, ConfigResult, GuardConfig, PasswordBrokerConfig, ProviderConfig,
+    SessionConfig,
+};
 pub use csrf::{CsrfLayer, PreventRequestForgery, SecFetchSite};
-pub use error::{AuthError, CsrfError, SerializationError, ThrottleError};
+pub use error::{AuthConfigError, AuthError, CsrfError, SerializationError, ThrottleError};
 pub use guard::{Auth, AuthManager, AuthUser, Credentials, Guard, GuardRegistrar, Token};
 pub use jwt::{JwtClaims, JwtConfig, JwtGuard};
 pub use session::{DeserializationAllowList, SessionGuard, SessionPolicy, SessionUser};

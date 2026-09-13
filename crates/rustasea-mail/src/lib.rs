@@ -6,6 +6,10 @@
 //! and [`MailNotification`] delivery through `rustasea-queue` with
 //! `#[deleteWhenMissingModels]` suppression (FR-605, US-M6-04).
 //!
+//! Laravel 13.x `mail.php` parity lives in [`config`]: [`MailConfig`] parses the
+//! `[mail]` table from `config/mail.toml` and [`mailer_from_config`] builds a
+//! ready [`Mailer`] from it (honouring `MAIL_*` environment overrides).
+//!
 //! ```no_run
 //! use std::sync::Arc;
 //! use rustasea_mail::{ArrayMailer, Mail, MailAddress, Mailable};
@@ -25,6 +29,7 @@
 //! ```
 
 pub mod address;
+pub mod config;
 pub mod error;
 pub mod mailable;
 pub mod mailer;
@@ -36,9 +41,10 @@ pub mod smtp;
 use std::sync::Arc;
 
 pub use address::MailAddress;
-pub use error::{MailError, Result};
+pub use config::{mailer_from_config, FromConfig, MailConfig, MailerConfig, DEFAULT_MAILER};
+pub use error::{MailConfigError, MailError, Result};
 pub use mailable::Mailable;
-pub use mailer::{mailer, set_mailer, ArrayMailer, LogMailer, Mailer};
+pub use mailer::{mailer, set_mailer, ArrayMailer, FailoverMailer, FromMailer, LogMailer, Mailer};
 pub use message::MailMessage;
 pub use notification::{MailNotification, QueuedNotification};
 #[cfg(feature = "smtp")]

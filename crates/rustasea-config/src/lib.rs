@@ -12,6 +12,12 @@ use std::path::{Path, PathBuf};
 use config::{Config, ConfigError, File};
 use serde::de::DeserializeOwned;
 
+pub mod services;
+
+pub use services::{
+    ServicesConfig, ServicesConfigError, SesCredentials, SlackNotifications, DEFAULT_SES_REGION,
+};
+
 /// Base file name always applied first, as the lowest-precedence layer.
 const BASE_FILE_NAME: &str = "app.toml";
 

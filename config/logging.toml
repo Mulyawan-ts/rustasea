@@ -1,0 +1,107 @@
+# RustaSea logging configuration (CFG-005).
+#
+# Mirrors Laravel 13.x `config/logging.php`: a `default` channel selector, a
+# `deprecations` block, and a map of named `[logging.channels.*]` entries. The
+# `rustasea-logging` crate parses this table through `rustasea-config`'s
+# `ConfigLoader` and installs a `tracing` subscriber from it.
+#
+# Environment overrides (applied by `LoggingConfig::apply_env`):
+#   LOG_CHANNEL     — replaces `default` below.
+#   LOG_LEVEL       — fallback level for channels without their own `level`.
+#   LOG_STACK       — comma-separated members of the `stack` channel.
+#   LOG_DAILY_DAYS  — retention (days) of the `daily` channel.
+#   LOG_SLACK_*     — accepted for parity; inert (the `slack` driver is
+#                     recognised but unsupported, see the note below).
+
+[logging]
+# Channel used when no channel is requested explicitly.
+default = "stack"
+
+# Deprecation reporting. Parsed for parity; RustaSea does not yet route
+# deprecations through a dedicated channel, so these values are inert.
+[logging.deprecations]
+channel = "null"
+trace = false
+
+# ---------------------------------------------------------------------------
+# Channels
+# ---------------------------------------------------------------------------
+# Supported drivers (installed onto tracing):
+#   single | daily | monthly | stack | stderr | stdout | null | emergency |
+#   errorlog (documented stderr fallback)
+# Recognised but unsupported (selecting one is a typed `UnsupportedDriver`
+# error, never a panic): slack | papertrail | syslog
+
+# The default channel: fan out to a file and stderr.
+[logging.channels.stack]
+driver = "stack"
+channels = ["daily", "stderr"]
+ignore_exceptions = false
+
+# Plain, non-rotating file appender.
+[logging.channels.single]
+driver = "single"
+path = "storage/logs/rustasea.log"
+level = "debug"
+replace_placeholders = false
+
+# Rolling file appender, one file per day (Laravel default retention: 14 days).
+[logging.channels.daily]
+driver = "daily"
+path = "storage/logs/rustasea.log"
+level = "debug"
+max_files = 14
+
+# Rolling file appender approximating Laravel's monthly rotation. `tracing-appender`
+# has no monthly interval, so the closest supported rotation (daily) is used with
+# the monthly retention default of 3 files.
+[logging.channels.monthly]
+driver = "monthly"
+path = "storage/logs/rustasea.log"
+level = "debug"
+max_files = 3
+
+# Standard error. In RustaSea this maps to a formatted `tracing` layer.
+[logging.channels.stderr]
+driver = "stderr"
+level = "debug"
+
+# Standard output (RustaSea bonus driver).
+[logging.channels.stdout]
+driver = "stdout"
+level = "debug"
+
+# Discards every event.
+[logging.channels.null]
+driver = "null"
+
+# Emergency log file; Laravel declares only a `path` (driver inferred).
+[logging.channels.emergency]
+path = "storage/logs/rustasea-emergency.log"
+
+# `errorlog` maps to the stderr fallback in RustaSea.
+[logging.channels.errorlog]
+driver = "errorlog"
+level = "debug"
+
+# --- Recognised but unsupported ---------------------------------------------
+# The following channels are parsed for full Laravel parity but cannot be
+# installed by `rustasea-logging`. Selecting one returns a typed
+# `LoggingError::UnsupportedDriver`; it never panics.
+
+[logging.channels.slack]
+driver = "slack"
+url = "https://hooks.slack.com/services/REPLACE/ME"
+username = "RustaSea"
+emoji = ":boom:"
+level = "critical"
+
+[logging.channels.papertrail]
+driver = "papertrail"
+url = "logs.papertrailapp.com:00000"
+level = "debug"
+
+[logging.channels.syslog]
+driver = "syslog"
+facility = "user"
+level = "debug"

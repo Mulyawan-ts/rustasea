@@ -393,8 +393,13 @@ impl QueueRegistry {
     }
 
     /// The default connection name used when none is provided.
+    ///
+    /// Returns the connection named by `[queue].default` once
+    /// [`QueueRegistry::configure_from`] has run, falling back to the historical
+    /// `sync` connection when no configuration was applied — so existing callers
+    /// that never configure a queue keep their previous behaviour.
     pub fn default_connection() -> &'static str {
-        SYNC_CONNECTION
+        crate::wiring::configured_default_connection().unwrap_or(SYNC_CONNECTION)
     }
 }
 

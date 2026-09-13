@@ -6,6 +6,7 @@ license.workspace = true
 description = "RustaSea authentication and security — JWT/session guards, origin-aware CSRF, throttling"
 
 [dependencies]
+rustasea-config = { path = "../rustasea-config" }
 rustasea-foundation = { path = "../rustasea-foundation" }
 rustasea-http = { path = "../rustasea-http" }
 serde = { workspace = true }

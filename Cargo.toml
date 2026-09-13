@@ -60,3 +60,7 @@ rand = "0.8"
 futures-core = "0.3"
 futures-util = { version = "0.3", default-features = false }
 tokio-stream = { version = "0.1", features = ["sync"] }
+# Logging / diagnostics (CFG-005) — Laravel-style channels mapped onto tracing.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"

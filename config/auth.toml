@@ -1,1 +1,53 @@
-# Placeholder: auth guard settings (M3). Loaded by rustasea-config.
+# Authentication configuration (M3). Loaded by rustasea-config and parsed into
+# the typed `rustasea_auth::AuthConfig` (`AuthConfig::from_loader`).
+#
+# Mirrors the shape of Laravel 13.x `config/auth.php` so the two are directly
+# comparable: `defaults` selects the active guard/password broker, `guards`
+# declare how a request is authenticated, `providers` describe where users are
+# read from, and `passwords` configure the password-reset broker.
+
+[auth]
+# Seconds before the framework re-confirms a password for sensitive actions
+# (Laravel `password_timeout`); 3 hours. Scalar sibling of the tables below,
+# matching the `config/auth.php` top-level key exactly.
+password_timeout = 10800
+
+[auth.defaults]
+# Guard used when no guard name is given (`Auth::guard()` with no argument).
+guard = "web"
+# Password broker used by `Password::broker()`.
+passwords = "users"
+
+# ---------------------------------------------------------------------------
+# Guards — how a request proves identity.
+# ---------------------------------------------------------------------------
+# `driver = "session"` is the browser/stateful path backed by the `SessionGuard`
+# (tower-sessions store + hardened cookie). `provider` names the user source.
+[auth.guards.web]
+driver = "session"
+provider = "users"
+
+# Stateless API guard (reserved; the JWT driver is wired in a later milestone).
+[auth.guards.api]
+driver = "token"
+provider = "users"
+
+# ---------------------------------------------------------------------------
+# Providers — where user records are read from.
+# ---------------------------------------------------------------------------
+# RustaSea ships a single `eloquent` driver name for ORM-backed providers; the
+# `model` value is a fully-qualified path string kept verbatim for parity.
+[auth.providers.users]
+driver = "eloquent"
+model = "App\\Models\\User"
+
+# ---------------------------------------------------------------------------
+# Password-reset brokers.
+# ---------------------------------------------------------------------------
+[auth.passwords.users]
+provider = "users"
+table = "password_reset_tokens"
+# Minutes a reset token stays valid.
+expire = 60
+# Seconds a client must wait between reset attempts.
+throttle = 60

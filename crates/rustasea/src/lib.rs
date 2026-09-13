@@ -200,3 +200,19 @@ pub use rustasea_mongo::{
     Collection as MongoCollection, Document as MongoDocument, Filter as MongoFilter,
     MongoClient, MongoConfig, MongoError, MongoPoolConfig, Update as MongoUpdate,
 };
+
+/// Logging facade re-export — only with the `logging` feature (CFG-005).
+///
+/// Opt-in so the core build never links the tracing subscriber/appender tree
+/// (NFR-Sca-02). The crate parses `config/logging.toml` and installs a global
+/// `tracing` subscriber from the selected Laravel-style channel.
+#[cfg(feature = "logging")]
+pub use rustasea_logging as logging;
+
+/// Logging re-exports for subscriber-install and channel ergonomics (CFG-005).
+#[cfg(feature = "logging")]
+pub use rustasea_logging::{
+    build as logging_build, init as logging_init, init_from_config as logging_init_from_config,
+    ChannelConfig as LoggingChannelConfig, Driver as LoggingDriver, LoggingConfig, LoggingError,
+    LoggingGuard,
+};

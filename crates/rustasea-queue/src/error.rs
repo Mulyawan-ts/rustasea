@@ -44,6 +44,64 @@ pub enum QueueError {
     /// No queued job was available for reservation.
     #[error("queue {0} is empty")]
     Empty(String),
+
+    /// A `[queue]` configuration table could not be parsed or validated.
+    ///
+    /// Wraps a structured [`QueueConfigError`] message so registry wiring that
+    /// returns a [`Result`] surfaces config problems without a second error type.
+    #[error("queue configuration error: {0}")]
+    Config(String),
+}
+
+/// Typed `[queue]` configuration errors (Laravel `config/queue.php` parity).
+///
+/// Produced by [`crate::config::QueueConfig`] parsing/validation and by
+/// [`crate::wiring::register_from_config`]. Every variant is a load-time error,
+/// so a misconfigured queue connection fails fast rather than silently falling
+/// back to the `sync` driver in production.
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
+pub enum QueueConfigError {
+    /// The `[queue]` table exists but could not be deserialized.
+    #[error("invalid queue config: {0}")]
+    Invalid(String),
+
+    /// `queue.default` (or a route) names a connection not declared under
+    /// `[queue.connections]`.
+    #[error("unknown queue connection `{name}`")]
+    UnknownConnection {
+        /// The undeclared connection name.
+        name: String,
+    },
+
+    /// A connection declares a driver RustaSea does not implement.
+    ///
+    /// Covers both genuinely unknown names and the recognised-but-unimplemented
+    /// Laravel drivers (`beanstalkd`, `sqs`, `deferred`, `background`,
+    /// `failover`); the offending driver is always named.
+    #[error("unsupported queue driver `{driver}` for connection `{connection}`")]
+    UnsupportedDriver {
+        /// Connection declaring the unsupported driver.
+        connection: String,
+        /// The unsupported driver name.
+        driver: String,
+    },
+
+    /// A connection is missing a field its driver requires (e.g. `table` for
+    /// the `database` driver).
+    #[error("queue connection `{connection}` is missing required field `{field}`")]
+    MissingField {
+        /// Connection missing the field.
+        connection: String,
+        /// Name of the missing field.
+        field: String,
+    },
+}
+
+impl From<QueueConfigError> for QueueError {
+    /// Map a typed config error onto the top-level [`QueueError::Config`].
+    fn from(error: QueueConfigError) -> Self {
+        QueueError::Config(error.to_string())
+    }
 }
 
 impl From<PoisonError<std::sync::RwLockWriteGuard<'_, crate::registry::RegistryInner>>>

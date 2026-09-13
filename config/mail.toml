@@ -1,0 +1,90 @@
+# RustaSea mail configuration (CFG-006).
+#
+# Mirrors Laravel 13.x `config/mail.php`: a `default` mailer selector, a map of
+# named `[mail.mailers.*]` entries, and a `[mail.from]` block. The
+# `rustasea-mail` crate parses this table through `rustasea-config`'s
+# `ConfigLoader` and builds a `dyn Mailer` from it via `mailer_from_config`.
+#
+# Environment overrides (applied by `MailConfig::apply_env`, env > file):
+#   MAIL_MAILER        — replaces `default` below.
+#   MAIL_HOST          — replaces `[mail.mailers.smtp].host`.
+#   MAIL_PORT          — replaces `[mail.mailers.smtp].port`.
+#   MAIL_USERNAME      — replaces `[mail.mailers.smtp].username`.
+#   MAIL_PASSWORD      — replaces `[mail.mailers.smtp].password`.
+#   MAIL_FROM_ADDRESS  — replaces `[mail.from].address`.
+#   MAIL_FROM_NAME     — replaces `[mail.from].name`.
+
+[mail]
+# Mailer used when no mailer is requested explicitly. Supported values:
+# "log" | "array" | "smtp" (feature `smtp`) | "failover". Selecting any other
+# name is a typed `MailConfigError::UnknownDefaultMailer`.
+default = "log"
+
+# Sender applied to every message that does not set its own `from`.
+[mail.from]
+address = "hello@example.com"
+# Display name; falls back to the application name when left empty.
+name = "RustaSea"
+
+# ---------------------------------------------------------------------------
+# Mailers
+# ---------------------------------------------------------------------------
+# Supported transports (built by `mailer_from_config`):
+#   smtp | log | array | failover
+# Recognised but not-yet-implemented (selecting one is a typed
+# `MailConfigError::UnsupportedTransport` naming the transport, never a panic):
+#   ses | postmark | resend | sendmail
+
+# SMTP relay. The `smtp` transport requires the crate's `smtp` feature; without
+# it the factory returns a typed error naming the feature.
+[mail.mailers.smtp]
+transport = "smtp"
+# Optional connection scheme (`smtp` or `smtps`); parsed for parity, the relay
+# helper uses STARTTLS.
+scheme = "smtp"
+# Optional pre-built DSN; parsed for parity and currently inert.
+url = ""
+host = "127.0.0.1"
+port = 2525
+# Credentials are omitted when empty; supply them via MAIL_USERNAME/MAIL_PASSWORD.
+username = ""
+password = ""
+# Socket timeout in seconds (parsed for parity; inert in this build).
+timeout = 5
+# EHLO domain presented to the relay (parsed for parity; inert).
+local_domain = ""
+
+# Writes a formatted diagnostic line to the log sink instead of delivering.
+[mail.mailers.log]
+transport = "log"
+# Optional log channel name (parsed for parity; inert).
+channel = ""
+
+# Records delivered messages in memory. Intended for tests and local dev.
+[mail.mailers.array]
+transport = "array"
+
+# Tries each listed mailer in order, falling back on transport failure.
+[mail.mailers.failover]
+transport = "failover"
+mailers = ["smtp", "log"]
+# Seconds to wait before retrying a failed mailer (parsed for parity; inert).
+retry_after = 60
+
+# --- Recognised but not-yet-implemented -------------------------------------
+# The following mailers are parsed for full Laravel parity but cannot be built
+# by `rustasea-mail`. Selecting one (as `default` or a `failover` member) returns
+# a typed `MailConfigError::UnsupportedTransport`; it never panics.
+
+# [mail.mailers.ses]
+# transport = "ses"
+
+# [mail.mailers.postmark]
+# transport = "postmark"
+
+# [mail.mailers.resend]
+# transport = "resend"
+
+# [mail.mailers.sendmail]
+# transport = "sendmail"
+# path = "/usr/sbin/sendmail -bs -i"

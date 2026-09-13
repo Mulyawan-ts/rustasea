@@ -18,13 +18,37 @@ default = "local"
 # fallback = "local"
 # copy_back = true
 
+# Symlinks materialized by `StorageManager::create_links` (Laravel's
+# `storage:link`). Key = link path, value = target.
+[storage.links]
+"public/storage" = "storage/app/public"
+
 [storage.disks.local]
 driver = "local"
 root = "storage/app"
+# Expose this disk through the framework dev server.
+serve = true
+# `local` (private) or `public` object visibility.
+visibility = "local"
+# Raise on failure instead of returning a falsy result.
+throw = false
+# Surface failures to the error reporter.
+report = false
+
+[storage.disks.public]
+driver = "local"
+root = "storage/app/public"
+# Publicly reachable objects (served via the `public/storage` link).
+visibility = "public"
+throw = false
+report = false
 
 [storage.disks.archive]
 driver = "local"
 root = "storage/archive"
+visibility = "local"
+throw = false
+report = false
 
 # --- Cloud disk examples (enable the matching feature to use) ---------------
 #
@@ -32,6 +56,9 @@ root = "storage/archive"
 # driver = "s3"
 # bucket = "rustasea"
 # region = "us-east-1"
+# visibility = "public"
+# throw = false
+# report = false
 # # Prefer the environment / a secret manager over inline credentials.
 # # access_key_id = "..."
 # # secret_access_key = "..."
@@ -40,10 +67,12 @@ root = "storage/archive"
 # [storage.disks.gcs]
 # driver = "gcs"
 # bucket = "rustasea"
+# visibility = "public"
 # # service_account_path = "/etc/rustasea/gcs-service-account.json"
 #
 # [storage.disks.azure]
 # driver = "azure"
 # account = "rustasea"
 # container = "app"
+# visibility = "public"
 # # access_key = "..."

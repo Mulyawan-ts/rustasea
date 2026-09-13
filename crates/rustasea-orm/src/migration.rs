@@ -1,10 +1,13 @@
 //! Migration contract, runner, seeder, and factory traits.
 //!
 //! [`Migrator`] executes registered [`Migration`] bodies against a live
-//! [`DbPool`], recording each in a `migrations` tracking table so re-runs are
-//! idempotent and the last batch can be rolled back in reverse. The sync
-//! `up_sql`/`down_sql` emit API is retained for backward compatibility. Only the
-//! `sqlx` runtime API is used — never the compile-time `query!` macros.
+//! [`DbPool`], recording each in a tracking table (default `migrations`) so
+//! re-runs are idempotent and the last batch can be rolled back in reverse. The
+//! tracking-table name is configurable via [`Migrator::with_migrations_table`]
+//! to honour `[database.migrations] table`; the default keeps existing callers
+//! unchanged. The sync `up_sql`/`down_sql` emit API is retained for backward
+//! compatibility. Only the `sqlx` runtime API is used — never the compile-time
+//! `query!` macros.
 
 use crate::db::DbPool;
 use crate::error::{OrmError, Result};
@@ -19,6 +22,9 @@ mod traits;
 pub use traits::{run_migrations, Factory, MigrationRecord, Seeder};
 
 /// Name of the migration tracking table.
+///
+/// Used when no `[database.migrations] table` override is supplied; see
+/// [`Migrator::with_migrations_table`] and [`Migrator::migrations_table`].
 const MIGRATIONS_TABLE: &str = "migrations";
 
 /// Process-wide migration registry populated by an application at startup.
@@ -127,16 +133,41 @@ pub trait Migration: Send + Sync {
 }
 
 /// Runner for an ordered migration set, tracking the `migrations` table.
+///
+/// The tracking table defaults to `migrations`; a `[database.migrations] table`
+/// override is threaded through [`Migrator::with_migrations_table`] without
+/// changing existing call sites.
 #[derive(Default, Clone)]
 pub struct Migrator {
     migrations: Vec<Arc<dyn Migration>>,
     seeders: Vec<Arc<dyn Seeder>>,
+    /// Optional tracking-table override; `None` uses [`MIGRATIONS_TABLE`].
+    table: Option<String>,
 }
 
 impl Migrator {
     /// Create an empty migrator.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Override the migration tracking-table name.
+    ///
+    /// Supply `[database.migrations] table` (see
+    /// [`crate::connections::DatabaseConfig::migrations_table`]) so the runner
+    /// records into the configured table. A blank name is ignored. Returns
+    /// `&mut Self` for builder chaining.
+    pub fn with_migrations_table(&mut self, table: impl Into<String>) -> &mut Self {
+        let table = table.into();
+        if !table.trim().is_empty() {
+            self.table = Some(table);
+        }
+        self
+    }
+
+    /// The effective tracking-table name (`migrations` unless overridden).
+    pub fn migrations_table(&self) -> &str {
+        self.table.as_deref().unwrap_or(MIGRATIONS_TABLE)
     }
 
     /// Register a migration (order of registration = order of execution).
@@ -184,7 +215,7 @@ impl Migrator {
     /// single transaction (one transaction per migration). SQLite/Postgres DDL is
     /// transactional, so a record failure rolls the schema back too; MySQL DDL is
     /// non-transactional, so its schema change is best-effort and may persist even
-    /// when the tracking row rolls back. Creates the `migrations` table first, and
+    /// when the tracking row rolls back. Creates the tracking table first, and
     /// a second call is a no-op. Returns the names applied by this call.
     pub async fn run(&self, pool: &DbPool) -> Result<Vec<String>> {
         self.ensure_table(pool).await?;
@@ -204,6 +235,7 @@ impl Migrator {
             let name = migration.name().to_string();
             let sql = migration.up()?;
             let applied = name.clone();
+            let table = self.migrations_table().to_string();
             crate::execution::transaction(pool, |tx| {
                 Box::pin(async move {
                     tx.execute_script(&sql)
@@ -211,7 +243,7 @@ impl Migrator {
                         .map_err(|error| failed(&name, error))?;
                     tx.execute_bind(
                         &format!(
-                            "INSERT INTO {MIGRATIONS_TABLE} (name, batch, executed_at) \
+                            "INSERT INTO {table} (name, batch, executed_at) \
                              VALUES ($1, $2, $3)"
                         ),
                         &[
@@ -253,13 +285,14 @@ impl Migrator {
             }
             let sql = migration.down()?;
             let rolled = name.clone();
+            let table = self.migrations_table().to_string();
             crate::execution::transaction(pool, |tx| {
                 Box::pin(async move {
                     tx.execute_script(&sql)
                         .await
                         .map_err(|error| failed(&name, error))?;
                     tx.execute_bind(
-                        &format!("DELETE FROM {MIGRATIONS_TABLE} WHERE name = $1"),
+                        &format!("DELETE FROM {table} WHERE name = $1"),
                         &[Value::Text(name.clone())],
                     )
                     .await?;
@@ -294,10 +327,11 @@ impl Migrator {
         Ok(ran)
     }
 
-    /// Create the `migrations` tracking table when absent.
+    /// Create the tracking table (configured name) when absent.
     async fn ensure_table(&self, pool: &DbPool) -> Result<()> {
+        let table = self.migrations_table();
         pool.execute_script(&format!(
-            "CREATE TABLE IF NOT EXISTS {MIGRATIONS_TABLE} (
+            "CREATE TABLE IF NOT EXISTS {table} (
                 name TEXT PRIMARY KEY,
                 batch INTEGER NOT NULL,
                 executed_at TEXT NOT NULL
@@ -308,9 +342,10 @@ impl Migrator {
 
     /// Names already recorded in the tracking table.
     async fn applied_names(&self, pool: &DbPool) -> Result<HashSet<String>> {
+        let table = self.migrations_table();
         let rows = pool
             .fetch_json(
-                &format!("SELECT name FROM {MIGRATIONS_TABLE} ORDER BY batch, name"),
+                &format!("SELECT name FROM {table} ORDER BY batch, name"),
                 &[],
             )
             .await?;
@@ -322,9 +357,10 @@ impl Migrator {
 
     /// Highest recorded batch number, or `0` when none exist.
     async fn max_batch(&self, pool: &DbPool) -> Result<i64> {
+        let table = self.migrations_table();
         let rows = pool
             .fetch_json(
-                &format!("SELECT COALESCE(MAX(batch), 0) AS batch FROM {MIGRATIONS_TABLE}"),
+                &format!("SELECT COALESCE(MAX(batch), 0) AS batch FROM {table}"),
                 &[],
             )
             .await?;
@@ -337,9 +373,10 @@ impl Migrator {
 
     /// Names recorded for a specific batch.
     async fn batch_names(&self, pool: &DbPool, batch: i64) -> Result<HashSet<String>> {
+        let table = self.migrations_table();
         let rows = pool
             .fetch_json(
-                &format!("SELECT name FROM {MIGRATIONS_TABLE} WHERE batch = $1"),
+                &format!("SELECT name FROM {table} WHERE batch = $1"),
                 &[Value::Int(batch)],
             )
             .await?;
@@ -446,5 +483,17 @@ mod tests {
             m.down_sql().unwrap_err(),
             crate::error::OrmError::Migration(MigrationError::Irreversible { .. })
         ));
+    }
+
+    /// The tracking table defaults to `migrations` and honours an override.
+    #[test]
+    fn migrations_table_defaults_and_overrides() {
+        let mut m = Migrator::new();
+        assert_eq!(m.migrations_table(), "migrations");
+        m.with_migrations_table("app_migrations");
+        assert_eq!(m.migrations_table(), "app_migrations");
+        // A blank override is ignored so the default is never lost.
+        m.with_migrations_table("   ");
+        assert_eq!(m.migrations_table(), "app_migrations");
     }
 }

@@ -8,6 +8,7 @@
 //! dead-letter surface and the Cloud queue metric shapes.
 
 pub mod batch;
+pub mod config;
 pub mod driver;
 pub mod error;
 pub mod job;
@@ -16,9 +17,14 @@ pub mod migrations;
 pub mod notification;
 pub mod registry;
 pub mod retry;
+pub mod wiring;
 
 pub use async_trait::async_trait;
 pub use batch::{dispatch_batch, BatchHandle, BatchId};
+pub use config::{
+    BatchingConfig, ConnectionConfig, FailedConfig, QueueConfig, DEFAULT_CONNECTION,
+    DEFAULT_FAILED_TABLE, DEFAULT_JOBS_TABLE,
+};
 #[cfg(feature = "redis")]
 pub use driver::RedisDriver;
 pub use driver::{
@@ -26,7 +32,7 @@ pub use driver::{
     run_worker_with, DatabaseDriver, QueueDriver, SyncDriver, DATABASE_CONNECTION, DATABASE_DRIVER,
     REDIS_CONNECTION, REDIS_DRIVER, SYNC_CONNECTION,
 };
-pub use error::{JobError, QueueError, Result};
+pub use error::{JobError, QueueConfigError, QueueError, Result};
 pub use job::{
     run_erased, ConcreteJob, DispatchHandle, ErasedJob, FailedJob, Job, JobId, JobOutcome,
     JobPayload,
@@ -41,3 +47,4 @@ pub use notification::{
 pub use registry::register_redis_driver;
 pub use registry::{register_database_driver, Queue, QueueRegistry, Route};
 pub use retry::{ShouldRetry, ShouldRetryUntil};
+pub use wiring::{configured_default_connection, register_from_config, register_from_config_with};

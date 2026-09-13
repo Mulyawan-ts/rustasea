@@ -7,11 +7,13 @@
 //!
 //! The suite is split across sibling submodules to respect the file-size
 //! standard: [`driver`] covers the driver matrix, [`precedence`] the default
-//! selector and pool precedence, and [`read_write`] the read/write overlays.
+//! selector and pool precedence, [`read_write`] the read/write overlays, and
+//! [`sections`] the migrations/redis sections.
 
 mod driver;
 mod precedence;
 mod read_write;
+mod sections;
 
 use super::*;
 use std::path::PathBuf;

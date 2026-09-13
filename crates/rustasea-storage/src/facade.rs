@@ -7,7 +7,7 @@
 //! feature surfaces [`StorageError::StoreUnavailable`] naming the feature, so
 //! misconfiguration is explicit rather than a silent fallback.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -29,6 +29,11 @@ pub struct StorageFacadeConfig {
     /// Optional read-through routing (`{ primary, fallback, copy_back }`).
     #[serde(default)]
     pub read_through: Option<StorageConfig>,
+    /// Symlinks materialized by [`StorageManager::create_links`], keyed by the
+    /// link path (`"public/storage"`) with the target as value
+    /// (`"storage/app/public"`). Mirrors Laravel's `filesystems.links`.
+    #[serde(default)]
+    pub links: BTreeMap<String, String>,
 }
 
 impl StorageFacadeConfig {
@@ -79,6 +84,49 @@ impl DiskDefinition {
             DiskDefinition::Azure(config) => build_azure(config, name),
         }
     }
+
+    /// Shared Laravel-parity settings (`serve`, `visibility`, `throw`, `report`).
+    pub fn settings(&self) -> &DiskSettings {
+        match self {
+            DiskDefinition::Local(config) => &config.settings,
+            DiskDefinition::S3(config) => &config.settings,
+            DiskDefinition::Gcs(config) => &config.settings,
+            DiskDefinition::Azure(config) => &config.settings,
+        }
+    }
+}
+
+/// Per-disk object visibility, mirroring Laravel's `visibility` key.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Visibility {
+    /// Private to the disk (`local` visibility).
+    Local,
+    /// Publicly reachable (`public` visibility).
+    Public,
+}
+
+/// Optional per-disk behavior flags shared by every driver.
+///
+/// Mirrors the Laravel 13.x `filesystems.php` disk keys: `serve` (expose the
+/// disk via the dev server), `visibility` (`local`/`public`), `throw` (raise
+/// on failure instead of returning `false`), and `report` (surface failures to
+/// the reporter). Every field is optional and absent keys deserialize to
+/// `None`, so unknown keys never break parsing.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+pub struct DiskSettings {
+    /// Serve the disk's objects through the framework dev server.
+    #[serde(default)]
+    pub serve: Option<bool>,
+    /// Object visibility (`local` or `public`).
+    #[serde(default)]
+    pub visibility: Option<Visibility>,
+    /// Raise on failure rather than returning a falsy result.
+    #[serde(default)]
+    pub throw: Option<bool>,
+    /// Report failures to the error reporter.
+    #[serde(default)]
+    pub report: Option<bool>,
 }
 
 /// Configuration for a local filesystem disk.
@@ -86,6 +134,9 @@ impl DiskDefinition {
 pub struct LocalDiskConfig {
     /// Root directory that confines every key.
     pub root: String,
+    /// Shared Laravel-parity disk settings.
+    #[serde(flatten, default)]
+    pub settings: DiskSettings,
 }
 
 /// Configuration for an S3 disk.
@@ -105,6 +156,9 @@ pub struct S3DiskConfig {
     /// Custom endpoint for S3-compatible services (MinIO, R2).
     #[serde(default)]
     pub endpoint: Option<String>,
+    /// Shared Laravel-parity disk settings.
+    #[serde(flatten, default)]
+    pub settings: DiskSettings,
 }
 
 /// Configuration for a Google Cloud Storage disk.
@@ -115,6 +169,9 @@ pub struct GcsDiskConfig {
     /// Path to a service-account JSON key.
     #[serde(default)]
     pub service_account_path: Option<String>,
+    /// Shared Laravel-parity disk settings.
+    #[serde(flatten, default)]
+    pub settings: DiskSettings,
 }
 
 /// Configuration for an Azure Blob Storage disk.
@@ -127,6 +184,9 @@ pub struct AzureDiskConfig {
     /// Explicit access key (prefer environment/secret manager).
     #[serde(default)]
     pub access_key: Option<String>,
+    /// Shared Laravel-parity disk settings.
+    #[serde(flatten, default)]
+    pub settings: DiskSettings,
 }
 
 impl StorageManager {
@@ -161,7 +221,7 @@ impl StorageManager {
                 routing.fallback
             )));
         }
-        Ok(StorageManager::from_parts(disks, routing))
+        Ok(StorageManager::from_parts(disks, routing).with_links(config.links.clone()))
     }
 
     /// Build a manager from a `config/storage.toml` document string.

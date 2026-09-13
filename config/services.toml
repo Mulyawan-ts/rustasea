@@ -1,0 +1,42 @@
+# RustaSea third-party service credentials (CFG-007).
+#
+# Mirrors Laravel 13.x `config/services.php`: Postmark, Resend, AWS SES, and
+# Slack notification credentials. This is a credentials surface — no runtime
+# consumer is wired yet — but AI/mail providers and future notification
+# channels read it through the typed `ServicesConfig` in
+# `crates/rustasea-config/src/services.rs`.
+#
+# NEVER commit real secrets. Leave every placeholder empty; supply values
+# through the environment instead. An empty string is treated as "unset"
+# (`None`), and a missing `[services.*]` block is fine (all accessors return
+# `None`).
+#
+# Environment mapping:
+#   The layered loader (`ConfigLoader`) lowercases environment keys and splits
+#   on the `__` separator, so a nested value can be set with, e.g.,
+#   `SERVICES__POSTMARK__KEY`. The Laravel-style single-underscore variables
+#   documented per field below are applied directly by
+#   `ServicesConfig::from_loader` (env > file), matching how `MailConfig`
+#   reads its `MAIL_*` overrides.
+
+[services.postmark]
+# Postmark server API token. env: POSTMARK_API_KEY
+key = ""
+
+[services.resend]
+# Resend API key. env: RESEND_API_KEY
+key = ""
+
+[services.ses]
+# AWS access key id. env: AWS_ACCESS_KEY_ID
+key = ""
+# AWS secret access key. env: AWS_SECRET_ACCESS_KEY
+secret = ""
+# AWS region; defaults to "us-east-1" (Laravel's default) when left empty.
+region = "us-east-1"
+
+[services.slack.notifications]
+# Slack bot user OAuth token. env: SLACK_BOT_USER_OAUTH_TOKEN
+bot_user_oauth_token = ""
+# Default Slack channel. env: SLACK_BOT_USER_DEFAULT_CHANNEL
+channel = ""

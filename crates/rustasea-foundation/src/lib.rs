@@ -1,5 +1,9 @@
 //! RustaSea foundation — Application, Container, ServiceProvider, shutdown.
 
+pub mod config;
+
+pub use config::{AppConfig, AppConfigError, MaintenanceConfig};
+
 use std::any::Any;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};

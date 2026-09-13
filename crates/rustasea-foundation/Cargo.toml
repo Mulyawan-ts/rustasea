@@ -6,3 +6,9 @@ license.workspace = true
 
 [dependencies]
 tokio = { version = "1", features = ["signal", "rt", "macros", "time"] }
+serde = { workspace = true }
+thiserror = { workspace = true }
+rustasea-config = { path = "../rustasea-config" }
+
+[dev-dependencies]
+tempfile = "3"

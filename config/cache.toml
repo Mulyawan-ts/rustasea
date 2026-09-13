@@ -1,1 +1,82 @@
-# Placeholder: cache store settings (M4). Loaded by rustasea-config.
+# Cache configuration (M4). Loaded by rustasea-config and parsed into the typed
+# `rustasea_cache::CacheConfig` (`CacheConfig::from_loader`).
+#
+# Mirrors the shape of Laravel 13.x `config/cache.php`. RustaSea maps Laravel's
+# `array` store onto its in-process `memory` driver; the `redis` driver is
+# implemented behind the crate's opt-in `redis` feature. Every other Laravel
+# driver (`database`, `file`, `storage`, `memcached`, `dynamodb`, `failover`,
+# `octane`) is recognised by name but NOT yet implemented: selecting one
+# surfaces a typed `CacheConfigError::UnsupportedDriver` at load time rather
+# than silently falling back, so a misconfigured production store never
+# degrades into a process-local map that loses entries on restart.
+
+[cache]
+# Default store name (Laravel `default`, usually `database`). RustaSea ships
+# the in-process `memory` store by default; Laravel's `array` is accepted as an
+# alias of `memory`.
+default = "memory"
+
+# Key prefix applied to every cache key (Laravel `prefix`). It MUST contain the
+# hyphenated `-cache-` marker so cache keys are never confused with session
+# keys; a prefix without it is a typed `CacheConfigError::InvalidPrefix`.
+prefix = "rustasea-cache-"
+
+# Class allow-list for deserialization (Laravel `serializable_classes`).
+# Laravel's `false` default (or an empty list) disables the allow-list;
+# RustaSea stores typed values as JSON and does not yet enforce the allow-list.
+serializable_classes = []
+
+# In-process (per-node) store — Laravel's `array` driver.
+[cache.stores.memory]
+driver = "memory"
+# Serialize values before storing (Laravel `serialize`). RustaSea always encodes
+# typed values as JSON, so this flag is parsed for parity only.
+serialize = false
+
+# Shared Redis store (feature `redis`). Requires a URL — set `url` here or the
+# `REDIS_URL` environment variable — AND a build with `--features redis`;
+# without both the store is skipped and the `redis` name is unresolvable.
+# `connection` / `lock_connection` map to the URL / REDIS_URL in RustaSea.
+[cache.stores.redis]
+driver = "redis"
+connection = "default"
+lock_connection = "default"
+# url = "redis://127.0.0.1:6379"
+
+# ---------------------------------------------------------------------------
+# Recognised but not yet implemented. Uncommenting any of these makes it the
+# selected driver and raises a typed CacheConfigError::UnsupportedDriver.
+# ---------------------------------------------------------------------------
+#
+# [cache.stores.database]
+# driver = "database"
+# connection = "default"
+# table = "cache"
+# lock_connection = "default"
+# lock_table = "cache_locks"
+#
+# [cache.stores.file]
+# driver = "file"
+# path = "storage/framework/cache/data"
+# lock_path = "storage/framework/cache/locks"
+#
+# [cache.stores.storage]
+# driver = "storage"
+# disk = "local"
+# path = "framework/cache/data"
+#
+# [cache.stores.memcached]
+# driver = "memcached"
+# servers = ["127.0.0.1:11211"]
+#
+# [cache.stores.dynamodb]
+# driver = "dynamodb"
+# key = ""
+# table = "cache"
+#
+# [cache.stores.failover]
+# driver = "failover"
+# stores = ["database", "memory"]
+#
+# [cache.stores.octane]
+# driver = "octane"

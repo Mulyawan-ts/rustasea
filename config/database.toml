@@ -71,3 +71,64 @@ database = "rustasea"
 # password = "secret"
 # Per-connection pool tuning is forwarded to the Mongo driver:
 # pool = { min = 1, max = 10, idle_timeout = 600 }
+
+# ---------------------------------------------------------------------------
+# Migrations (Laravel `database.php` `migrations` section). Consumed by the ORM
+# `Migrator`: `table` names the tracking table that records each applied
+# migration and its batch. `update_date_on_publish` is parsed for Laravel
+# parity (RustaSea stamps `executed_at` on apply, so it is currently advisory).
+# ---------------------------------------------------------------------------
+[database.migrations]
+table = "migrations"
+update_date_on_publish = true
+
+# ---------------------------------------------------------------------------
+# Redis (Laravel `database.php` `redis` section). These are connection
+# *definitions* the cache/queue configs reference by name (`default`, `cache`);
+# the ORM only parses and validates them and never opens a Redis socket itself.
+#
+# `client` selects the backend. RustaSea uses `deadpool`, mapping onto Laravel's
+# `phpredis`/`predis` selector. `options` mirrors Laravel's shared `options`
+# block: `cluster` is the cluster backend (`redis`, `predis`, …), `prefix` is
+# applied to every key, and `persistent` keeps connections open across requests.
+#
+# A full `url` wins over the granular `host`/`port`/`database` fields; the
+# scheme must be `redis://`/`rediss://` (or `unix://`) or parsing fails with a
+# typed error. `database` is the logical Redis DB index. `max_retries` and the
+# `backoff_*` keys describe the reconnect policy (algorithm name, base delay in
+# milliseconds, and cap).
+# ---------------------------------------------------------------------------
+[database.redis]
+client = "deadpool"
+
+[database.redis.options]
+cluster = "redis"
+prefix = "rustasea-database-"
+persistent = false
+
+# Primary Redis connection (Laravel `default`), logical DB 0.
+[database.redis.default]
+url = "redis://127.0.0.1:6379/0"
+host = "127.0.0.1"
+port = 6379
+# username = ""   # Laravel REDIS_USERNAME (Redis 6 ACL)
+# password = ""   # Laravel REDIS_PASSWORD
+database = 0
+max_retries = 3
+backoff_algorithm = "exponential"
+backoff_base = 100
+backoff_cap = 1000
+
+# Cache Redis connection (Laravel `cache`), logical DB 1 so cache keys never
+# collide with the primary connection's keys.
+[database.redis.cache]
+url = "redis://127.0.0.1:6379/1"
+host = "127.0.0.1"
+port = 6379
+# username = ""   # Laravel REDIS_USERNAME (Redis 6 ACL)
+# password = ""   # Laravel REDIS_PASSWORD
+database = 1
+max_retries = 3
+backoff_algorithm = "exponential"
+backoff_base = 100
+backoff_cap = 1000

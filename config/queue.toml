@@ -1,1 +1,101 @@
-# Placeholder: queue connection settings (M4). Loaded by rustasea-config.
+# Queue configuration (Laravel 13.x `config/queue.php` parity).
+#
+# Loaded by `rustasea-config` and parsed by `rustasea_queue::QueueConfig`
+# (`from_loader`). The shape mirrors Laravel one-for-one so a migrated
+# `queue.php` maps onto the same keys:
+#
+#   [queue]                     <- `return [ ... ]` root
+#   queue.default               <- `'default' => env('QUEUE_CONNECTION', ...)`
+#   [queue.connections.<name>]  <- `'connections' => [ '<name>' => [ ... ] ]`
+#   [queue.batching]            <- `'batching' => [ ... ]`
+#   [queue.failed]              <- `'failed' => [ ... ]`
+#
+# Drivers implemented by RustaSea: `sync`, `database`, `redis`. The remaining
+# Laravel drivers (`beanstalkd`, `sqs`, `deferred`, `background`, `failover`)
+# are documented as commented examples below and are **not yet implemented** —
+# selecting one is a typed `QueueConfigError::UnsupportedDriver` at load time
+# rather than a silent fallback.
+
+[queue]
+# Connection used when a dispatch names none. RustaSea maps Laravel's
+# `database` default onto the canonical `database` connection.
+default = "database"
+
+# --- Implemented connections -------------------------------------------------
+
+# `sync` executes jobs inline in the dispatching process (deterministic tests,
+# local debugging). Always available; no configuration beyond `driver`.
+[queue.connections.sync]
+driver = "sync"
+
+# `database` persists jobs to a table and is drained by `queue:work`. `connection`
+# optionally names a `[database.connections.<name>]` entry; when omitted the ORM
+# default connection is used. `table` is the jobs table (default `jobs`).
+# `retry_after` (seconds) is the reservation timeout; `after_commit` defers the
+# push until the enclosing transaction commits (parsed for parity).
+[queue.connections.database]
+driver = "database"
+# connection = "default"
+table = "jobs"
+queue = "default"
+retry_after = 90
+after_commit = false
+
+# `redis` stores immediate jobs on a list and delayed jobs on a sorted set.
+# Requires the crate's `redis` feature; without it the driver is a documented
+# typed error (`QueueConfigError::UnsupportedDriver`). `connection` names a
+# `[database.connections.<name>]` Redis entry (or is left unset for the default);
+# `block_for` is the seconds `BRPOP` blocks before yielding (null = short poll).
+[queue.connections.redis]
+driver = "redis"
+# connection = "default"
+queue = "default"
+retry_after = 90
+# block_for = 5
+
+# --- Batching ----------------------------------------------------------------
+
+# `batching` backs `Bus::batch()`. `database` names the DB connection and
+# `table` the batches table (Laravel default `job_batches`).
+[queue.batching]
+# database = "default"
+table = "job_batches"
+
+# --- Failed jobs -------------------------------------------------------------
+
+# `failed` is the dead-letter store. `database-uuids` is the implemented driver
+# (UUID primary keys); `database`/`table` select where dead letters land
+# (Laravel default table `failed_jobs`).
+[queue.failed]
+driver = "database-uuids"
+# database = "default"
+table = "failed_jobs"
+
+# --- Not yet implemented (Laravel parity, commented examples) ----------------
+#
+# [queue.connections.beanstalkd]
+# driver = "beanstalkd"
+# host = "127.0.0.1"
+# queue = "default"
+# retry_after = 90
+# block_for = 0
+#
+# [queue.connections.sqs]
+# driver = "sqs"
+# key = "your-public-key"
+# secret = "your-secret-key"
+# prefix = "https://sqs.us-east-1.amazonaws.com/your-account-id"
+# queue = "default"
+# suffix = ""
+# region = "us-east-1"
+# after_commit = false
+#
+# [queue.connections.deferred]
+# driver = "deferred"
+#
+# [queue.connections.background]
+# driver = "background"
+#
+# [queue.connections.failover]
+# driver = "failover"
+# connections = ["redis", "database"]

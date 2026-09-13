@@ -84,6 +84,87 @@ impl AuthError {
     }
 }
 
+/// Typed configuration errors raised while parsing `auth.toml` / `session.toml`.
+///
+/// These surface at boot (before any request is served), so a misconfigured
+/// session driver or cookie policy fails fast instead of degrading silently.
+/// Each variant carries a stable `code` via [`AuthConfigError::code`].
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum AuthConfigError {
+    /// The `[auth]` / `[session]` table exists but cannot be deserialized.
+    #[error("invalid auth configuration: {0}")]
+    Invalid(String),
+
+    /// A required table or key is absent from the configuration.
+    #[error("missing auth configuration: {0}")]
+    Missing(String),
+
+    /// `session.same_site` was not one of `lax`, `strict`, or `none`.
+    #[error("invalid session same_site {0:?} (expected \"lax\", \"strict\", or \"none\")")]
+    InvalidSameSite(String),
+
+    /// `session.serialization` was not `json`.
+    #[error("unsupported session serialization {0:?} (only \"json\" is allowed)")]
+    UnsupportedSerialization(String),
+
+    /// `session.driver` names a store that is not implemented yet.
+    #[error("unsupported session driver {0:?} (only \"memory\" is implemented)")]
+    UnsupportedSessionDriver(String),
+
+    /// The named guard is not declared in `[auth.guards]`.
+    #[error("unknown auth guard {0:?}")]
+    UnknownGuard(String),
+
+    /// The guard declares no `provider`, or the named provider is undeclared.
+    #[error("guard {guard:?} has no usable provider {provider:?}")]
+    MissingGuardProvider {
+        /// Guard whose provider could not be resolved.
+        guard: String,
+        /// Provider name the guard referenced (possibly empty).
+        provider: String,
+    },
+}
+
+impl AuthConfigError {
+    /// Stable machine-readable code, e.g. `AuthConfigError::InvalidSameSite`.
+    pub fn code(&self) -> String {
+        let variant = match self {
+            AuthConfigError::Invalid(_) => "Invalid",
+            AuthConfigError::Missing(_) => "Missing",
+            AuthConfigError::InvalidSameSite(_) => "InvalidSameSite",
+            AuthConfigError::UnsupportedSerialization(_) => "UnsupportedSerialization",
+            AuthConfigError::UnsupportedSessionDriver(_) => "UnsupportedSessionDriver",
+            AuthConfigError::UnknownGuard(_) => "UnknownGuard",
+            AuthConfigError::MissingGuardProvider { .. } => "MissingGuardProvider",
+        };
+        format!("AuthConfigError::{variant}")
+    }
+
+    /// Short user-facing remediation hint.
+    pub fn hint(&self) -> &'static str {
+        match self {
+            AuthConfigError::Invalid(_) | AuthConfigError::Missing(_) => {
+                "Fix the auth/session config file to match the documented shape."
+            }
+            AuthConfigError::InvalidSameSite(_) => {
+                "Set session.same_site to \"lax\", \"strict\", or \"none\"."
+            }
+            AuthConfigError::UnsupportedSerialization(_) => {
+                "Set session.serialization to \"json\"."
+            }
+            AuthConfigError::UnsupportedSessionDriver(_) => {
+                "Set session.driver to \"memory\" (the only implemented store)."
+            }
+            AuthConfigError::UnknownGuard(_) => {
+                "Declare the guard under [auth.guards.<name>] or fix auth.defaults.guard."
+            }
+            AuthConfigError::MissingGuardProvider { .. } => {
+                "Declare the guard's provider under [auth.providers.<name>]."
+            }
+        }
+    }
+}
+
 /// Typed CSRF (forgery-protection) errors.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum CsrfError {
@@ -154,6 +235,27 @@ mod tests {
             }
             .code(),
             "CsrfError::UntrustedOrigin"
+        );
+    }
+
+    /// Config-error codes follow the same `Type::Variant` wire contract.
+    #[test]
+    fn config_error_codes_match_wire_contract() {
+        assert_eq!(
+            AuthConfigError::InvalidSameSite("weird".into()).code(),
+            "AuthConfigError::InvalidSameSite"
+        );
+        assert_eq!(
+            AuthConfigError::UnsupportedSerialization("msgpack".into()).code(),
+            "AuthConfigError::UnsupportedSerialization"
+        );
+        assert_eq!(
+            AuthConfigError::MissingGuardProvider {
+                guard: "web".into(),
+                provider: String::new(),
+            }
+            .code(),
+            "AuthConfigError::MissingGuardProvider"
         );
     }
 }

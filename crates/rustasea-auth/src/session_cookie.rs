@@ -32,10 +32,12 @@ pub struct SessionCookieConfig {
     pub same_site: SameSite,
     /// Cookie path scope.
     pub path: String,
+    /// Optional cookie domain; `None` means host-only (the browser default).
+    pub domain: Option<String>,
 }
 
 impl Default for SessionCookieConfig {
-    /// Hardened defaults: HttpOnly, Secure, SameSite=Lax, Path=/.
+    /// Hardened defaults: HttpOnly, Secure, SameSite=Lax, Path=/, host-only.
     fn default() -> Self {
         Self {
             name: "rustasea-session".to_string(),
@@ -43,6 +45,7 @@ impl Default for SessionCookieConfig {
             secure: true,
             same_site: SameSite::Lax,
             path: "/".to_string(),
+            domain: None,
         }
     }
 }
@@ -52,14 +55,18 @@ impl SessionCookieConfig {
     ///
     /// The returned cookie is what the `SessionManagerLayer` (M5 HTTP wiring)
     /// serialises onto the response; it is exposed here so the flags are
-    /// testable without an HTTP stack.
+    /// testable without an HTTP stack. A configured [`SessionCookieConfig::domain`]
+    /// is applied as the cookie `Domain` attribute; `None` leaves it host-only.
     pub fn build_cookie(&self, value: impl Into<String>) -> Cookie<'static> {
-        Cookie::build((self.name.clone(), value.into()))
+        let mut builder = Cookie::build((self.name.clone(), value.into()))
             .http_only(self.http_only)
             .secure(self.secure)
             .same_site(self.same_site)
-            .path(self.path.clone())
-            .build()
+            .path(self.path.clone());
+        if let Some(domain) = self.domain.clone() {
+            builder = builder.domain(domain);
+        }
+        builder.build()
     }
 }
 
@@ -74,6 +81,7 @@ mod tests {
         assert!(config.http_only);
         assert!(config.secure);
         assert_eq!(config.same_site, SameSite::Lax);
+        assert_eq!(config.domain, None);
 
         let cookie = config.build_cookie("sid-value");
         assert_eq!(cookie.name(), "rustasea-session");
@@ -82,5 +90,17 @@ mod tests {
         assert_eq!(cookie.secure(), Some(true));
         assert_eq!(cookie.same_site(), Some(SameSite::Lax));
         assert_eq!(cookie.path(), Some("/"));
+        assert_eq!(cookie.domain(), None);
+    }
+
+    /// A configured domain is emitted on the cookie; `None` stays host-only.
+    #[test]
+    fn configured_domain_is_applied() {
+        let config = SessionCookieConfig {
+            domain: Some("example.com".to_string()),
+            ..SessionCookieConfig::default()
+        };
+        let cookie = config.build_cookie("sid-value");
+        assert_eq!(cookie.domain(), Some("example.com"));
     }
 }

@@ -71,7 +71,10 @@ fn deepest_existing_ancestor(path: &Path) -> Option<PathBuf> {
 }
 
 /// Cheap lexical pre-check for `..` components that would escape the root.
-fn has_parent_escape(path: &Path) -> bool {
+///
+/// Shared with [`crate::StorageManager::create_links`], which validates both
+/// sides of a `[storage.links]` entry before touching the filesystem.
+pub(crate) fn has_parent_escape(path: &Path) -> bool {
     path.components().any(|c| matches!(c, Component::ParentDir))
 }
 

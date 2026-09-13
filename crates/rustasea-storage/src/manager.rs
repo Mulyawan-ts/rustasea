@@ -7,8 +7,8 @@
 //! delegated to each named disk so traversal is rejected at path time
 //! (NFR-Sec-03) without a filesystem probe.
 
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -58,6 +58,8 @@ pub struct StorageManager {
     disks: HashMap<String, Arc<dyn ManagedDisk>>,
     /// Read-through configuration.
     config: StorageConfig,
+    /// `[storage.links]` entries (`link path` → `target`) for `create_links`.
+    links: BTreeMap<String, String>,
 }
 
 impl StorageManager {
@@ -75,6 +77,7 @@ impl StorageManager {
         Self {
             disks: HashMap::new(),
             config,
+            links: BTreeMap::new(),
         }
     }
 
@@ -83,7 +86,18 @@ impl StorageManager {
         disks: HashMap<String, Arc<dyn ManagedDisk>>,
         config: StorageConfig,
     ) -> Self {
-        Self { disks, config }
+        Self {
+            disks,
+            config,
+            links: BTreeMap::new(),
+        }
+    }
+
+    /// Attach `[storage.links]` entries (`link path` → `target`) for
+    /// [`StorageManager::create_links`] (builder style).
+    pub fn with_links(mut self, links: BTreeMap<String, String>) -> Self {
+        self.links = links;
+        self
     }
 
     /// Register a named disk (builder style).
@@ -159,6 +173,96 @@ impl StorageManager {
         self.disk(&self.config.primary)?.delete(key).await?;
         self.disk(&self.config.fallback)?.delete(key).await
     }
+
+    /// Materialize every `[storage.links]` symlink (`link path` → `target`).
+    ///
+    /// Mirrors Laravel's `storage:link`: each entry creates a symlink at the
+    /// link path pointing at the target, resolved to an absolute path (against
+    /// the current directory) so the link resolves wherever it lives. Entries
+    /// whose link path already exists are skipped, making the call idempotent;
+    /// the returned vector lists only the paths actually created. Parent
+    /// directories of a link are created on demand.
+    ///
+    /// Both sides of every entry are validated *before* any filesystem
+    /// mutation: a link path or target containing a `..` component (a
+    /// traversal escape, NFR-Sec-03) is rejected with
+    /// [`StorageError::PathTraversal`], so a hostile `[storage.links]` entry
+    /// can never materialize outside the project root.
+    ///
+    /// Link creation is platform-specific: Unix uses [`tokio::fs::symlink`],
+    /// Windows uses [`tokio::fs::symlink_dir`] (the Laravel `public/storage`
+    /// link always targets a directory).
+    pub async fn create_links(&self) -> Result<Vec<PathBuf>> {
+        let mut created = Vec::new();
+        for (link, target) in &self.links {
+            validate_link_paths(link, target)?;
+            let link = PathBuf::from(link);
+            if tokio::fs::symlink_metadata(&link).await.is_ok() {
+                continue;
+            }
+            if let Some(parent) = link.parent() {
+                if !parent.as_os_str().is_empty() {
+                    tokio::fs::create_dir_all(parent)
+                        .await
+                        .map_err(|e| StorageError::Io {
+                            path: parent.display().to_string(),
+                            source: e,
+                        })?;
+                }
+            }
+            let target = absolute_target(target);
+            make_symlink(&target, &link)
+                .await
+                .map_err(|e| StorageError::Io {
+                    path: link.display().to_string(),
+                    source: e,
+                })?;
+            created.push(link);
+        }
+        Ok(created)
+    }
+}
+
+/// Validate both sides of a `[storage.links]` entry before any fs mutation.
+///
+/// A `..` component in the link path or the target is a traversal escape
+/// (NFR-Sec-03) and surfaces as [`StorageError::PathTraversal`] without
+/// touching the filesystem. Valid relative entries (`public/storage` →
+/// `storage/app/public`) pass through unchanged.
+fn validate_link_paths(link: &str, target: &str) -> Result<()> {
+    if crate::path::has_parent_escape(Path::new(link)) {
+        return Err(StorageError::PathTraversal(link.to_string()));
+    }
+    if crate::path::has_parent_escape(Path::new(target)) {
+        return Err(StorageError::PathTraversal(target.to_string()));
+    }
+    Ok(())
+}
+
+/// Resolve a link `target` to an absolute path (canonicalized when it exists).
+fn absolute_target(target: &str) -> PathBuf {
+    let path = Path::new(target);
+    if let Ok(abs) = path.canonicalize() {
+        return abs;
+    }
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+    std::env::current_dir()
+        .map(|cwd| cwd.join(path))
+        .unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// Create a symlink, using the platform-appropriate primitive.
+#[cfg(unix)]
+async fn make_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+    tokio::fs::symlink(target, link).await
+}
+
+/// Create a symlink, using the platform-appropriate primitive.
+#[cfg(windows)]
+async fn make_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+    tokio::fs::symlink_dir(target, link).await
 }
 
 /// Object-store-backed disk wrapping an `object_store` backend.

@@ -7,11 +7,12 @@ use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::error::{CacheError, Result};
+use crate::config::{CacheConfig, CacheDriver};
+use crate::error::{CacheConfigError, CacheError, Result};
 use crate::lock::Lock;
 use crate::memory::MemoryStore;
 use crate::redis::RedisStore;
-use crate::store::Store;
+use crate::store::{Store, DEFAULT_PREFIX};
 
 /// Canonical store names.
 pub const MEMORY_STORE: &str = "memory";
@@ -26,13 +27,23 @@ pub type StoreRef = Arc<dyn Store>;
 /// Stores are isolated by name: a `put` on `redis` is not visible on
 /// `memory` (US-M4-03 decision table). The manager seeds both canonical stores
 /// so `store(name)` never surprises; extra stores can be registered.
+///
+/// The manager also carries the configured default store name and key prefix,
+/// applied to every [`Repository`] it hands out. [`CacheManager::new`] keeps
+/// the historical behaviour (default `memory`, [`DEFAULT_PREFIX`]);
+/// [`CacheManager::from_config`] derives both from a [`CacheConfig`].
 #[derive(Clone)]
 pub struct CacheManager {
     stores: Arc<std::sync::RwLock<HashMap<String, StoreRef>>>,
+    default_store: String,
+    prefix: String,
 }
 
 impl CacheManager {
     /// Create a manager pre-seeded with isolated `memory` + `redis` stores.
+    ///
+    /// Uses the built-in default store (`memory`) and prefix (`-cache-`), i.e.
+    /// identical to the historical constructor.
     pub fn new() -> Self {
         let mut map = HashMap::new();
         map.insert(
@@ -45,7 +56,71 @@ impl CacheManager {
         );
         Self {
             stores: Arc::new(std::sync::RwLock::new(map)),
+            default_store: MEMORY_STORE.to_string(),
+            prefix: DEFAULT_PREFIX.to_string(),
         }
+    }
+
+    /// Build a manager from a typed [`CacheConfig`].
+    ///
+    /// The `memory` store is always registered. A declared `redis` store is
+    /// registered only when the crate is built with the `redis` feature AND the
+    /// store resolves a URL (`url`, a URL-shaped `connection`, or `REDIS_URL`);
+    /// otherwise it is skipped so a config that merely mentions Redis does not
+    /// poison an otherwise-working process. Selecting an unimplemented driver
+    /// (`database`, `file`, …) or naming an undeclared default store returns a
+    /// typed error, so misconfiguration fails closed.
+    ///
+    /// # Errors
+    ///
+    /// [`CacheConfigError`] promoted to [`CacheError::Config`] for an unknown
+    /// default store or an unsupported/unknown driver.
+    pub fn from_config(config: &CacheConfig) -> Result<Self> {
+        config.validate()?;
+        let mut map: HashMap<String, StoreRef> = HashMap::new();
+        map.insert(
+            MEMORY_STORE.to_string(),
+            Arc::new(MemoryStore::new()) as StoreRef,
+        );
+
+        for (name, store) in &config.stores {
+            match store.driver_kind()? {
+                CacheDriver::Memory => {
+                    map.entry(name.clone())
+                        .or_insert_with(|| Arc::new(MemoryStore::new()) as StoreRef);
+                }
+                CacheDriver::Redis => {
+                    #[cfg(feature = "redis")]
+                    if let Some(url) = store.resolved_url() {
+                        let redis = RedisStore::from_url(name, &url)?;
+                        map.insert(name.clone(), Arc::new(redis) as StoreRef);
+                    }
+                    // Feature disabled, or no URL configured: the store is
+                    // intentionally left unregistered (spec: register `redis`
+                    // only when the feature is enabled AND a url is present).
+                    // `store(name)` on it still yields a typed UnknownStore.
+                    #[cfg(not(feature = "redis"))]
+                    let _ = store;
+                }
+            }
+        }
+
+        Ok(Self {
+            stores: Arc::new(std::sync::RwLock::new(map)),
+            default_store: config.default.clone(),
+            prefix: config.prefix.clone(),
+        })
+    }
+
+    /// Convenience: load `[cache]` from a loader, then build the manager.
+    ///
+    /// # Errors
+    ///
+    /// Any [`CacheConfigError`] from parsing/validating the config, promoted to
+    /// [`CacheError::Config`].
+    pub fn configure_from(loader: &rustasea_config::ConfigLoader) -> Result<Self> {
+        let config = CacheConfig::from_loader(loader)?;
+        Self::from_config(&config)
     }
 
     /// Register (or replace) a store under `name`.
@@ -53,6 +128,16 @@ impl CacheManager {
         if let Ok(mut map) = self.stores.write() {
             map.insert(name.into(), store);
         }
+    }
+
+    /// Name of the default store used by [`CacheManager::repository`].
+    pub fn default_store(&self) -> &str {
+        &self.default_store
+    }
+
+    /// Key prefix applied to every repository handed out by this manager.
+    pub fn prefix(&self) -> &str {
+        &self.prefix
     }
 
     /// Resolve the store registered under `name`.
@@ -65,12 +150,19 @@ impl CacheManager {
             .get(name)
             .cloned()
             .ok_or_else(|| CacheError::UnknownStore(name.to_string()))?;
-        Ok(Repository::new(store))
+        Ok(Repository::new(store).with_prefix(&self.prefix))
     }
 
-    /// Access the default `memory` store repository.
+    /// Access the default store repository.
+    ///
+    /// Uses the configured default store (Laravel `cache.default`); falls back
+    /// to `memory` when that store is not registered.
     pub fn repository(&self) -> Result<Repository> {
-        self.store(MEMORY_STORE)
+        match self.store(&self.default_store) {
+            Ok(repository) => Ok(repository),
+            Err(_) if self.default_store != MEMORY_STORE => self.store(MEMORY_STORE),
+            Err(error) => Err(error),
+        }
     }
 
     /// Access a context-scoped default-store repository.
@@ -110,21 +202,58 @@ impl Default for CacheManager {
 
 /// Typed, prefix-aware view over one store.
 ///
-/// Applies the `-cache-` prefix (M3 hardening) to every key and (de)serializes
-/// values as JSON (`Repository` = typed layer; `Store` = bytes).
+/// Applies a key prefix (the `-cache-` marker by default, or the configured
+/// `cache.prefix`) to every key and (de)serializes values as JSON
+/// (`Repository` = typed layer; `Store` = bytes).
 #[derive(Clone)]
 pub struct Repository {
     store: StoreRef,
     context: Option<String>,
+    prefix: String,
 }
 
 impl Repository {
     /// Create a repository over an existing store.
+    ///
+    /// Uses the built-in [`DEFAULT_PREFIX`]; call [`Repository::with_prefix`]
+    /// to override it.
     pub fn new(store: StoreRef) -> Self {
         Self {
             store,
             context: None,
+            prefix: DEFAULT_PREFIX.to_string(),
         }
+    }
+
+    /// Return a repository that applies `prefix` to every key.
+    ///
+    /// The prefix is validated to contain the hyphenated `-cache-` marker (the
+    /// same rule `SessionPolicy` enforces) so cache keys can never be confused
+    /// with session keys.
+    ///
+    /// # Errors
+    ///
+    /// [`CacheConfigError::InvalidPrefix`] promoted to [`CacheError::Config`]
+    /// when `prefix` lacks the `-cache-` marker.
+    pub fn try_with_prefix(mut self, prefix: impl Into<String>) -> Result<Self> {
+        let prefix = prefix.into();
+        if !prefix.contains("-cache-") {
+            return Err(CacheConfigError::InvalidPrefix(prefix).into());
+        }
+        self.prefix = prefix;
+        Ok(self)
+    }
+
+    /// Infallible builder used internally by [`CacheManager`] with an
+    /// already-validated prefix.
+    fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.prefix = prefix.into();
+        self
+    }
+
+    /// Key prefix applied by this repository.
+    pub fn prefix(&self) -> &str {
+        &self.prefix
     }
 
     /// Return a repository whose keys carry a deterministic context segment.
@@ -154,6 +283,7 @@ impl Repository {
         Repository {
             store: self.store.clone(),
             context: Some(segment),
+            prefix: self.prefix.clone(),
         }
     }
 
@@ -170,8 +300,8 @@ impl Repository {
     /// Prefixed key helper.
     fn key(&self, key: &str) -> String {
         match self.context {
-            Some(ref ctx) => format!("{}{}:{}", crate::store::DEFAULT_PREFIX, ctx, key),
-            None => format!("{}{}", crate::store::DEFAULT_PREFIX, key),
+            Some(ref ctx) => format!("{}{}:{}", self.prefix, ctx, key),
+            None => format!("{}{}", self.prefix, key),
         }
     }
 

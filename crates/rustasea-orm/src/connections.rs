@@ -43,12 +43,20 @@
 //! against the URL scheme and a disagreement surfaces as a typed
 //! [`ConnectionError::DriverMismatch`].
 //!
+//! ## Migrations and Redis sections
+//!
+//! The Laravel `database.php` `migrations` and `redis` blocks are parsed too:
+//! `[database.migrations]` becomes [`MigrationsConfig`] (the tracking table the
+//! [`crate::Migrator`] records into) and `[database.redis]` becomes an optional
+//! [`RedisConfig`] whose named connection definitions (`default`, `cache`) the
+//! cache/queue configs reference by name. Both are optional; absent sections
+//! fall back to Laravel defaults and never fail parsing.
+//!
 //! Environment-variable precedence is intentionally *not* handled here — the
 //! CLI and `xtask` keep `DATABASE_URL`/`DATABASE__URL` ahead of this module so a
 //! single-URL app behaves exactly as before.
 
 use std::collections::{BTreeMap, HashMap};
-use std::time::Duration;
 
 use serde::Deserialize;
 use tokio::sync::Mutex;
@@ -58,79 +66,20 @@ use rustasea_config::ConfigLoader;
 use crate::db::{DbPool, PoolSettings};
 use crate::error::{ConnectionError, OrmError, Result};
 
+mod migrations;
 mod mongo;
 mod pair;
+mod pool;
+mod redis;
 
+pub use migrations::MigrationsConfig;
 pub use mongo::DatabaseConnection;
 pub use pair::ConnectionPair;
+pub use pool::{EndpointConfig, PoolConfig};
+pub use redis::{RedisConfig, RedisConnection, RedisOptions};
 
 /// Name assigned to the implicit connection synthesized from a legacy `url`.
 const IMPLICIT_DEFAULT_NAME: &str = "default";
-
-/// Pool tuning overrides read from `[database.pool]` / `[database.connections.*.pool]`.
-///
-/// Every field is optional; unset values fall back to [`PoolSettings::default`].
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct PoolConfig {
-    /// Minimum number of idle connections kept warm.
-    #[serde(default)]
-    pub min: Option<u32>,
-    /// Maximum connections the pool will open.
-    #[serde(default)]
-    pub max: Option<u32>,
-    /// Seconds before an idle connection is reaped.
-    #[serde(default)]
-    pub idle_timeout: Option<u64>,
-}
-
-impl PoolConfig {
-    /// Convert the config into runtime [`PoolSettings`], keeping ORM defaults
-    /// for unset fields.
-    fn to_settings(&self) -> PoolSettings {
-        let mut settings = PoolSettings::default();
-        if let Some(min) = self.min {
-            settings.min_connections = min;
-        }
-        if let Some(max) = self.max {
-            settings.max_connections = max;
-        }
-        if let Some(idle) = self.idle_timeout {
-            settings.idle_timeout = Some(Duration::from_secs(idle));
-        }
-        settings
-    }
-}
-
-/// One optional read or write endpoint overlay (`[….read]` / `[….write]`).
-///
-/// Every field is optional. When an endpoint omits a field it falls back to the
-/// primary connection's value, so a replica that shares credentials with the
-/// primary only needs `host` (and maybe `port`). Supplying `url` replaces the
-/// whole endpoint (still validated against the primary `driver`).
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct EndpointConfig {
-    /// Full endpoint URL; when set it takes precedence over the granular fields.
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Host name or IP address (network drivers).
-    #[serde(default)]
-    pub host: Option<String>,
-    /// TCP port (network drivers); falls back to the primary when omitted.
-    #[serde(default)]
-    pub port: Option<u16>,
-    /// Database name (network drivers) or file path (`sqlite`).
-    #[serde(default)]
-    pub database: Option<String>,
-    /// Login user (network drivers).
-    #[serde(default)]
-    pub username: Option<String>,
-    /// Login password (network drivers).
-    #[serde(default)]
-    pub password: Option<String>,
-    /// Optional client charset appended as `?charset=…` (network drivers).
-    #[serde(default)]
-    pub charset: Option<String>,
-}
 
 /// One named database connection.
 ///
@@ -186,6 +135,12 @@ pub struct ConnectionConfig {
 /// The legacy flat `url` (and its `driver` hint) are retained so a single-URL
 /// config keeps working; [`DatabaseConfig::synthesize`] folds them into an
 /// implicit connection when no explicit `[database.connections]` exist.
+///
+/// The Laravel-parity `migrations` and `redis` sections are parsed alongside the
+/// connections: [`MigrationsConfig`] names the tracking table and
+/// [`RedisConfig`] holds the cache/queue connection definitions by name. Both
+/// are optional and default when absent, so a connections-only config keeps
+/// parsing unchanged.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct DatabaseConfig {
     /// Name of the connection used when `resolve(None)` is called.
@@ -203,6 +158,12 @@ pub struct DatabaseConfig {
     /// Named connections, ordered by name for deterministic iteration.
     #[serde(default)]
     pub connections: BTreeMap<String, ConnectionConfig>,
+    /// Migration tracking-table settings (`[database.migrations]`).
+    #[serde(default)]
+    pub migrations: MigrationsConfig,
+    /// Redis connection definitions (`[database.redis]`); absent when unset.
+    #[serde(default)]
+    pub redis: Option<RedisConfig>,
 }
 
 impl DatabaseConfig {
@@ -211,12 +172,15 @@ impl DatabaseConfig {
     /// A missing `[database]` table yields an empty config (tolerated, matching
     /// the loader's missing-file policy); a malformed table surfaces a typed
     /// [`ConnectionError::InvalidConfig`]. Legacy flat fields are folded into an
-    /// implicit connection by [`DatabaseConfig::synthesize`].
+    /// implicit connection by [`DatabaseConfig::synthesize`]. When a
+    /// `[database.redis]` section is present its connection definitions are
+    /// validated (unsupported URL scheme → typed error).
     ///
     /// # Errors
     ///
     /// Returns [`OrmError::Connection`] when the `[database]` table exists but
-    /// cannot be deserialized.
+    /// cannot be deserialized, or when a Redis connection carries an invalid
+    /// `url` scheme.
     pub fn from_loader(loader: &ConfigLoader) -> Result<Self> {
         let mut config = match loader.get_key::<DatabaseConfig>("database") {
             Ok(config) => config,
@@ -233,8 +197,30 @@ impl DatabaseConfig {
                 }
             }
         };
+        if let Some(redis) = &config.redis {
+            redis.validate()?;
+        }
         config.synthesize();
         Ok(config)
+    }
+
+    /// Name of the migration tracking table (default `migrations`).
+    ///
+    /// Read from `[database.migrations] table`; a config without that section
+    /// yields the Laravel default.
+    pub fn migrations_table(&self) -> &str {
+        self.migrations.table.as_str()
+    }
+
+    /// Whether a re-published migration refreshes its recorded date.
+    pub fn update_date_on_publish(&self) -> bool {
+        self.migrations.update_date_on_publish
+    }
+
+    /// The named Redis connection definition, when a `[database.redis]` section
+    /// declares one under `name` (`default`, `cache`, …).
+    pub fn redis_connection(&self, name: &str) -> Option<&RedisConnection> {
+        self.redis.as_ref().and_then(|redis| redis.connection(name))
     }
 
     /// Fold legacy flat fields into the connection map.

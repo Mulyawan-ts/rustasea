@@ -1,17 +1,112 @@
 //! Mailer transports and the process-wide mailer registry.
 
+use std::any::Any;
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use async_trait::async_trait;
 
-use crate::error::Result;
+use crate::address::MailAddress;
+use crate::error::{MailError, Result};
 use crate::message::MailMessage;
 
 /// A transport that delivers fully-built messages.
+///
+/// [`Any`] is a supertrait so a boxed mailer can be downcast back to its
+/// concrete type (see [`dyn Mailer::downcast_ref`](dyn Mailer)), which the
+/// configuration factory and tests rely on.
 #[async_trait]
-pub trait Mailer: Send + Sync + 'static {
+pub trait Mailer: Send + Sync + Any + 'static {
     /// Deliver `message`, or return a transport error.
     async fn send(&self, message: MailMessage) -> Result<()>;
+}
+
+impl dyn Mailer {
+    /// Downcast this mailer to a concrete type, when it is `T`.
+    pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
+        let any: &dyn Any = self;
+        any.downcast_ref::<T>()
+    }
+}
+
+/// Mailer decorator that stamps a default `from` on messages that lack one.
+///
+/// Laravel applies `mail.from` globally; RustaSea keeps the [`Mailer`] contract
+/// sender-agnostic, so the configuration factory wraps the transport in a
+/// `FromMailer` when `[mail.from]` is set. A message that already carries its
+/// own `from` is passed through unchanged.
+pub struct FromMailer {
+    /// Wrapped transport that performs the delivery.
+    inner: Arc<dyn Mailer>,
+    /// Sender applied to messages without their own `from`.
+    from: MailAddress,
+}
+
+impl FromMailer {
+    /// Wrap `inner`, stamping `from` on messages that lack a sender.
+    pub fn new(inner: Arc<dyn Mailer>, from: impl Into<MailAddress>) -> Self {
+        Self {
+            inner,
+            from: from.into(),
+        }
+    }
+
+    /// The wrapped transport.
+    pub fn inner(&self) -> &Arc<dyn Mailer> {
+        &self.inner
+    }
+
+    /// The default sender applied to messages.
+    pub fn from(&self) -> &MailAddress {
+        &self.from
+    }
+}
+
+#[async_trait]
+impl Mailer for FromMailer {
+    /// Apply the default `from` (when absent) and delegate to the transport.
+    async fn send(&self, mut message: MailMessage) -> Result<()> {
+        if message.from.is_none() {
+            message.from = Some(self.from.clone());
+        }
+        self.inner.send(message).await
+    }
+}
+
+/// Mailer that tries each inner mailer in order until one succeeds.
+///
+/// Mirrors Laravel's `failover` transport: the first mailer that delivers wins;
+/// when every mailer fails, the last transport error is returned.
+pub struct FailoverMailer {
+    /// Member mailers, tried in order.
+    mailers: Vec<Arc<dyn Mailer>>,
+}
+
+impl FailoverMailer {
+    /// Create a failover mailer over `mailers`, tried in order.
+    pub fn new(mailers: Vec<Arc<dyn Mailer>>) -> Self {
+        Self { mailers }
+    }
+
+    /// The member mailers, in delivery order.
+    pub fn mailers(&self) -> &[Arc<dyn Mailer>] {
+        &self.mailers
+    }
+}
+
+#[async_trait]
+impl Mailer for FailoverMailer {
+    /// Try each member mailer in order, returning the first success.
+    async fn send(&self, message: MailMessage) -> Result<()> {
+        let mut last_error = None;
+        for mailer in &self.mailers {
+            match mailer.send(message.clone()).await {
+                Ok(()) => return Ok(()),
+                Err(error) => last_error = Some(error),
+            }
+        }
+        Err(last_error
+            .unwrap_or_else(|| MailError::Transport("failover mailer has no members".into())))
+    }
 }
 
 /// In-memory mailer that records every delivered message.

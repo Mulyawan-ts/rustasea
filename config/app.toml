@@ -1,4 +1,30 @@
+# Application configuration — Laravel 13.x `config/app.php` parity.
+#
+# Keys stay flat (`app_*`) to match the existing convention and the config
+# loader's environment overlay: `APP_NAME` -> `app_name`,
+# `APP_MAINTENANCE_DRIVER` -> `app_maintenance_driver`, etc. Environment
+# variables always win over this file. See
+# `crates/rustasea-foundation/src/config.rs` for the typed consumer.
 app_name = "RustaSea"
 app_env = "local"
 app_debug = true
 app_url = "http://localhost:8000"
+# Application timezone (Laravel default: "UTC").
+app_timezone = "UTC"
+# Default locale (Laravel default: "en").
+app_locale = "en"
+# Locale used when the default locale has no translation (Laravel default: "en").
+app_fallback_locale = "en"
+# Faker locale for database factories (Laravel default: "en_US").
+app_faker_locale = "en_US"
+# Encryption cipher (Laravel default: "AES-256-CBC").
+app_cipher = "AES-256-CBC"
+# Encryption key; normally supplied via the `APP_KEY` environment variable.
+# An empty value is treated as "unset" (None) by AppConfig.
+app_key = ""
+# Previous encryption keys retained for decryption during key rotation.
+app_previous_keys = []
+# Maintenance mode backend, selected with `APP_MAINTENANCE_DRIVER`
+# (`file` or `database`) and `APP_MAINTENANCE_STORE`.
+app_maintenance_driver = "file"
+app_maintenance_store = "database"

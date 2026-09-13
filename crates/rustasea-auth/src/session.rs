@@ -14,6 +14,7 @@ use std::sync::Arc;
 use tower_sessions::session::{Id, Session};
 use tower_sessions::{MemoryStore, SessionStore};
 
+use crate::config::SessionConfig;
 use crate::error::{AuthError, Result};
 use crate::guard::{AuthUser, Credentials, Guard, Token};
 use crate::session_cookie::SessionCookieConfig;
@@ -21,6 +22,11 @@ use crate::users::UserLookup;
 use crate::verify::{Argon2Verifier, PasswordVerifier};
 
 /// Session lifetime advertised on issued tokens (two weeks, tower-sessions default).
+///
+/// Kept as the fallback when a guard is built without an explicit TTL (e.g.
+/// [`SessionGuard::new`]); [`SessionGuard::with_ttl`] /
+/// [`SessionGuard::from_config`] override it with the configured
+/// `session.lifetime` (minutes → seconds).
 const SESSION_TTL_SECS: u64 = 1_209_600;
 
 /// Hardening policy for session/cache serialization (FR-303/FR-304).
@@ -172,6 +178,8 @@ pub struct SessionGuard<S: SessionStore = MemoryStore> {
     lookup: Arc<dyn UserLookup>,
     /// Whether `login_using_id` is permitted (disabled by default).
     allow_login_using_id: bool,
+    /// Access-token lifetime in seconds advertised by [`Guard::login`].
+    ttl_secs: u64,
 }
 
 impl SessionGuard<MemoryStore> {
@@ -179,9 +187,45 @@ impl SessionGuard<MemoryStore> {
     pub fn new(policy: SessionPolicy) -> Self {
         Self::with_store(policy, Arc::new(MemoryStore::default()))
     }
+
+    /// Build a guard from a typed [`SessionConfig`] over the in-memory store.
+    ///
+    /// Applies the configured cookie (name/secure/http_only/same_site/path/
+    /// domain), the serialization policy (prefix derived from the cookie name),
+    /// and the TTL (`lifetime` minutes × 60). The driver has already been
+    /// validated as `memory` by [`SessionConfig::from_loader`].
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`SessionConfig::to_policy`] / [`SessionConfig::to_cookie_config`]
+    /// typed errors (invalid serialization, same_site, or cookie name).
+    pub fn from_config(config: &SessionConfig) -> crate::config::ConfigResult<Self> {
+        Self::new(SessionPolicy::default()).with_config(config)
+    }
 }
 
 impl<S: SessionStore> SessionGuard<S> {
+    /// Apply a typed [`SessionConfig`]'s cookie, TTL, and serialization policy.
+    ///
+    /// The cookie and TTL are always applied. The policy is updated in place:
+    /// `serialization` and `prefix` come from the config, while any
+    /// `serializable_classes` allow-list already present on this guard is
+    /// preserved (the config carries no allow-list, so it must never silently
+    /// widen or clear an injected one).
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`SessionConfig::to_policy`] / [`SessionConfig::to_cookie_config`]
+    /// typed errors.
+    pub fn with_config(mut self, config: &SessionConfig) -> crate::config::ConfigResult<Self> {
+        let policy = config.to_policy()?;
+        self.policy.serialization = policy.serialization;
+        self.policy.prefix = policy.prefix;
+        self.cookie = config.to_cookie_config()?;
+        self.ttl_secs = config.ttl_secs();
+        Ok(self)
+    }
+
     /// Create a guard over an explicit store (Redis/SQLx/etc.).
     pub fn with_store(policy: SessionPolicy, store: Arc<S>) -> Self {
         Self {
@@ -192,7 +236,18 @@ impl<S: SessionStore> SessionGuard<S> {
             verifier: Arc::new(Argon2Verifier::new()),
             lookup: Arc::new(crate::users::StaticLookup),
             allow_login_using_id: false,
+            ttl_secs: SESSION_TTL_SECS,
         }
+    }
+
+    /// Override the advertised session TTL (seconds).
+    ///
+    /// Wired from `session.lifetime` (minutes × 60) via
+    /// [`SessionGuard::with_config`]; without this call the guard keeps the
+    /// two-week [`SESSION_TTL_SECS`] fallback.
+    pub fn with_ttl(mut self, ttl_secs: u64) -> Self {
+        self.ttl_secs = ttl_secs;
+        self
     }
 
     /// Attach the password verifier used by [`Guard::login`].
@@ -229,6 +284,11 @@ impl<S: SessionStore> SessionGuard<S> {
         &self.cookie
     }
 
+    /// Access-token lifetime (seconds) advertised by [`Guard::login`].
+    pub fn ttl_secs(&self) -> u64 {
+        self.ttl_secs
+    }
+
     /// Shared handle to the backing store (HTTP wiring and tests).
     pub fn session_store(&self) -> Arc<S> {
         Arc::clone(&self.store)
@@ -261,7 +321,7 @@ impl<S: SessionStore> SessionGuard<S> {
             access_token: value.clone(),
             refresh_token: value,
             token_type: "Session".to_string(),
-            expires_in: SESSION_TTL_SECS,
+            expires_in: self.ttl_secs,
         }
     }
 

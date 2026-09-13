@@ -9,6 +9,7 @@
 //! `redis` feature (inert and typed-error by default), store isolation
 //! (`redis` vs `memory`), and an atomic `Lock` with `get`/`block`/`release`.
 
+pub mod config;
 pub mod error;
 pub mod lock;
 pub mod memory;
@@ -16,7 +17,8 @@ pub mod redis;
 pub mod repository;
 pub mod store;
 
-pub use error::{CacheError, LockError, Result};
+pub use config::{CacheConfig, CacheDriver, StoreConfig};
+pub use error::{CacheConfigError, CacheError, LockError, Result};
 pub use lock::{Lock, LockGuard};
 pub use memory::MemoryStore;
 pub use redis::RedisStore;

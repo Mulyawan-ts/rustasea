@@ -30,7 +30,7 @@ pub use blueprint::Blueprint;
 pub use builder::{Executor, Lock, OrderDirection, QueryBuilder, Raw};
 pub use connections::{
     ConnectionConfig, ConnectionPair, ConnectionResolver, DatabaseConfig, DatabaseConnection,
-    PoolConfig,
+    MigrationsConfig, PoolConfig, RedisConfig, RedisConnection, RedisOptions,
 };
 pub use db::{DbPool, PoolSettings};
 pub use eager::EagerPlan;

@@ -40,6 +40,10 @@ rustasea-inertia-client = { path = "../rustasea-inertia-client", optional = true
 rustasea-inertia-adapters = { path = "../rustasea-inertia-adapters", optional = true }
 rustasea-livewire = { path = "../rustasea-livewire", optional = true }
 rustasea-scaffold = { path = "../rustasea-scaffold", optional = true }
+# Logging facade (CFG-005): Laravel-style `logging.toml` channels on tracing.
+# Opt-in so the core build never links the tracing subscriber tree
+# (pay-for-what-you-use, NFR-Sca-02).
+rustasea-logging = { path = "../rustasea-logging", optional = true }
 
 [features]
 default = []
@@ -76,6 +80,9 @@ ai-mcp = ["dep:rustasea-ai", "rustasea-ai/mcp"]
 # MongoDB document store (ADR-0010). Opt-in so the core build never links the
 # `mongodb`/`bson` driver tree (NFR-Sca-02).
 mongo = ["dep:rustasea-mongo"]
+# Logging facade (CFG-005). Opt-in so the core build never links the tracing
+# subscriber/appender tree (NFR-Sca-02).
+logging = ["dep:rustasea-logging"]
 # Composite: every server-side presentation layer plus the scaffolder. The WASM
 # variants stay opt-in because an app selects exactly one (ADR-0002 §4), and
 # `ai` is excluded so `full` never pulls provider SDKs (NFR-Sca-02).

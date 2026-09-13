@@ -1,0 +1,71 @@
+# Session configuration (M3). Loaded by rustasea-config and parsed into the
+# typed `rustasea_auth::SessionConfig` (`SessionConfig::from_loader`).
+#
+# Mirrors the shape of Laravel 13.x `config/session.php`. RustaSea currently
+# implements a single backing store:
+#
+#   * `memory` — the default; tower-sessions `MemoryStore` (per-process,
+#     non-shared). Use it for local development and single-node deployments.
+#
+# The remaining Laravel drivers (`redis`, `database`, `file`, `cookie`,
+# `array`) are recognised by name but NOT yet implemented: selecting one
+# surfaces a typed `AuthConfigError::UnsupportedSessionDriver` at load time
+# rather than silently falling back to memory. This keeps the fail-closed
+# posture — a misconfigured production driver never degrades into a store that
+# loses sessions on restart.
+
+[session]
+# Backing store: only `memory` is implemented (see the module doc above).
+driver = "memory"
+
+# Session lifetime in MINUTES (Laravel parity; converted to seconds by the
+# guard). 120 minutes = 2 hours.
+lifetime = 120
+
+# Destroy the session when the browser closes. `false` keeps Laravel's
+# "remember me for `lifetime`" behaviour.
+expire_on_close = false
+
+# Encrypt the session payload at rest. Reserved: the memory store holds values
+# in-process, so encryption is a no-op until a persistent driver lands.
+encrypt = false
+
+# Where `driver = "file"` would store sessions (unimplemented; kept for parity).
+files = "storage/framework/sessions"
+
+# Connection name used by `driver = "database"` / `"redis"` (unimplemented).
+connection = "default"
+
+# Table used by `driver = "database"` (unimplemented).
+table = "sessions"
+
+# Named store within a driver (unimplemented; kept for parity).
+store = "default"
+
+# Garbage-collection lottery `[chance, out_of]` — Laravel's `[2, 100]`.
+lottery = [2, 100]
+
+# Cookie name. The `-session-` marker is required by `SessionPolicy` so the
+# guard's session keys are always hyphenated (never `_session_`).
+cookie = "rustasea-session"
+
+# Cookie path scope.
+path = "/"
+
+# Cookie domain; empty string means "host-only" (the browser default).
+domain = ""
+
+# Only send the cookie over HTTPS.
+secure = false
+
+# Hide the cookie from JavaScript (`document.cookie`).
+http_only = true
+
+# SameSite policy: `lax` | `strict` | `none` (mapped to the cookie crate enum).
+same_site = "lax"
+
+# Cookies with an independent partitioned (CHIPS) storage key.
+partitioned = false
+
+# Session payload serialization: `json` is the only supported format.
+serialization = "json"

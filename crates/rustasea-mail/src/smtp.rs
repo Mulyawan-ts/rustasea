@@ -25,10 +25,23 @@ impl SmtpMailer {
         port: u16,
         credentials: Option<(String, String)>,
     ) -> Result<Self> {
+        Self::relay_with_timeout(host, port, credentials, None)
+    }
+
+    /// Create an SMTP mailer with an optional socket timeout.
+    ///
+    /// `timeout` bounds each connection/read; `None` leaves lettre's default.
+    pub fn relay_with_timeout(
+        host: impl Into<String>,
+        port: u16,
+        credentials: Option<(String, String)>,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<Self> {
         let host = host.into();
         let mut builder = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&host)
             .map_err(|e| MailError::Transport(e.to_string()))?
-            .port(port);
+            .port(port)
+            .timeout(timeout);
         if let Some((user, password)) = credentials {
             builder = builder.credentials(Credentials::new(user, password));
         }
