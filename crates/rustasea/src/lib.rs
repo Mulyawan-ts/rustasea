@@ -189,3 +189,14 @@ pub use ai::{
     adapters, embed, Agent, AgentError, Ai, AiChunk, AiError, AiProvider, AiResponse, Capability,
     InProcessProvider, ProviderCall, StrToEmbeddings, Tool, ToolRegistry,
 };
+
+/// M7 MongoDB document store re-export — only with the `mongo` feature (ADR-0010).
+#[cfg(feature = "mongo")]
+pub use rustasea_mongo as mongo;
+
+/// Mongo re-exports for document/CRUD ergonomics (ADR-0010).
+#[cfg(feature = "mongo")]
+pub use rustasea_mongo::{
+    Collection as MongoCollection, Document as MongoDocument, Filter as MongoFilter,
+    MongoClient, MongoConfig, MongoError, MongoPoolConfig, Update as MongoUpdate,
+};

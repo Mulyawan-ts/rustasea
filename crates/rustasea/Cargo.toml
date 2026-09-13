@@ -26,6 +26,9 @@ rustasea-storage = { path = "../rustasea-storage" }
 rustasea-search = { path = "../rustasea-search" }
 rustasea-jsonapi = { path = "../rustasea-jsonapi" }
 rustasea-ai = { path = "../rustasea-ai", optional = true }
+# MongoDB document store (ADR-0010); opt-in so the core build never links the
+# `mongodb`/`bson` driver tree (pay-for-what-you-use, NFR-Sca-02).
+rustasea-mongo = { path = "../rustasea-mongo", optional = true }
 # M6 server-side view layer (askama default); opt-in to preserve
 # pay-for-what-you-use (blueprint §3).
 rustasea-view = { path = "../rustasea-view", optional = true }
@@ -70,6 +73,9 @@ ai = ["dep:rustasea-ai"]
 ai-search = ["dep:rustasea-ai", "rustasea-ai/search"]
 ai-storage = ["dep:rustasea-ai", "rustasea-ai/storage"]
 ai-mcp = ["dep:rustasea-ai", "rustasea-ai/mcp"]
+# MongoDB document store (ADR-0010). Opt-in so the core build never links the
+# `mongodb`/`bson` driver tree (NFR-Sca-02).
+mongo = ["dep:rustasea-mongo"]
 # Composite: every server-side presentation layer plus the scaffolder. The WASM
 # variants stay opt-in because an app selects exactly one (ADR-0002 §4), and
 # `ai` is excluded so `full` never pulls provider SDKs (NFR-Sca-02).

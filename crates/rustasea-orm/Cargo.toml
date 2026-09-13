@@ -18,21 +18,36 @@ sqlite = ["sqlx/sqlite"]
 # `pgvector` crate's `sqlx` integration so a `Vector` binds/decodes natively on
 # Postgres; SQLite/MySQL keep the portable text representation.
 vector = ["dep:pgvector", "pgvector/sqlx"]
+# MongoDB document store through the shared named-connections resolver. Opt-in
+# so a SQL-only app never compiles the `mongodb` driver; `rustasea-mongo` is the
+# optional dependency this feature activates.
+mongodb = ["dep:rustasea-mongo"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio = { version = "1", features = ["rt", "macros", "sync"] }
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
+# Config-driven named connections: the ORM owns parsing of the `[database]`
+# table, reading it through the shared layered loader.
+rustasea-config = { path = "../rustasea-config" }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 async-trait = { workspace = true }
+# RFC 3986 percent-encoding for credentials interpolated into connection URLs.
+percent-encoding = "2"
 # Runtime API only — the compile-time `query!` macros are intentionally not
 # enabled (CI has no `DATABASE_URL`). Driver features are added via `[features]`.
 sqlx = { workspace = true }
 # Native pgvector type + sqlx `Encode`/`Decode` for `Postgres` (feature `vector`).
 pgvector = { version = "0.4", optional = true, default-features = false }
+# MongoDB document store (feature `mongodb`). Optional so SQL-only builds stay
+# free of the driver; the connections resolver gates all uses behind the feature.
+rustasea-mongo = { path = "../rustasea-mongo", optional = true }
 
 [dev-dependencies]
 rustasea-macros = { path = "../rustasea-macros" }
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
+# Integration tests parse the assembled connection URLs to prove credentials
+# with reserved characters stay within the authority.
+url = "2"

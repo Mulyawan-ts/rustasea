@@ -42,6 +42,10 @@ pub enum OrmError {
     #[error("connection pool error: {0}")]
     Pool(String),
 
+    /// Named-connection resolution failure (unknown name, missing field, …).
+    #[error(transparent)]
+    Connection(#[from] ConnectionError),
+
     /// Migration failure.
     #[error(transparent)]
     Migration(#[from] crate::migration::MigrationError),
@@ -49,6 +53,10 @@ pub enum OrmError {
     /// Transaction lifecycle failure (already committed or rolled back).
     #[error(transparent)]
     Transaction(#[from] crate::tx::TransactionError),
+
+    /// Schema-builder failure (bad dialect, identifier, or blueprint shape).
+    #[error(transparent)]
+    Schema(#[from] SchemaError),
 
     /// Vector dimension mismatch: the column expects `expected` dimensions but
     /// the supplied embedding has `actual`.
@@ -68,6 +76,50 @@ impl From<sqlx::Error> for OrmError {
     }
 }
 
+/// Named-connection resolution errors raised by [`crate::connections`].
+///
+/// Every variant is a configuration problem detected *before* any socket is
+/// opened: an unknown name, a missing required field, or a `driver`/URL scheme
+/// disagreement. Driver-level failures surface separately as
+/// [`OrmError::Pool`] / [`OrmError::UnsupportedDriver`].
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ConnectionError {
+    /// No connection is declared under the requested name.
+    #[error("unknown database connection: {0}")]
+    UnknownConnection(String),
+
+    /// No connection map exists and no legacy `database.url` fallback is set.
+    #[error("no database connection configured")]
+    NotConfigured,
+
+    /// The `[database]` config table exists but could not be deserialized.
+    #[error("invalid database config: {0}")]
+    InvalidConfig(String),
+
+    /// A driver that cannot be mapped onto a supported URL scheme was declared.
+    #[error("unsupported database driver `{driver}`")]
+    UnsupportedDriver {
+        /// The unrecognised driver (or URL scheme) string.
+        driver: String,
+    },
+
+    /// A granular connection is missing a field required by its driver.
+    #[error("connection is missing required field `{field}`")]
+    MissingField {
+        /// The missing field (e.g. `host`).
+        field: String,
+    },
+
+    /// The declared `driver` disagrees with the URL scheme.
+    #[error("driver `{driver}` does not match URL scheme `{scheme}`")]
+    DriverMismatch {
+        /// The declared driver.
+        driver: String,
+        /// The scheme parsed from the connection's `url`.
+        scheme: String,
+    },
+}
+
 /// Strict upsert errors — thrown before any round-trip.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum UpsertError {
@@ -78,4 +130,53 @@ pub enum UpsertError {
     /// Upsert row count exceeded the configured batch limit.
     #[error("upsert batch too large: {0} rows")]
     BatchTooLarge(usize),
+}
+
+/// Schema-builder errors raised by [`crate::schema`].
+///
+/// Every variant is detected *before* any SQL is executed: the caller asked for
+/// an unsupported dialect, named a table/column with an illegal identifier, or
+/// produced a blueprint that cannot be rendered (no columns, duplicate column).
+/// The raw DDL string is only produced once validation passes, so a successful
+/// [`crate::schema::Schema::create`] always yields executable SQL.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum SchemaError {
+    /// The requested dialect is not one of `sqlite` / `postgres` / `mysql`.
+    #[error("unknown dialect: {0}")]
+    UnknownDialect(String),
+
+    /// A table name was empty (or whitespace-only).
+    #[error("empty table name")]
+    EmptyTableName,
+
+    /// A column name was empty (or whitespace-only).
+    #[error("empty column name")]
+    EmptyColumnName,
+
+    /// A table or column identifier contained characters outside the allow-list.
+    #[error("invalid identifier `{identifier}`")]
+    InvalidIdentifier {
+        /// The offending identifier.
+        identifier: String,
+    },
+
+    /// A table-level `index`/`unique` declaration carried no columns.
+    #[error("index declaration has no columns")]
+    EmptyIndexColumns,
+
+    /// A blueprint carried no column definitions.
+    #[error("table `{table}` has no columns")]
+    EmptyBlueprint {
+        /// The table that was left empty.
+        table: String,
+    },
+
+    /// The same column name was declared twice on one blueprint.
+    #[error("duplicate column `{column}` on table `{table}`")]
+    DuplicateColumn {
+        /// The table being built.
+        table: String,
+        /// The repeated column name.
+        column: String,
+    },
 }

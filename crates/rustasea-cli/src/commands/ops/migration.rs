@@ -8,7 +8,7 @@ use async_trait::async_trait;
 
 use crate::artisan::{Command, Io};
 use crate::error::{CliError, CliResult};
-use rustasea_orm::{DbPool, Migrator};
+use rustasea_orm::{ConnectionError, DatabaseConfig, DbPool, Migrator, OrmError};
 
 /// Return the database URL from the process environment, when set and non-blank.
 ///
@@ -26,13 +26,17 @@ fn database_url_from_env() -> Option<String> {
 /// Precedence, highest to lowest:
 /// 1. `DATABASE_URL` — plain process environment variable.
 /// 2. `DATABASE__URL` — nested environment overlay key.
-/// 3. `database.url` from `config/database.toml` (the fallback).
+/// 3. The default connection from `config/database.toml` — either a named
+///    `[database.connections.<default>]` entry or the legacy flat `database.url`
+///    (folded into an implicit default by [`DatabaseConfig`]).
 /// 4. The legacy top-level `database_url` key.
 ///
 /// The environment is consulted first because [`rustasea_config::ConfigLoader`]'s
 /// overlay maps `DATABASE_URL` to the unrelated top-level `database_url` key; a
-/// `config/database.toml` `database.url` value would otherwise shadow it.
-/// Returns a typed error when nothing is configured.
+/// `config/database.toml` value would otherwise shadow it. Named connections are
+/// resolved through the shared [`DatabaseConfig`], so CLI behaviour for a
+/// single-connection app is unchanged. Returns a typed error when nothing is
+/// configured.
 pub(crate) fn database_url() -> CliResult<String> {
     if let Some(url) = database_url_from_env() {
         return Ok(url);
@@ -41,11 +45,13 @@ pub(crate) fn database_url() -> CliResult<String> {
     let loader = rustasea_config::ConfigLoader::load_from(&["config/database", "config/app"])
         .map_err(|error| CliError::Domain(format!("failed to load database config: {error}")))?;
 
-    if let Ok(url) = loader.get_key::<String>("database.url") {
-        if !url.trim().is_empty() {
-            return Ok(url);
-        }
+    match DatabaseConfig::from_loader(&loader).and_then(|config| config.resolve_url(None)) {
+        Ok(url) => return Ok(url),
+        // No connection configured — fall through to the legacy top-level key.
+        Err(OrmError::Connection(ConnectionError::NotConfigured)) => {}
+        Err(error) => return Err(CliError::Domain(error.to_string())),
     }
+
     if let Ok(url) = loader.get_key::<String>("database_url") {
         if !url.trim().is_empty() {
             return Ok(url);

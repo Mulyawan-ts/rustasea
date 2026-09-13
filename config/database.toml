@@ -1,17 +1,73 @@
 # Database connection settings (M2). Loaded by rustasea-orm from the process
 # working directory (workspace root). The `DATABASE_URL` environment variable
-# overrides `url` at runtime, matching the FSD FS-M2-01 contract.
+# overrides the resolved URL at runtime, matching the FSD FS-M2-01 contract.
+#
+# Two shapes are supported and may coexist:
+#   * legacy flat `url` below — still honoured for single-connection apps;
+#   * named `[database.connections.<name>]` tables selected by `default`.
 
 [database]
-# Driver is inferred from the `url` scheme when omitted.
-# One of: postgres | mysql | sqlite
-driver = "postgres"
-url = "postgres://rustasea:secret@localhost:5432/rustasea"
+# Connection used when no name is requested (CLI/xtask resolve the default).
+default = "sqlite"
+# Legacy flat connection — kept for backward compatibility. When
+# `[database.connections]` is absent this is synthesized into an implicit
+# `default` connection; when present it is ignored in favour of the named map.
+url = "sqlite://database.sqlite?mode=rwc"
+# Pool tuning shared by connections that do not override `[….pool]`.
+pool = { min = 1, max = 10, idle_timeout = 600 }
 
-[database.pool]
-# Minimum idle connections kept warm.
-min = 1
-# Maximum connections the pool will open.
-max = 10
-# Seconds before an idle connection is reaped.
-idle_timeout = 600
+# A full `url` may be supplied instead of granular fields. The `driver` key is
+# validated against the URL scheme, so a mismatch is a typed error.
+[database.connections.sqlite]
+driver = "sqlite"
+url = "sqlite://database.sqlite?mode=rwc"
+
+# Granular fields build the URL per driver (`postgres://user:pass@host:port/db`).
+[database.connections.pgsql]
+driver = "postgres"
+host = "127.0.0.1"
+port = 5432
+database = "rustasea"
+username = "rustasea"
+password = "secret"
+# charset optional
+
+# Optional read/write splitting (Laravel-style). Declare a `[….read]` (and/or
+# `[….write]`) table to route SELECTs to a replica while mutations always hit
+# the primary. Omitted endpoint fields fall back to the primary, so a replica
+# sharing credentials only needs its own `host`. A full `read.url` may replace
+# the whole endpoint. With no `[….read]` table, reads and writes share one pool.
+[database.connections.pgsql.read]
+host = "replica.internal"
+port = 5432
+# database/username/password/charset inherit from the primary above.
+# url = "postgres://rustasea:secret@replica.internal:5432/rustasea"  # alt form
+
+[database.connections.mysql]
+driver = "mysql"
+host = "127.0.0.1"
+port = 3306
+database = "rustasea"
+username = "rustasea"
+password = "secret"
+
+# MongoDB (document store) via the shared named-connections resolver. Requires
+# the `mongodb` feature on `rustasea-orm`; without it, resolving this connection
+# returns a typed `UnsupportedDriver` error (never a panic). Supply a full `uri`
+# (`mongodb://` or `mongodb+srv://`) or the granular host/port/database fields,
+# which build a `mongodb://host:port/database` URI (port defaults to 27017). The
+# `MONGODB_URI` env var overrides `uri` and `MONGODB_DATABASE` overrides
+# `database` (see `rustasea_mongo::MongoConfig::from_parts`). `config/mongo.toml`
+# remains the standalone MongoDB config; both surfaces are supported.
+[database.connections.mongo]
+driver = "mongodb"
+uri = "mongodb://127.0.0.1:27017"
+database = "rustasea"
+# Granular alternative (mutually exclusive with `uri`):
+# host = "127.0.0.1"
+# port = 27017
+# database = "rustasea"
+# username = "rustasea"
+# password = "secret"
+# Per-connection pool tuning is forwarded to the Mongo driver:
+# pool = { min = 1, max = 10, idle_timeout = 600 }

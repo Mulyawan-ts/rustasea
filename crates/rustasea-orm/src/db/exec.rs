@@ -4,7 +4,9 @@
 //! a JSON object; [`DbPool::execute_bind`] runs a statement and returns the
 //! affected row count. Both use the `sqlx` runtime API only — no compile-time
 //! `query!` macros — and dispatch to the concrete pool for the active driver.
+//! [`ConnectionPair`] adds the read/write routing layer over these methods.
 
+use crate::connections::ConnectionPair;
 use crate::db::DbPool;
 #[cfg(not(any(feature = "sqlite", feature = "postgres", feature = "mysql")))]
 use crate::error::OrmError;
@@ -396,6 +398,34 @@ async fn fetch_json_mysql(
 async fn execute_mysql(pool: &sqlx::MySqlPool, sql: &str, bindings: &[Value]) -> Result<u64> {
     let query = bind_all::<sqlx::MySql>(sqlx::query(sql), bindings);
     Ok(query.execute(pool).await?.rows_affected())
+}
+
+impl ConnectionPair {
+    /// Run a read query (`SELECT`) on the read pool.
+    ///
+    /// Read routing: mirrors [`DbPool::fetch_json`], but targets
+    /// [`ConnectionPair::read`]. With no split configured the read pool *is*
+    /// the write pool, so behaviour is identical to a single-pool setup.
+    pub async fn fetch_json(
+        &self,
+        sql: &str,
+        bindings: &[Value],
+    ) -> Result<Vec<serde_json::Value>> {
+        self.read().fetch_json(sql, bindings).await
+    }
+
+    /// Run a mutation (`INSERT`/`UPDATE`/`DELETE`) on the write pool.
+    ///
+    /// Write routing: mirrors [`DbPool::execute_bind`], always targeting
+    /// [`ConnectionPair::write`], never a read replica.
+    pub async fn execute_bind(&self, sql: &str, bindings: &[Value]) -> Result<u64> {
+        self.write().execute_bind(sql, bindings).await
+    }
+
+    /// Run a `;`-separated SQL script on the write pool (never a replica).
+    pub async fn execute_script(&self, sql: &str) -> Result<()> {
+        self.write().execute_script(sql).await
+    }
 }
 
 #[cfg(test)]

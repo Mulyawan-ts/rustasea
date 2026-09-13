@@ -1,0 +1,24 @@
+# MongoDB connection settings. Loaded by `rustasea-mongo` from the process
+# working directory (workspace root). The `MONGODB_URI` environment variable
+# overrides `uri` at runtime, and `MONGODB_DATABASE` overrides `database`
+# (matching the `MongoConfig::from_env` contract).
+
+[mongo]
+# Connection string. Use `mongodb://` for a direct host list or
+# `mongodb+srv://` for DNS-seeded replica sets (Atlas).
+uri = "mongodb://localhost:27017"
+# Default database for collection access. Defaults to "rustasea" when unset.
+database = "rustasea"
+
+# Connection pool tuning (all keys optional; omitted values use driver
+# defaults). Uncomment and adjust as needed.
+#
+# [mongo.pool]
+# # Minimum idle connections kept warm.
+# min = 1
+# # Maximum connections the pool will open.
+# max = 10
+# # Seconds before an idle connection is reaped.
+# idle_timeout = 600
+# # Application name reported to the server (shows in `currentOp`).
+# app_name = "rustasea"

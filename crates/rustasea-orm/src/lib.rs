@@ -7,6 +7,7 @@
 pub mod blueprint;
 pub mod builder;
 pub mod clause;
+pub mod connections;
 pub mod db;
 pub mod eager;
 pub mod error;
@@ -18,6 +19,7 @@ pub mod model;
 pub mod model_ops;
 pub mod naming;
 pub mod relations;
+pub mod schema;
 pub mod scopes;
 pub mod tx;
 pub mod types;
@@ -26,9 +28,13 @@ pub mod vector;
 
 pub use blueprint::Blueprint;
 pub use builder::{Executor, Lock, OrderDirection, QueryBuilder, Raw};
-pub use db::DbPool;
+pub use connections::{
+    ConnectionConfig, ConnectionPair, ConnectionResolver, DatabaseConfig, DatabaseConnection,
+    PoolConfig,
+};
+pub use db::{DbPool, PoolSettings};
 pub use eager::EagerPlan;
-pub use error::{OrmError, Result, UpsertError};
+pub use error::{ConnectionError, OrmError, Result, SchemaError, UpsertError};
 pub use execution::{
     chunk_by, count_sql, raw, raw_sql, sum_sql, to_row_count_sql, transaction, Links, PageMeta,
     PaginationMeta, Paginator,
@@ -42,6 +48,7 @@ pub use migration::{
 pub use model::{Model, Relation, RelationKind, Relations, SoftDeletes, Timestamps};
 pub use model_ops::ModelOps;
 pub use naming::snake_plural;
+pub use schema::{Column, ColumnKind, DefaultValue, Schema, SchemaBlueprint};
 pub use scopes::{Scope, ScopeRegistry};
 pub use tx::{Transaction, TransactionError};
 pub use types::{ColumnType, JsonFilter};

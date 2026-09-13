@@ -8,28 +8,41 @@
 //! crate-private; keep both call sites in sync when the config precedence changes.
 
 use rustasea_config::ConfigLoader;
-use rustasea_orm::{registered_migrator, DbPool};
+use rustasea_orm::{registered_migrator, ConnectionError, DatabaseConfig, DbPool, OrmError};
 
 use crate::FAILURE;
 
+/// Return the database URL from the process environment, when set and non-blank.
+///
+/// Mirrors the CLI's `database_url_from_env`: `DATABASE_URL` wins over the
+/// nested `DATABASE__URL` overlay key, and both are checked before config so an
+/// explicit environment value can never be shadowed by `config/database.toml`.
+fn database_url_from_env() -> Option<String> {
+    ["DATABASE_URL", "DATABASE__URL"]
+        .into_iter()
+        .find_map(|key| std::env::var(key).ok().filter(|url| !url.trim().is_empty()))
+}
+
 /// Resolve the database connection URL from layered config.
 ///
-/// Precedence mirrors the CLI's `database_url`: `database.url` (TOML or the
-/// `DATABASE__URL` env overlay), then plain `DATABASE_URL`, then the
-/// `database_url` key produced by the config env overlay.
+/// Precedence mirrors the CLI's `database_url` exactly (the two call sites are
+/// kept in sync): `DATABASE_URL`, then `DATABASE__URL`, then the config default
+/// connection — a named `[database.connections.<default>]` entry or the legacy
+/// flat `database.url` folded into an implicit default — then the legacy
+/// top-level `database_url` key. Named connections resolve through the shared
+/// [`DatabaseConfig`], so single-URL behaviour is unchanged.
 fn database_url() -> Result<String, String> {
+    if let Some(url) = database_url_from_env() {
+        return Ok(url);
+    }
+
     let loader = ConfigLoader::load_from(&["config/database", "config/app"])
         .map_err(|error| format!("failed to load database config: {error}"))?;
 
-    if let Ok(url) = loader.get_key::<String>("database.url") {
-        if !url.trim().is_empty() {
-            return Ok(url);
-        }
-    }
-    if let Ok(url) = std::env::var("DATABASE_URL") {
-        if !url.trim().is_empty() {
-            return Ok(url);
-        }
+    match DatabaseConfig::from_loader(&loader).and_then(|config| config.resolve_url(None)) {
+        Ok(url) => return Ok(url),
+        Err(OrmError::Connection(ConnectionError::NotConfigured)) => {}
+        Err(error) => return Err(error.to_string()),
     }
     if let Ok(url) = loader.get_key::<String>("database_url") {
         if !url.trim().is_empty() {

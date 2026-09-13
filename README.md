@@ -194,7 +194,7 @@ Milestones are **dependency-ordered**: each builds only on predecessors. No circ
 |---|---|---|
 | Async runtime | `tokio` | De-facto async runtime; powers `axum`, `sqlx`, `deadpool`, and queue workers. Work-stealing scheduler, `tokio::select!` for graceful shutdown. |
 | HTTP | `axum` + `tower` + `tower-http` | Ergonomic, extractor-based routing; `tower` middleware composes cleanly; `tower-http` ships CORS, rate-limit, tracing, compression. Preferred over `actix-web` for `tokio` alignment and simpler ownership. |
-| ORM / DB | `sqlx` | Runtime-checked queries via the `sqlx` API (no compile-time `query!` macros — CI has no `DATABASE_URL`); `pgvector` integration behind the `vector` feature. Migrations run through the custom `Migrator` (`crates/rustasea-orm/src/migration.rs:131`). |
+| ORM / DB | `sqlx` | Runtime-checked queries via the `sqlx` API (no compile-time `query!` macros — CI has no `DATABASE_URL`); `pgvector` integration behind the `vector` feature. Migrations run through the custom `Migrator` (`crates/rustasea-orm/src/migration.rs:131`). Named connections (with read/write split) resolve through `ConnectionResolver` (`crates/rustasea-orm/src/connections.rs`); MongoDB joins the same resolver behind the `mongodb` feature via `rustasea-mongo` (`crates/rustasea-orm/src/connections/mongo.rs`). |
 | Connection pooling | `sqlx` built-in pool + `deadpool-redis` (Redis) | `DbPool` wraps the driver-native sqlx pool (`crates/rustasea-orm/src/db.rs:24`); `deadpool-redis` 0.21 backs the feature-gated Redis cache/queue drivers. No `bb8`. |
 | Migrations | Custom `Migrator` | Versioned, reversible migrations (`run`/`rollback`/`fresh`/`seed` — `crates/rustasea-orm/src/migration.rs:189`–`:288`); `cargo artisan migrate` (plus `migrate:fresh`/`migrate:rollback`) or `cargo xtask migrate` wraps them. |
 | Validation | `validator` + custom `rustasea-validation` | `validator` derive macros for struct-level rules; custom crate for `ErrorBag` + FormRequest semantics. |
@@ -213,6 +213,60 @@ Milestones are **dependency-ordered**: each builds only on predecessors. No circ
 | Vector / AI | `pgvector` (feature-gated) + real HTTP providers | `MemoryVectorStore` is the default; `PgVectorStore` executes real similarity queries behind the `pgvector` feature (`crates/rustasea-search/src/pgvector.rs:24`). AI providers make real HTTP calls via `reqwest` — `provider_from_env()` supports OpenAI, Anthropic, Azure, Groq, xAI, DeepSeek, Mistral, Ollama, OpenRouter, and OpenAI-compatible endpoints (`crates/rustasea-ai/src/providers/mod.rs:27`); Gemini/Bedrock are not yet wired. |
 | Testing | `testcontainers` 0.23 + `cargo test` | Isolated Postgres via the `PostgresTestDb` fixture (`crates/rustasea-testing/src/fixtures.rs:49`); Docker-gated integration suite in `crates/rustasea/tests/feature/` runs with `cargo test -p rustasea --features integration -- --ignored`. |
 | Lint / Format | `rustfmt` + `clippy` | Enforced in CI; generated code is `rustfmt`-clean. |
+
+---
+
+## Database Connections
+
+`rustasea-orm` owns config-driven **named connections** parsed from the
+`[database]` table (`crates/rustasea-orm/src/connections.rs`) and resolved
+lazily by `ConnectionResolver`. Two config shapes coexist: a legacy flat
+`database.url` (synthesized into an implicit `default` connection) and explicit
+`[database.connections.<name>]` tables selected by `[database].default`.
+
+```toml
+[database]
+default = "pgsql"          # switch the connection used when no name is given
+
+[database.connections.sqlite]
+driver = "sqlite"
+url = "sqlite://database.sqlite?mode=rwc"
+
+[database.connections.pgsql]
+driver = "postgres"
+host = "127.0.0.1"
+port = 5432
+database = "rustasea"
+username = "rustasea"
+password = "secret"
+```
+
+- **Default switching** — `[database].default` names the connection used by
+  `resolve(None)`; `resolve_url(None)` follows the same selector for the
+  CLI/`xtask`. Passing an explicit name overrides it.
+- **Read/write split** — add an optional `[database.connections.<name>.read]`
+  (and/or `.write`) overlay to route reads to a replica while mutations hit the
+  primary. Omitted endpoint fields inherit the primary, and a connection with no
+  split reuses one pool for both roles (`ConnectionResolver::pair` →
+  `ConnectionPair`; routing lives in `crates/rustasea-orm/src/db/exec.rs`).
+- **MongoDB** — a connection with `driver = "mongodb"` (or `uri = "mongodb://…"`
+  / `mongodb+srv://…`) resolves through `ConnectionResolver::resolve_any` to a
+  `DatabaseConnection::Mongo` handle, alongside the SQL `DatabaseConnection::Sql`
+  pair (`crates/rustasea-orm/src/connections/mongo.rs`). MongoDB support is
+  opt-in behind the `mongodb` feature on `rustasea-orm` (which activates the
+  optional `rustasea-mongo` dependency); without the feature such a connection
+  resolves to a typed `ConnectionError::UnsupportedDriver` naming the feature —
+  never a panic. The standalone `config/mongo.toml` surface
+  (`rustasea_mongo::MongoConfig`) keeps working, and `MONGODB_URI` /
+  `MONGODB_DATABASE` override the connection URI/database
+  (`MongoConfig::from_parts`).
+
+```toml
+[database.connections.mongo]
+driver = "mongodb"
+uri = "mongodb://127.0.0.1:27017"   # or granular host/port/database
+database = "rustasea"
+```
 
 ---
 

@@ -1,0 +1,21 @@
+[package]
+name = "rustasea-mongo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "RustaSea Mongo — MongoDB document store: typed client, Document contract, CRUD helpers, filter/update builders"
+
+[dependencies]
+# Driver is pinned to bson 3 (`bson-3`) so the workspace has a single BSON
+# version shared by the driver and this crate. `compat-3-3-0` is mandatory per
+# the driver's own forward-compatibility compile check.
+mongodb = { version = "3.9", default-features = false, features = ["compat-3-3-0", "bson-3", "rustls-tls", "dns-resolver"] }
+bson = "3.1"
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+toml = "0.8"
+
+[dev-dependencies]
+bson = "3.1"
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

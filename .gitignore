@@ -9,3 +9,9 @@
 
 # Local environment overrides — commit only .env.example.
 /.env
+
+# Local SQLite artifacts (test/runtime databases) — never commit.
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
