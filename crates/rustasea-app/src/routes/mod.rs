@@ -17,12 +17,14 @@ pub mod web;
 #[cfg(test)]
 mod tests;
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum::extract::Request;
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
+use tower_http::services::ServeDir;
 
 use rustasea::auth::AuthUser;
 use rustasea::http::AppState;
@@ -67,12 +69,44 @@ pub fn table() -> RouteTable {
 pub fn compile(mut table: RouteTable, state: Arc<AppState>) -> axum::Router {
     table.layer(axum::Extension(state));
     match table.try_into_axum_router() {
-        Ok(router) => router,
+        Ok(router) => mount_assets(router),
         Err(error) => {
             eprintln!("route table build failed: {error}");
             axum::Router::new().fallback(|| async { StatusCode::INTERNAL_SERVER_ERROR })
         }
     }
+}
+
+/// Mount the static asset service at `/assets/*`, serving the workspace
+/// `resources/` directory.
+///
+/// [`ServeDir`] owns all path handling: it percent-decodes the request path,
+/// rejects any segment containing `..` (or a backslash), and returns `404`
+/// rather than escaping the root, so traversal is handled by the library and
+/// never hand-rolled. The route is mounted on the already-compiled router
+/// outside any [`RouteTable::group`], so it inherits no authentication gate,
+/// and the `/assets` prefix cannot shadow the existing named routes (`/`,
+/// `/health`, `/dashboard`, `/settings/*`, `/console`).
+fn mount_assets(router: axum::Router) -> axum::Router {
+    router.nest_service("/assets", ServeDir::new(resources_root()))
+}
+
+/// Locate the workspace `resources/` directory.
+///
+/// Prefers the process-relative `resources/` — correct for a deployed app and
+/// for `cargo run` from the workspace root — and otherwise falls back to the
+/// workspace root derived from `CARGO_MANIFEST_DIR` (the crate lives at
+/// `crates/rustasea-app`, two levels below it). The fallback keeps `cargo test`
+/// working, since tests run with the crate root as their working directory.
+pub(crate) fn resources_root() -> PathBuf {
+    let cwd_relative = PathBuf::from("resources");
+    if cwd_relative.is_dir() {
+        return cwd_relative;
+    }
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("resources")
 }
 
 /// Minimal `501 Not Implemented` response for flows that are not wired yet.

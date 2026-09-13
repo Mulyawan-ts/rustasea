@@ -1,0 +1,261 @@
+/* RustaSea — single design-token stylesheet entry.
+ *
+ * This file follows the convention of laravel/livewire-starter-kit's
+ * `resources/css/app.css`: one entry point that declares design tokens as CSS
+ * custom properties, overrides them for dark mode, and layers a small set of
+ * base element styles and reusable utility classes on top.
+ *
+ * It is intentionally plain CSS — no Tailwind, no Vite, no npm, no build step.
+ * The app shell links it directly at `/assets/css/app.css`.
+ *
+ * Re-theme the whole application by editing the custom properties below.
+ */
+
+/* ==========================================================================
+   1. Design tokens
+   ========================================================================== */
+
+:root {
+  /* --- Colour ramp ------------------------------------------------------ */
+  --color-bg: #ffffff;
+  --color-surface: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+
+  /* Accent (primary brand colour) and its readable foreground. */
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-contrast: #ffffff;
+
+  /* Status colours. */
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+
+  /* --- Spacing scale ---------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* --- Typography ------------------------------------------------------- */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /* --- Radii ------------------------------------------------------------ */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+
+  /* --- Shadows ---------------------------------------------------------- */
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.08);
+  --shadow-md: 0 4px 12px rgb(15 23 42 / 0.1);
+}
+
+/* ==========================================================================
+   2. Dark override
+   Follow the OS preference by default. Only colour tokens are re-declared;
+   the spacing, typography, radius and shadow scales stay shared.
+   ========================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0b1120;
+    --color-surface: #111827;
+    --color-border: #1f2937;
+    --color-text: #e2e8f0;
+    --color-text-muted: #94a3b8;
+
+    --color-accent: #818cf8;
+    --color-accent-hover: #a5b4fc;
+    --color-accent-contrast: #0b1120;
+
+    --color-success: #4ade80;
+    --color-warning: #fbbf24;
+    --color-danger: #f87171;
+  }
+}
+
+/* ==========================================================================
+   3. Base layer
+   Minimal resets and element defaults. Everything reads from the tokens
+   above so a theme change is a single edit.
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: var(--space-6) 0 var(--space-3);
+  line-height: 1.25;
+}
+
+p {
+  margin: 0 0 var(--space-4);
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+/* Keyboard-only focus ring, applied consistently across interactive elements. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Centred, width-limited page wrapper. */
+.container {
+  width: 100%;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+}
+
+/* ==========================================================================
+   4. Utility classes
+   Small, composable helpers for templates. Only what the base layer and these
+   classes actually need — this is not a framework.
+   ========================================================================== */
+
+.card {
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:hover {
+  background-color: var(--color-border);
+  text-decoration: none;
+}
+
+.btn-primary {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  color: var(--color-accent-contrast);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover {
+  background-color: var(--color-accent-hover);
+}
+
+.form-label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+}
+
+/* Inline validation error text. */
+.error {
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}
+
+/* Flash/status banner (success by default; pair with a status modifier). */
+.flash {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+.flash-success {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.flash-warning {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.flash-danger {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+/* Visually hidden but still announced by assistive technology. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

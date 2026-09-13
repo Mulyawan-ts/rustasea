@@ -154,3 +154,79 @@ async fn unimplemented_post_flows_return_501() {
     assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
     assert!(body.contains("not implemented"), "body: {body}");
 }
+
+/// Positive: the static asset route serves `resources/css/app.css` with a CSS
+/// content type, so the stylesheet the app shell links is reachable over HTTP.
+#[tokio::test]
+async fn asset_route_serves_the_stylesheet() {
+    let (status, headers, body) = call(app(), get("/assets/css/app.css")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        headers
+            .get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok()),
+        Some("text/css")
+    );
+    assert!(
+        body.contains("--color-accent"),
+        "the served stylesheet must be the real design-token entry"
+    );
+}
+
+/// Negative: path-traversal attempts against the asset route must not escape
+/// the `resources/` root. `tower-http`'s `ServeDir` owns all path handling
+/// (percent-decoding plus a `..`/backslash rejection) and answers `404`, so no
+/// workspace file — here the root `Cargo.toml` — is ever returned.
+#[tokio::test]
+async fn asset_route_rejects_path_traversal() {
+    for uri in [
+        "/assets/../Cargo.toml",
+        "/assets/..%2FCargo.toml",
+        "/assets/%2e%2e/Cargo.toml",
+        "/assets/../resources/css/app.css",
+    ] {
+        let (status, _, body) = call(app(), get(uri)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "GET {uri}");
+        assert!(
+            !body.contains("[package]"),
+            "GET {uri} must not leak workspace file contents"
+        );
+    }
+}
+
+/// Positive: `/` renders through the shared layout chrome — the
+/// `partials/head.html` stylesheet link and the auth-aware nav — rather than a
+/// bare string literal.
+#[tokio::test]
+async fn root_renders_layout_chrome() {
+    let (status, _, body) = call(app(), get("/")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains(r#"href="/assets/css/app.css""#),
+        "the head partial must link the stylesheet"
+    );
+    assert!(body.contains("<nav"), "the layout must render its nav");
+}
+
+/// Positive: an authenticated `/dashboard` renders the full app layout —
+/// head partial, footer, and the `user`-aware greeting.
+#[tokio::test]
+async fn authenticated_dashboard_renders_the_layout() {
+    let principal = AuthUser::new("user-1", Some("ada@example.com"), "session");
+    let router = app().layer(Extension(principal));
+
+    let (status, _, body) = call(router, get("/dashboard")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body.contains(r#"href="/assets/css/app.css""#),
+        "the head partial must link the stylesheet"
+    );
+    assert!(
+        body.contains("<footer"),
+        "the layout must render its footer"
+    );
+    assert!(
+        body.contains("Welcome back, ada@example.com"),
+        "the greeting must interpolate the `user` context"
+    );
+}

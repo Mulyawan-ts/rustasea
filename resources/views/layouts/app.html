@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>{% block title %}RustaSea{% endblock %}</title>
+  {% include "partials/head.html" %}
+</head>
+<body>
+  <nav class="container">
+    <a href="/">RustaSea</a>
+    {% if user %}
+      <a href="/dashboard">Dashboard</a>
+      <a href="/settings/profile">Settings</a>
+      <form method="post" action="/logout">
+        <button type="submit" class="btn">Log out</button>
+      </form>
+    {% else %}
+      <a href="/login">Log in</a>
+      <a href="/register">Register</a>
+    {% endif %}
+  </nav>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="container">
+    <p class="muted">Served by RustaSea on axum</p>
+  </footer>
+</body>
+</html>

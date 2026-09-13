@@ -11,11 +11,16 @@ publish = false
 description = "RustaSea runnable app scaffold — `cargo dev` serves the example HTTP application."
 
 [dependencies]
-rustasea = { path = "../rustasea" }
+# `view` exposes the view layer (`ViewResponse`, `ViewEngine`); the forwarded
+# `view-runtime-templates` feature enables the runtime minijinja engine the app
+# renders `resources/views/*.html` with.
+rustasea = { path = "../rustasea", features = ["view", "view-runtime-templates"] }
 tokio = { workspace = true }
 axum = { workspace = true }
 anyhow = "1"
 serde = { workspace = true, features = ["derive"] }
+# `ServeDir` serves `resources/` at `/assets/*`; `fs` is the file-service feature.
+tower-http = { workspace = true, features = ["fs"] }
 
 [dev-dependencies]
 # `ServiceExt::oneshot` drives the compiled router in route tests.

@@ -1,0 +1,27 @@
+{% extends "layouts/app.html" %}
+
+{% block title %}Dashboard — RustaSea{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+{% if user %}
+<p>Welcome back, {{ user.email }}.</p>
+{% else %}
+<p class="muted">You are authenticated. Application data lands here.</p>
+{% endif %}
+
+<div class="card">
+  <h2>Overview</h2>
+  <p class="muted">Placeholder panels for your application data.</p>
+  <div>
+    <div class="card">
+      <h3>Activity</h3>
+      <p class="muted">Recent events appear here.</p>
+    </div>
+    <div class="card">
+      <h3>Metrics</h3>
+      <p class="muted">Key counters appear here.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
