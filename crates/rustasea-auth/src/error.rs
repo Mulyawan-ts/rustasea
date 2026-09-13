@@ -49,6 +49,20 @@ pub enum AuthError {
     /// Session store read/write failure (Redis/DB down).
     #[error("session store unavailable")]
     StoreUnavailable,
+
+    /// A user with the same unique email already exists (registration).
+    #[error("user already exists for email {email}")]
+    UserExists {
+        /// Email that collided with an existing user.
+        email: String,
+    },
+
+    /// No user matches the requested identifier (password reset / update).
+    #[error("user not found: {id}")]
+    UserNotFound {
+        /// Identifier (UUID) that resolved to no user.
+        id: String,
+    },
 }
 
 impl AuthError {
@@ -63,6 +77,8 @@ impl AuthError {
             AuthError::Token(_) => "Token",
             AuthError::Hash(_) => "Hash",
             AuthError::StoreUnavailable => "StoreUnavailable",
+            AuthError::UserExists { .. } => "UserExists",
+            AuthError::UserNotFound { .. } => "UserNotFound",
         };
         format!("AuthError::{variant}")
     }
@@ -80,6 +96,10 @@ impl AuthError {
             AuthError::Token(_) => "The token could not be processed; obtain a new one.",
             AuthError::Hash(_) => "Re-hash the stored password.",
             AuthError::StoreUnavailable => "The session store is unreachable; retry later.",
+            AuthError::UserExists { .. } => {
+                "Choose a different email address; this one is already registered."
+            }
+            AuthError::UserNotFound { .. } => "Re-check the user identifier.",
         }
     }
 }
@@ -235,6 +255,20 @@ mod tests {
             }
             .code(),
             "CsrfError::UntrustedOrigin"
+        );
+        assert_eq!(
+            AuthError::UserExists {
+                email: "ada@example.com".into()
+            }
+            .code(),
+            "AuthError::UserExists"
+        );
+        assert_eq!(
+            AuthError::UserNotFound {
+                id: "user-1".into()
+            }
+            .code(),
+            "AuthError::UserNotFound"
         );
     }
 

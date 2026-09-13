@@ -5299,6 +5299,7 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http",
+ "tower-sessions",
 ]
 
 [[package]]

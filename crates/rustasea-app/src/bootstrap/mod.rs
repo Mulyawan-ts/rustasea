@@ -8,5 +8,6 @@
 //! `main.rs` reaches as `crate::bootstrap`.
 
 pub mod app;
+pub mod auth;
 pub mod commands;
 pub mod providers;

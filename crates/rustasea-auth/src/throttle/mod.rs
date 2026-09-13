@@ -6,8 +6,17 @@
 /// windows are pruned and the bucket map is capped so a flood of distinct
 /// keys cannot grow memory without limit. The Redis-backed limiter (M4)
 /// implements the same trait.
+///
+/// On top of the key-first primitive, [`registry::RateLimiterRegistry`] adds the
+/// kit's *named* limiters (`RateLimiter::for()` parity): the three built-ins
+/// live in [`defaults`] and are registered from `[fortify.limiters]` via
+/// [`registry::RateLimiterRegistry::from_fortify_config`]. [`route`] bridges a
+/// named limiter to the router DSL's `register_middleware` signature.
+pub mod defaults;
 pub mod layer;
 pub mod limiter;
+pub mod registry;
+pub mod route;
 
 use std::time::Duration;
 

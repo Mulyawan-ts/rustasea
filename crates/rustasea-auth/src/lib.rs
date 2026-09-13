@@ -28,10 +28,10 @@ pub mod verification;
 pub mod verify;
 
 pub use config::{
-    AuthConfig, AuthDefaults, ConfigResult, FortifyConfig, FortifyFeaturesConfig,
-    FortifyLimiterConfig, FortifyPasskeyFeatureConfig, FortifyPasskeysConfig,
-    FortifyTwoFactorConfig, GuardConfig, PasswordBrokerConfig, ProviderConfig, ResolvedPasskeys,
-    SessionConfig,
+    password_timeout_secs, AuthConfig, AuthDefaults, ConfigResult, FortifyConfig,
+    FortifyFeaturesConfig, FortifyLimiterConfig, FortifyPasskeyFeatureConfig,
+    FortifyPasskeysConfig, FortifyTwoFactorConfig, GuardConfig, PasswordBrokerConfig,
+    ProviderConfig, ResolvedPasskeys, SessionConfig, DEFAULT_PASSWORD_TIMEOUT_SECS,
 };
 pub use csrf::{CsrfLayer, PreventRequestForgery, SecFetchSite};
 pub use error::{AuthConfigError, AuthError, CsrfError, SerializationError, ThrottleError};
@@ -39,9 +39,18 @@ pub use guard::{Auth, AuthManager, AuthUser, Credentials, Guard, GuardRegistrar,
 pub use jwt::{JwtClaims, JwtConfig, JwtGuard};
 pub use session::{DeserializationAllowList, SessionGuard, SessionPolicy, SessionUser};
 pub use session_cookie::SessionCookieConfig;
+pub use throttle::defaults::{
+    kit_limiters, login_definition, normalize_username, passkeys_definition, two_factor_definition,
+    LOGIN, PASSKEYS, TWO_FACTOR,
+};
 pub use throttle::layer::{ThrottleLayer, ThrottleService};
 pub use throttle::limiter::MemoryRateLimiter;
+pub use throttle::registry::{LimiterDefinition, LimiterError, LimiterInput, RateLimiterRegistry};
+pub use throttle::route::{
+    limiter_input, named_limiter_layer, ThrottleCredentialId, ThrottleSessionId, ThrottleUsername,
+};
 pub use throttle::{BucketState, KeyBy, Limit, RateLimiter, ThrottleConfig, ThrottleDecision};
+pub use users::provider::{DenyAllProvider, MemoryUserProvider, NewUserRecord, UserProvider};
 pub use verification::{EmailVerification, MemoryEmailVerification};
 
 /// Alias kept for documentation parity (`Auth::guard(...)`).

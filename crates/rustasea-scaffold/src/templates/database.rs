@@ -57,6 +57,13 @@ impl Migration for CreateUsers {
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     email_verified_at TIMESTAMPTZ NULL,
+    -- Two-factor secret, stored encrypted at rest (ciphertext in this column).
+    two_factor_secret TEXT NULL,
+    -- JSON array of single-use 2FA recovery codes, stored as text.
+    two_factor_recovery_codes TEXT NULL,
+    two_factor_confirmed_at TIMESTAMPTZ NULL,
+    -- Remember-me token for persistent logins.
+    remember_token VARCHAR(100) NULL,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     deleted_at TIMESTAMPTZ NULL
@@ -156,6 +163,10 @@ impl Factory<User> for UserFactory {
             email: format!("user{}@example.test", self.count),
             password: "hashed-placeholder".to_string(),
             email_verified_at: None,
+            two_factor_secret: None,
+            two_factor_recovery_codes: None,
+            two_factor_confirmed_at: None,
+            remember_token: None,
             deleted_at: None,
             timestamps: Default::default(),
         }
@@ -176,7 +187,7 @@ pub use database_seeder::DatabaseSeeder;
 
 const DATABASE_SEEDER: &str = r##"//! Seeds the default application data.
 
-use rustasea::orm::{Seeder, OrmResult};
+use rustasea::orm::{Result as OrmResult, Seeder};
 
 /// `DatabaseSeeder` — inserts the default application records.
 pub struct DatabaseSeeder;

@@ -7,6 +7,10 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
+pub mod provider;
+
+pub use provider::{DenyAllProvider, MemoryUserProvider, NewUserRecord, UserProvider};
+
 /// Minimal user record the auth layer needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthUserRecord {
@@ -30,6 +34,18 @@ pub trait UserLookup: Send + Sync {
 
     /// Resolve the email for a user UUID.
     fn email_for_id(&self, id: &str) -> Option<String>;
+
+    /// Resolve `users.email_verified_at` for a user UUID.
+    ///
+    /// Returns `None` for an unverified account **and** for a lookup that does
+    /// not track verification at all — the two are indistinguishable on
+    /// purpose, so an un-wired provider fails closed (the `verified` gate stays
+    /// shut) rather than falsely reporting every user as verified. The default
+    /// implementation returns `None`, so existing lookups keep compiling and
+    /// keep failing closed until they opt in.
+    fn email_verified_at_for_id(&self, _id: &str) -> Option<String> {
+        None
+    }
 }
 
 /// Fail-closed lookup: never yields credentials.
@@ -91,5 +107,14 @@ impl UserLookup for MemoryUserRegistry {
             .values()
             .find(|r| r.id == id)
             .map(|r| r.email.clone())
+    }
+
+    fn email_verified_at_for_id(&self, id: &str) -> Option<String> {
+        self.by_email
+            .read()
+            .ok()?
+            .values()
+            .find(|r| r.id == id)
+            .and_then(|r| r.email_verified_at.clone())
     }
 }

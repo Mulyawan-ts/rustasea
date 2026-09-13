@@ -37,8 +37,15 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Compile that exact table into a dispatch router with the shared state.
-    let state = Arc::new(AppState::new("local", true));
-    let router = routes::compile(table, state);
+    // The session guard was installed into the container by
+    // `AuthServiceProvider::register`; seed it into `AppState` so the global
+    // session middleware can project `Extension<AuthUser>` for logged-in
+    // requests. When wiring failed the slot stays absent and auth fails closed.
+    let mut state = AppState::new("local", true);
+    if let Some(guard) = bootstrap::auth::session_guard(&app.container) {
+        state = state.with_auth(guard);
+    }
+    let router = routes::compile(table, Arc::new(state));
 
     // Bind and serve with graceful shutdown.
     let addr: SocketAddr = bind_address();

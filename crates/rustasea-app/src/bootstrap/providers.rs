@@ -5,6 +5,8 @@
 
 use rustasea::{Application, ServiceProvider};
 
+use super::auth::{install_session_guard, SESSION_GUARD_KEY};
+
 /// Application service provider.
 ///
 /// Owns app-level container bindings. Framework services (config, ORM, auth,
@@ -25,10 +27,56 @@ impl ServiceProvider for AppServiceProvider {
     fn boot(&self, _app: &Application) {}
 }
 
+/// Auth service provider — the RustaSea analogue of `FortifyServiceProvider`.
+///
+/// During [`ServiceProvider::register`] it builds the real
+/// [`rustasea::auth::SessionGuard`] from `config/session.toml` (see
+/// [`super::auth::build_session_guard`]) and installs it into the foundation
+/// container under [`SESSION_GUARD_KEY`]. `main`/tests resolve that binding to
+/// seed [`AppState`](rustasea::http::AppState), and the `auth` route middleware
+/// downcasts the installed guard to project `Extension<AuthUser>`.
+///
+/// # Fail-closed
+///
+/// The guard is built over the fail-closed `StaticLookup` (no database-backed
+/// lookup exists yet), so no credential resolves and no login can succeed. A
+/// missing/malformed `session.toml` leaves the container unbound: the app then
+/// serves without an auth slot and the existing gates keep redirecting.
+///
+/// [`ServiceProvider::register`]: rustasea::ServiceProvider::register
+pub struct AuthServiceProvider;
+
+impl ServiceProvider for AuthServiceProvider {
+    /// Stable provider name used for dependency resolution.
+    fn name(&self) -> &'static str {
+        "AuthServiceProvider"
+    }
+
+    /// Build and install the session guard into the container.
+    fn register(&self, app: &mut Application) {
+        if install_session_guard(&mut app.container) {
+            println!("auth: session guard wired from config/session.toml");
+        } else {
+            eprintln!(
+                "auth: no session guard installed; gated routes stay closed \
+                 (container key {SESSION_GUARD_KEY:?} unbound)"
+            );
+        }
+    }
+
+    /// Boot after all providers have registered.
+    ///
+    /// Nothing to boot yet — the guard is a stateless shared `Arc`, so no
+    /// post-registration reconciliation is required.
+    fn boot(&self, _app: &Application) {}
+}
+
 /// Return the providers registered for the application boot DAG.
 ///
 /// Order is the tie-breaker for providers without `dependencies()`; the
 /// foundation [`Application::boot`] topologically sorts them regardless.
+/// [`AuthServiceProvider`] runs after [`AppServiceProvider`] so app bindings are
+/// in place before the auth wiring reads them.
 pub fn providers() -> Vec<Box<dyn ServiceProvider>> {
-    vec![Box::new(AppServiceProvider)]
+    vec![Box::new(AppServiceProvider), Box::new(AuthServiceProvider)]
 }

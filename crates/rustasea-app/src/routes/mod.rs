@@ -11,6 +11,7 @@
 
 pub mod auth;
 pub mod console;
+mod helpers;
 pub mod settings;
 pub mod web;
 
@@ -25,8 +26,10 @@ use axum::http::{header, HeaderValue, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use tower_http::services::ServeDir;
+use tower_sessions::cookie::Cookie;
 
-use rustasea::auth::AuthUser;
+use rustasea::auth::csrf::{csrf_error_response, RequestHeaders};
+use rustasea::auth::{password_timeout_secs, AuthUser, Guard, PreventRequestForgery, SessionGuard};
 use rustasea::http::AppState;
 use rustasea::router::Router as RouteTable;
 
@@ -39,6 +42,16 @@ pub const PASSWORD_CONFIRM: &str = "password.confirm";
 
 /// Where unauthenticated requests to a gated route are redirected.
 pub const LOGIN_PATH: &str = "/login";
+/// Where authenticated-but-unverified requests to a `verified` route are
+/// redirected (the kit's `verification.notice` screen).
+pub const VERIFY_EMAIL_PATH: &str = "/verify-email";
+/// Where authenticated-but-unconfirmed requests to a `password.confirm` route
+/// are redirected (the kit's confirm-password screen).
+pub const CONFIRM_PASSWORD_PATH: &str = "/confirm-password";
+
+/// Session cookie the auth middleware reads, matching `config/session.toml`
+/// (`cookie = "rustasea-session"`).
+pub const SESSION_COOKIE_NAME: &str = "rustasea-session";
 
 /// Build the full route table for the application.
 ///
@@ -67,14 +80,135 @@ pub fn table() -> RouteTable {
 /// table, so the printed route table is exactly the one served. Tests use
 /// [`table`] + this to build a router from a known table.
 pub fn compile(mut table: RouteTable, state: Arc<AppState>) -> axum::Router {
-    table.layer(axum::Extension(state));
+    table.layer(axum::Extension(Arc::clone(&state)));
     match table.try_into_axum_router() {
-        Ok(router) => mount_assets(router),
+        Ok(router) => with_csrf(with_session(mount_assets(router), &state), &state),
         Err(error) => {
             eprintln!("route table build failed: {error}");
             axum::Router::new().fallback(|| async { StatusCode::INTERNAL_SERVER_ERROR })
         }
     }
+}
+
+/// Apply the session → `Extension<AuthUser>` layer to a compiled router.
+///
+/// # Why a global layer, not the sticky `auth` middleware id
+///
+/// [`RouteTable::middleware`] is **sticky**: it applies to every subsequent
+/// route on the table (and is why the gates are declared inside
+/// [`RouteTable::group`]). Registering the session resolver as the `auth`
+/// middleware id would therefore either leak the resolver onto every later
+/// route or force a re-grouping of the whole table — and the resolver must run
+/// for **ungated** routes too (the nav renders the logged-in user on `/`).
+///
+/// This function instead wraps the fully compiled axum router with a global
+/// `layer(...)`, so every route receives the projection while the existing
+/// `AUTH`/`VERIFIED`/`PASSWORD_CONFIRM` gate middleware keep doing the gating
+/// exactly as before. The layer is applied *outside* [`mount_assets`], so the
+/// static asset service is covered too — it inserts nothing unless a valid
+/// session cookie is present.
+///
+/// # State capture, not the `State` extractor
+///
+/// The guard is resolved from [`AppState`] once here and captured by the
+/// middleware closure. The `State<Arc<AppState>>` extractor is deliberately not
+/// used: `from_fn`'s state is fixed to `()`, and `Arc<AppState>` has no
+/// `FromRef<()>` impl, so the extractor cannot resolve it. Capturing avoids a
+/// second `AppState` clone per request and keeps the layer construction
+/// explicit. When no guard is wired the closure is a no-op and auth fails
+/// closed.
+pub fn with_session(router: axum::Router, state: &AppState) -> axum::Router {
+    let guard = state.auth::<SessionGuard>();
+    router.layer(axum::middleware::from_fn(
+        move |mut request: Request, next: Next| {
+            let guard = guard.clone();
+            async move {
+                // Read the cookie synchronously: `Request` is not `Sync`, so it
+                // must not be held across the `parse` await.
+                if let Some(session_id) = session_id_from_headers(request.headers()) {
+                    if let Some(principal) = resolve_principal(guard.as_deref(), &session_id).await
+                    {
+                        request.extensions_mut().insert(principal);
+                    }
+                }
+                next.run(request).await
+            }
+        },
+    ))
+}
+
+/// Apply the origin-aware CSRF gate to the mutating routes only.
+///
+/// # Why a scoped global layer, not the sticky `middleware` id
+///
+/// [`RouteTable::middleware`] is **sticky**: it applies to every subsequent
+/// route on the table, so registering the gate that way would leak it onto
+/// unrelated routes. This wraps the already-compiled axum router with a global
+/// `layer(...)` instead, and the closure decides per request whether the
+/// request targets a protected `(method, path)` (see [`helpers::csrf_protected`]).
+/// The allow-list is exact, so safe routes — `GET /`, `GET /health`, assets —
+/// are untouched: the guard is a no-op for them.
+///
+/// # The decision
+///
+/// For a protected route the crate's [`PreventRequestForgery`] runs the full
+/// token-first + `Sec-Fetch-Site`/`Origin` decision table. The expected token
+/// is [`helpers::csrf_token`] and the origin allow-list is
+/// [`AppState::csrf_origins`](rustasea::http::AppState). A failure returns the
+/// crate's `403` JSON envelope via [`csrf_error_response`]; safe methods and
+/// non-protected routes pass straight through.
+///
+/// # Fail-closed
+///
+/// The crate's [`PreventRequestForgery::check`] fails closed on a missing or
+/// mismatched token and on a `cross-site` request whose `Origin` is not in the
+/// allow-list. An empty allow-list therefore still rejects cross-site writes,
+/// and a request with no CSRF token at all is rejected — never silently
+/// allowed.
+pub fn with_csrf(router: axum::Router, state: &AppState) -> axum::Router {
+    let origins = state.csrf_origins().to_vec();
+    let expected_token = helpers::csrf_token().to_string();
+    router.layer(axum::middleware::from_fn(
+        move |request: Request, next: Next| {
+            let policy = PreventRequestForgery::new(origins.clone())
+                .with_expected_token(expected_token.clone());
+            async move {
+                if helpers::csrf_protected(request.method(), request.uri().path()) {
+                    let headers = RequestHeaders::from_request(&request);
+                    if let Err(error) = policy.check(&headers) {
+                        return csrf_error_response(&error);
+                    }
+                }
+                next.run(request).await
+            }
+        },
+    ))
+}
+
+/// Resolve the authenticated principal for a session id, or `None`.
+///
+/// Split out so the fail-closed branches are unit-testable without a full
+/// middleware stack. `None` means "not authenticated" — the caller inserts
+/// nothing. Every failure mode (no guard, an invalid or unknown session id, or
+/// a store error) collapses to `None`.
+pub async fn resolve_principal(guard: Option<&SessionGuard>, session_id: &str) -> Option<AuthUser> {
+    let guard = guard?;
+    guard.parse(session_id).await.ok()
+}
+
+/// Extract the session id from the request's `Cookie` header, if present.
+///
+/// Parses the `Cookie` header into individual cookies with
+/// [`tower_sessions::cookie::Cookie`] (the same `cookie` crate `rustasea-auth`
+/// builds the session cookie with) and returns the value of the one named
+/// [`SESSION_COOKIE_NAME`]. A missing header, a header that is not valid UTF-8,
+/// or the absence of the named cookie all yield `None`.
+pub fn session_id_from_headers(headers: &axum::http::HeaderMap) -> Option<String> {
+    let raw = headers.get(header::COOKIE)?.to_str().ok()?;
+    Cookie::split_parse(raw)
+        .filter_map(Result::ok)
+        .find(|cookie| cookie.name() == SESSION_COOKIE_NAME)
+        .map(|cookie| cookie.value().to_string())
 }
 
 /// Mount the static asset service at `/assets/*`, serving the workspace
@@ -139,12 +273,12 @@ fn register_middleware(table: &mut RouteTable) {
 /// Identity travels as a request extension (`Extension<AuthUser>`), the
 /// convention documented by the stateless `SessionGuard`/`JwtGuard` in
 /// `rustasea-auth`: the guard holds no per-request state, so the HTTP layer
-/// projects `Guard::parse` results into `Extension<AuthUser>`. A request
-/// lacking that extension is answered with `302 Found` → [`LOGIN_PATH`] (the
-/// web-app convention, so a browser is sent to the login form) rather than
-/// `401`. This app does not yet wire a session layer that inserts the
-/// extension, so gated routes redirect until that lands — an honest gate, not
-/// a faked login.
+/// projects `Guard::parse` results into `Extension<AuthUser>`. The projection is
+/// performed by [`session_middleware`], which runs globally over the compiled
+/// router and inserts the extension when the request carries a resolvable
+/// session cookie. A request lacking that extension (no cookie, an unknown id,
+/// or no auth slot) is answered with `302 Found` → [`LOGIN_PATH`] (the web-app
+/// convention, so a browser is sent to the login form) rather than `401`.
 async fn require_authenticated(request: Request, next: Next) -> Response {
     if request.extensions().get::<AuthUser>().is_some() {
         next.run(request).await
@@ -155,40 +289,69 @@ async fn require_authenticated(request: Request, next: Next) -> Response {
 
 /// `verified` guard — email-verification gate.
 ///
-/// **Placeholder (documented).** The authenticated principal type (`AuthUser`)
-/// exposes no verification state, so email verification cannot be enforced
-/// here yet. The guard therefore requires only an authenticated principal —
-/// the strongest check the current principal supports — and documents the gap
-/// rather than silently letting unverified users through. Swap in a real
-/// `email_verified_at` check once the principal carries it.
+/// Identity travels as an `Extension<AuthUser>` (see [`require_authenticated`]).
+/// The gate fails closed in two stages:
+///
+/// * **Unauthenticated** (no extension) → `302 Found` → [`LOGIN_PATH`], so a
+///   browser is sent to the login form first.
+/// * **Authenticated but unverified** (`email_verified_at` is `None`) →
+///   `302 Found` → [`VERIFY_EMAIL_PATH`], the kit's `verification.notice`
+///   screen where the user re-sends the verification email. Redirecting to
+///   login here would wrongly discard a valid session, and returning `403`
+///   would strand the user with no route forward; the notice screen is the
+///   actionable destination.
+///
+/// Only a principal carrying an `email_verified_at` timestamp reaches the
+/// handler. The check is the real one — no degradation to a plain auth check.
 async fn require_verified(request: Request, next: Next) -> Response {
-    if request.extensions().get::<AuthUser>().is_some() {
-        next.run(request).await
-    } else {
-        redirect_to_login()
+    match request.extensions().get::<AuthUser>() {
+        None => redirect_to(LOGIN_PATH),
+        Some(user) if !user.is_email_verified() => redirect_to(VERIFY_EMAIL_PATH),
+        Some(_) => next.run(request).await,
     }
 }
 
 /// `password.confirm` guard — recent-password-confirmation gate.
 ///
-/// **Placeholder (documented).** The session guard stores no
-/// password-confirmation timestamp and the principal exposes none, so recent
-/// confirmation cannot be checked; like [`require_verified`], the guard
-/// degrades to requiring an authenticated principal and states the gap
-/// honestly.
+/// The confirmation timestamp is read from the authenticated principal's
+/// `password_confirmed_at` field (populated by the session guard from the
+/// `auth.password_confirmed_at` session entry) and compared against the
+/// configured window — `AUTH_PASSWORD_TIMEOUT` / `[auth] password_timeout`,
+/// defaulting to 3 hours. The gate fails closed in two stages:
+///
+/// * **Unauthenticated** (no extension) → `302 Found` → [`LOGIN_PATH`].
+/// * **Authenticated but unconfirmed/stale** → `302 Found` →
+///   [`CONFIRM_PASSWORD_PATH`], the kit's confirm-password screen. Returning
+///   `403` would not tell the browser where to re-confirm; the dedicated
+///   screen lets the user re-authenticate their password and continue.
+///
+/// A principal that never confirmed (or whose confirmation is older than the
+/// window) is rejected — the placeholder degradation is gone.
 async fn require_password_confirmed(request: Request, next: Next) -> Response {
-    if request.extensions().get::<AuthUser>().is_some() {
-        next.run(request).await
-    } else {
-        redirect_to_login()
+    let timeout_secs = password_timeout_secs();
+    match request.extensions().get::<AuthUser>() {
+        None => redirect_to(LOGIN_PATH),
+        Some(user) if !user.is_password_confirmed(timeout_secs) => {
+            redirect_to(CONFIRM_PASSWORD_PATH)
+        }
+        Some(_) => next.run(request).await,
     }
 }
 
 /// Build the `302 Found` → [`LOGIN_PATH`] redirect response.
 fn redirect_to_login() -> Response {
+    redirect_to(LOGIN_PATH)
+}
+
+/// Build a `302 Found` redirect to `location`.
+///
+/// The static path constants are ASCII and contain no header-unsafe bytes, so
+/// the `HeaderValue` is built directly; the only dynamic value ever passed here
+/// is one of those constants.
+fn redirect_to(location: &'static str) -> Response {
     (
         StatusCode::FOUND,
-        [(header::LOCATION, HeaderValue::from_static(LOGIN_PATH))],
+        [(header::LOCATION, HeaderValue::from_static(location))],
     )
         .into_response()
 }

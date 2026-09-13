@@ -62,6 +62,10 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# The generated session guard is generic over any `tower-sessions` store, and
+# `app/actions/auth/attempt_to_authenticate.rs` names the `SessionStore` trait
+# directly; the app therefore declares the dependency itself.
+tower-sessions = "0.15"
 
 [features]
 default = []
@@ -109,6 +113,10 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# The generated session guard is generic over any `tower-sessions` store, and
+# `app/actions/auth/attempt_to_authenticate.rs` names the `SessionStore` trait
+# directly; the app therefore declares the dependency itself.
+tower-sessions = "0.15"
 
 [features]
 default = []
@@ -156,6 +164,10 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# The generated session guard is generic over any `tower-sessions` store, and
+# `app/actions/auth/attempt_to_authenticate.rs` names the `SessionStore` trait
+# directly; the app therefore declares the dependency itself.
+tower-sessions = "0.15"
 
 [features]
 default = []
@@ -193,7 +205,10 @@ name = "unit"
 path = "tests/unit/mod.rs"
 
 [dependencies]
-rustasea = { version = "0.1", features = ["view", "broadcast"] }
+# `broadcast` is re-exported by `rustasea` unconditionally, so there is no
+# `broadcast` cargo feature to enable (requesting one fails dependency
+# resolution); the livewire kit only needs the `view` feature.
+rustasea = { version = "0.1", features = ["view"] }
 rustasea-view = "0.1"
 rustasea-livewire = "0.1"
 axum = "0.7"
@@ -203,6 +218,10 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# The generated session guard is generic over any `tower-sessions` store, and
+# `app/actions/auth/attempt_to_authenticate.rs` names the `SessionStore` trait
+# directly; the app therefore declares the dependency itself.
+tower-sessions = "0.15"
 
 [features]
 default = []
@@ -236,7 +255,8 @@ mod tests {
         assert!(vue.contains("wasm-leptos"));
         assert!(vue.contains("features = [\"vue\"]"));
         let livewire = cargo_toml(StarterKitVariant::Livewire);
-        assert!(livewire.contains("features = [\"view\", \"broadcast\"]"));
+        assert!(livewire.contains("features = [\"view\"]"));
+        assert!(!livewire.contains("\"view\", \"broadcast\""));
     }
 
     #[test]

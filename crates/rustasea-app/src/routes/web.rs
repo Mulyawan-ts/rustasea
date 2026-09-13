@@ -45,7 +45,9 @@ fn engine() -> &'static MinijinjaEngine {
 /// Serializable projection of [`AuthUser`] exposed to templates as `user`.
 ///
 /// Only the fields a view renders are projected, so the template context stays
-/// a small, explicit contract rather than the guard's full principal.
+/// a small, explicit contract rather than the guard's full principal. The
+/// verification/confirmation timestamps are projected too, so a view can show a
+/// "verify your email" banner or hide a confirmation-gated control.
 #[derive(Serialize)]
 struct NavUser {
     /// Primary key of the authenticated record.
@@ -54,6 +56,10 @@ struct NavUser {
     email: Option<String>,
     /// Guard name that produced the principal.
     guard: String,
+    /// `users.email_verified_at`, or `None` when unverified.
+    email_verified_at: Option<String>,
+    /// Session `auth.password_confirmed_at`, or `None` when unconfirmed.
+    password_confirmed_at: Option<String>,
 }
 
 impl From<AuthUser> for NavUser {
@@ -62,6 +68,8 @@ impl From<AuthUser> for NavUser {
             id: user.id,
             email: user.email,
             guard: user.guard,
+            email_verified_at: user.email_verified_at,
+            password_confirmed_at: user.password_confirmed_at,
         }
     }
 }

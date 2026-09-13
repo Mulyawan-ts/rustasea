@@ -8,73 +8,9 @@ use std::sync::Arc;
 
 use crate::error::{AuthError, Result};
 
-/// Authenticated principal returned by `Guard::parse`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthUser {
-    /// Primary key (UUID string) of the authenticated record.
-    pub id: String,
-    /// Login identifier (email for JWT/session guards).
-    pub email: Option<String>,
-    /// Guard name that produced this principal.
-    pub guard: String,
-}
+pub(crate) mod principal;
 
-impl AuthUser {
-    /// Build a principal for a custom guard's `parse`/`user` results.
-    ///
-    /// # Custom guard example
-    ///
-    /// ```rust
-    /// use rustasea_auth::{AuthUser, Guard, AuthError};
-    ///
-    /// /// Minimal API-key guard: `"secret"` is the only valid key.
-    /// pub struct ApiKeyGuard;
-    ///
-    /// impl Guard for ApiKeyGuard {
-    ///     fn name(&self) -> &str { "api" }
-    ///     fn login<'a>(&'a self, _: &'a rustasea_auth::Credentials)
-    ///         -> std::pin::Pin<Box<dyn std::future::Future<Output = rustasea_auth::error::Result<rustasea_auth::Token>> + Send + 'a>>
-    ///     { Box::pin(async move { Err(AuthError::BadCredentials) }) }
-    ///     fn login_using_id<'a>(&'a self, _: &'a str)
-    ///         -> std::pin::Pin<Box<dyn std::future::Future<Output = rustasea_auth::error::Result<rustasea_auth::Token>> + Send + 'a>>
-    ///     { Box::pin(async move { Err(AuthError::BadCredentials) }) }
-    ///     fn parse<'a>(&'a self, token: &'a str)
-    ///         -> std::pin::Pin<Box<dyn std::future::Future<Output = rustasea_auth::error::Result<AuthUser>> + Send + 'a>>
-    ///     {
-    ///         Box::pin(async move {
-    ///             if token == "secret" {
-    ///                 Ok(AuthUser::new("user-1", Some("api@example.com"), "api"))
-    ///             } else {
-    ///                 Err(AuthError::InvalidToken)
-    ///             }
-    ///         })
-    ///     }
-    ///     fn refresh<'a>(&'a self, _: &'a str)
-    ///         -> std::pin::Pin<Box<dyn std::future::Future<Output = rustasea_auth::error::Result<rustasea_auth::Token>> + Send + 'a>>
-    ///     { Box::pin(async move { Err(AuthError::BadCredentials) }) }
-    ///     fn logout<'a>(&'a self, _: &'a str)
-    ///         -> std::pin::Pin<Box<dyn std::future::Future<Output = rustasea_auth::error::Result<()>> + Send + 'a>>
-    ///     { Box::pin(async move { Ok(()) }) }
-    ///     fn user<'a>(&'a self)
-    ///         -> std::pin::Pin<Box<dyn std::future::Future<Output = rustasea_auth::error::Result<Option<AuthUser>>> + Send + 'a>>
-    ///     { Box::pin(async move { Ok(None) }) }
-    ///     fn id<'a>(&'a self)
-    ///         -> std::pin::Pin<Box<dyn std::future::Future<Output = rustasea_auth::error::Result<Option<String>>> + Send + 'a>>
-    ///     { Box::pin(async move { Ok(None) }) }
-    /// }
-    /// ```
-    pub fn new(
-        id: impl Into<String>,
-        email: Option<impl Into<String>>,
-        guard: impl Into<String>,
-    ) -> Self {
-        Self {
-            id: id.into(),
-            email: email.map(Into::into),
-            guard: guard.into(),
-        }
-    }
-}
+pub use principal::AuthUser;
 
 /// Credentials accepted by `Guard::login`.
 #[derive(Debug, Clone, PartialEq, Eq)]

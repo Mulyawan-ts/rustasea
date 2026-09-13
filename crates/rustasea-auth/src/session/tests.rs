@@ -111,6 +111,14 @@ fn user_key_keeps_session_marker() {
     assert_eq!(SessionPolicy::default().user_key(), "rustasea-session-user");
 }
 
+/// The password-confirmation key mirrors the user key and keeps the marker.
+#[test]
+fn password_confirmed_key_keeps_session_marker() {
+    let key = SessionPolicy::default().password_confirmed_key();
+    assert_eq!(key, "rustasea-session-password_confirmed_at");
+    assert!(key.contains("-session-"));
+}
+
 /// The guard is stateless: `user`/`id` never resolve from shared state.
 ///
 /// A shared guard serves every concurrent request, so exposing a "current"
@@ -271,4 +279,102 @@ fn login_using_id_disabled_by_default() {
     let guard = SessionGuard::new(SessionPolicy::default());
     let err = tokio_test_block_on(guard.login_using_id("user-1")).expect_err("disabled");
     assert!(matches!(err, AuthError::Disabled(_)));
+}
+
+/// Login captures `email_verified_at` from the lookup and `parse` round-trips
+/// it onto the principal (session payload preserves verification state).
+#[test]
+fn login_threads_email_verified_at_through_the_session() {
+    let registry = Arc::new(MemoryUserRegistry::default());
+    registry.seed(AuthUserRecord {
+        id: "user-1".into(),
+        email: "ada@example.com".into(),
+        password_hash: "phc$hash".into(),
+        email_verified_at: Some("2026-01-01T00:00:00Z".into()),
+    });
+    let guard = SessionGuard::new(SessionPolicy::default())
+        .with_verifier(Arc::new(AlwaysVerify))
+        .with_lookup(registry)
+        .with_allow_login_using_id(true);
+
+    let token = tokio_test_block_on(guard.login(&creds())).expect("login succeeds");
+
+    // The serialized session payload carries the verification timestamp.
+    let id: Id = token.access_token.parse().expect("session id");
+    let stored = tokio_test_block_on(guard.session_store().load(&id))
+        .expect("store load")
+        .expect("session present");
+    let key = guard.policy().user_key();
+    let value = stored.data.get(&key).cloned().expect("user key present");
+    let user: SessionUser = serde_json::from_value(value).expect("stored user decodes");
+    assert_eq!(
+        user.email_verified_at.as_deref(),
+        Some("2026-01-01T00:00:00Z")
+    );
+
+    // And `parse` projects it onto the principal.
+    let principal = tokio_test_block_on(guard.parse(&token.access_token)).expect("parse");
+    assert!(principal.is_email_verified());
+    assert_eq!(
+        principal.email_verified_at.as_deref(),
+        Some("2026-01-01T00:00:00Z")
+    );
+}
+
+/// An unverified seeded user round-trips as unverified (fail-closed gate).
+#[test]
+fn unverified_user_parses_without_verification() {
+    let (guard, _registry) = guard_with_registry();
+    let token = tokio_test_block_on(guard.login(&creds())).expect("login succeeds");
+    let principal = tokio_test_block_on(guard.parse(&token.access_token)).expect("parse");
+    assert!(!principal.is_email_verified());
+    assert_eq!(principal.email_verified_at, None);
+}
+
+/// `confirm_password` writes a session timestamp that `parse` projects and the
+/// freshness predicate honours; a stale confirmation is rejected.
+#[test]
+fn confirm_password_records_and_parses_fresh_timestamp() {
+    let (guard, _registry) = guard_with_registry();
+    let token = tokio_test_block_on(guard.login(&creds())).expect("login succeeds");
+
+    // No confirmation yet: parse yields None and the gate fails closed.
+    let before = tokio_test_block_on(guard.parse(&token.access_token)).expect("parse");
+    assert_eq!(before.password_confirmed_at, None);
+    assert!(!before.is_password_confirmed(10_800));
+
+    // Record a confirmation at a fixed instant.
+    tokio_test_block_on(guard.confirm_password_at(&token.access_token, 1_000)).expect("confirm");
+    let stored = tokio_test_block_on(guard.password_confirmed_at(&token.access_token))
+        .expect("read confirmation");
+    assert_eq!(stored.as_deref(), Some("1000"));
+
+    // Fresh within the window, stale outside it.
+    let fresh = tokio_test_block_on(guard.is_password_confirmed_within(
+        &token.access_token,
+        10_800,
+        1_000 + 10_800,
+    ))
+    .expect("freshness");
+    assert!(fresh);
+    let stale = tokio_test_block_on(guard.is_password_confirmed_within(
+        &token.access_token,
+        10_800,
+        1_000 + 10_801,
+    ))
+    .expect("freshness");
+    assert!(!stale);
+
+    // And the projected principal carries the timestamp.
+    let after = tokio_test_block_on(guard.parse(&token.access_token)).expect("parse");
+    assert_eq!(after.password_confirmed_at.as_deref(), Some("1000"));
+}
+
+/// Confirming a password on an unknown/unauthenticated session fails closed.
+#[test]
+fn confirm_password_on_unknown_session_fails_closed() {
+    let guard = SessionGuard::new(SessionPolicy::default());
+    let forged = Id::default().to_string();
+    let err = tokio_test_block_on(guard.confirm_password(&forged)).expect_err("rejected");
+    assert_eq!(err, AuthError::InvalidToken);
 }

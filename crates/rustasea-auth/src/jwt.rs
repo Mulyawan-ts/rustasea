@@ -224,10 +224,28 @@ impl Guard for JwtGuard {
             if claims.typ != "access" {
                 return Err(AuthError::InvalidToken);
             }
+            // Verification state is resolved fresh from the lookup on every
+            // parse rather than baked into the signed claims: a JWT lives for
+            // its whole `exp` window, so an `email_verified_at` claim would go
+            // stale the moment the address is verified or `markEmailAsUnverified`
+            // clears it. The lookup read keeps the `verified` gate honest at the
+            // cost of one lookup per request — the same trade the `email` field
+            // already makes.
+            //
+            // `password_confirmed_at` is deliberately left `None`: Laravel
+            // stores it in the *session* (`auth.password_confirmed_at`), and a
+            // stateless bearer token has no session record to carry it. A
+            // password-confirmation gate over JWT therefore fails closed until
+            // that state is provided out of band (a deny-list/session store,
+            // tracked by the S05 milestone); see `SessionGuard::confirm_password`
+            // for the stateful path.
+            let email_verified_at = self.lookup.email_verified_at_for_id(&claims.sub);
             Ok(AuthUser {
                 email: self.lookup.email_for_id(&claims.sub),
                 id: claims.sub,
                 guard: self.name().to_string(),
+                email_verified_at,
+                password_confirmed_at: None,
             })
         })
     }
@@ -432,5 +450,43 @@ mod tests {
             .await
             .expect_err("garbage token must be rejected");
         assert_eq!(err, AuthError::InvalidToken);
+    }
+
+    /// `parse` resolves `email_verified_at` fresh from the lookup; a guard with
+    /// no verification-aware lookup fails closed (`None`).
+    #[tokio::test]
+    async fn parse_resolves_email_verified_at_from_lookup() {
+        let id = Uuid::new_v4();
+        let registry = Arc::new(crate::users::MemoryUserRegistry::default());
+        registry.seed(crate::users::AuthUserRecord {
+            id: id.to_string(),
+            email: "ada@example.com".into(),
+            password_hash: "phc$hash".into(),
+            email_verified_at: Some("2026-01-01T00:00:00Z".into()),
+        });
+        let guard = test_guard().with_lookup(registry);
+
+        let token = guard
+            .login_using_id(&id.to_string())
+            .await
+            .expect("login_using_id succeeds");
+        let user = guard.parse(&token.access_token).await.expect("parse");
+        assert_eq!(
+            user.email_verified_at.as_deref(),
+            Some("2026-01-01T00:00:00Z")
+        );
+        assert!(user.is_email_verified());
+        // The JWT guard never carries a session-backed confirmation.
+        assert_eq!(user.password_confirmed_at, None);
+
+        // Without a lookup the field fails closed.
+        let bare = test_guard();
+        let bare_token = bare
+            .login_using_id(&id.to_string())
+            .await
+            .expect("login_using_id succeeds");
+        let bare_user = bare.parse(&bare_token.access_token).await.expect("parse");
+        assert_eq!(bare_user.email_verified_at, None);
+        assert!(!bare_user.is_email_verified());
     }
 }

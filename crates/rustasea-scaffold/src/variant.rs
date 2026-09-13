@@ -17,7 +17,7 @@ pub enum StarterKitVariant {
     React,
     /// Leptos WASM + Inertia (`resources/js`), umbrella features `inertia`, `wasm-leptos`.
     Vue,
-    /// askama + HTMX + broadcast (`resources/views`), umbrella features `view`, `broadcast`.
+    /// askama + HTMX starter kit (`resources/views`), umbrella feature `view`.
     Livewire,
 }
 
@@ -44,12 +44,16 @@ impl StarterKitVariant {
     }
 
     /// `rustasea` umbrella feature set that wires this variant's presentation.
+    ///
+    /// `broadcast` is not a cargo feature on the umbrella (it re-exports
+    /// `rustasea-broadcast` unconditionally), so the livewire kit needs only
+    /// the `view` feature.
     pub const fn cargo_features(self) -> &'static [&'static str] {
         match self {
             StarterKitVariant::Blade => &["view"],
             StarterKitVariant::React => &["inertia", "wasm-dioxus"],
             StarterKitVariant::Vue => &["inertia", "wasm-leptos"],
-            StarterKitVariant::Livewire => &["view", "broadcast"],
+            StarterKitVariant::Livewire => &["view"],
         }
     }
 
@@ -137,9 +141,6 @@ mod tests {
             StarterKitVariant::Vue.cargo_features(),
             &["inertia", "wasm-leptos"]
         );
-        assert_eq!(
-            StarterKitVariant::Livewire.cargo_features(),
-            &["view", "broadcast"]
-        );
+        assert_eq!(StarterKitVariant::Livewire.cargo_features(), &["view"]);
     }
 }

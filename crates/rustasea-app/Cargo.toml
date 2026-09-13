@@ -21,6 +21,9 @@ anyhow = "1"
 serde = { workspace = true, features = ["derive"] }
 # `ServeDir` serves `resources/` at `/assets/*`; `fs` is the file-service feature.
 tower-http = { workspace = true, features = ["fs"] }
+# `tower_sessions::cookie::Cookie` parses the session cookie the auth
+# middleware reads; `rustasea-auth` builds the guard over the same 0.15 line.
+tower-sessions = { workspace = true }
 
 [dev-dependencies]
 # `ServiceExt::oneshot` drives the compiled router in route tests.

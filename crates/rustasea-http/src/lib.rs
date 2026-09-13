@@ -1,5 +1,8 @@
 //! RustaSea HTTP layer — AppState, JSON helpers, middleware stubs, and HTTP client.
 
+use std::any::Any;
+use std::sync::Arc;
+
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json as AxumJson;
@@ -36,7 +39,28 @@ impl SecurityConfig {
 }
 
 /// Shared application state passed to handlers.
-#[derive(Debug, Clone)]
+///
+/// # Auth seam (ADR-0007 alignment)
+///
+/// The auth subsystem (`rustasea_auth::SessionGuard`) cannot be named here:
+/// `rustasea-auth` depends on `rustasea-http` (it consumes [`SecurityConfig`]
+/// and this type), so naming the guard would create a dependency cycle. The
+/// auth slot is therefore **type-erased** — an `Option<Arc<dyn Any + Send + Sync>>`
+/// installed with [`AppState::with_auth`] and read back with the typed accessor
+/// [`AppState::auth`]. `rustasea-app` stores its concrete guard and its
+/// middleware downcasts it back, keeping the DAG acyclic.
+///
+/// This is the object-erased variant of the "small object-safe trait" seam: it
+/// needs no async trait object, no boxed futures, and no new dependency, while
+/// still letting the app install and resolve any `Send + Sync + 'static` value.
+///
+/// # Fail-closed
+///
+/// The slot defaults to `None` and [`AppState::auth`] returns a typed `None`
+/// when it is absent **or** holds a different concrete type. Nothing here ever
+/// panics, so an un-wired app simply never authenticates and the existing gates
+/// redirect.
+#[derive(Clone)]
 pub struct AppState {
     /// Application environment name.
     pub env: String,
@@ -44,15 +68,18 @@ pub struct AppState {
     pub debug: bool,
     /// Security posture (CSRF origins, trusted proxies).
     pub security: SecurityConfig,
+    /// Type-erased authentication backend (see the type-level docs).
+    auth: Option<Arc<dyn Any + Send + Sync>>,
 }
 
 impl AppState {
-    /// Create a new AppState.
+    /// Create a new AppState with no authentication backend wired.
     pub fn new(env: impl Into<String>, debug: bool) -> Self {
         Self {
             env: env.into(),
             debug,
             security: SecurityConfig::default(),
+            auth: None,
         }
     }
 
@@ -62,9 +89,55 @@ impl AppState {
         self
     }
 
+    /// Install the authentication backend (type-erased).
+    ///
+    /// The value is typically the app's `SessionGuard` wrapped in an [`Arc`],
+    /// but any `Send + Sync + 'static` type is accepted so the HTTP layer stays
+    /// auth-agnostic. Reading it back is an [`AppState::auth`] downcast.
+    pub fn with_auth<T>(mut self, auth: Arc<T>) -> Self
+    where
+        T: Any + Send + Sync,
+    {
+        self.auth = Some(auth);
+        self
+    }
+
+    /// Resolve the authentication backend as its concrete type `T`.
+    ///
+    /// Returns `None` — never a panic — when no backend is installed or the
+    /// installed backend is not a `T`. Callers must treat `None` as
+    /// "unauthenticated" and fail closed.
+    pub fn auth<T>(&self) -> Option<Arc<T>>
+    where
+        T: Any + Send + Sync,
+    {
+        self.auth
+            .as_ref()
+            .and_then(|backend| Arc::clone(backend).downcast::<T>().ok())
+    }
+
+    /// Whether an authentication backend is installed.
+    pub fn has_auth(&self) -> bool {
+        self.auth.is_some()
+    }
+
     /// Convenience accessor for the CSRF origin allow-list.
     pub fn csrf_origins(&self) -> &[String] {
         &self.security.csrf_origins
+    }
+}
+
+impl std::fmt::Debug for AppState {
+    /// Manual debug — the erased backend is rendered as a presence flag, never
+    /// by contents (it holds no `Debug` bound).
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AppState")
+            .field("env", &self.env)
+            .field("debug", &self.debug)
+            .field("security", &self.security)
+            .field("auth", &self.has_auth())
+            .finish()
     }
 }
 

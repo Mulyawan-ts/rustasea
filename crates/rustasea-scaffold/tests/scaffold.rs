@@ -206,7 +206,7 @@ fn livewire_variant_generates_htmx_layout() {
         .exists());
     assert!(root.join("askama.toml").exists());
     assert!(!root.join("resources/js").exists());
-    assert_manifest_contains(&root, "features = [\"view\", \"broadcast\"]");
+    assert_manifest_contains(&root, "features = [\"view\"]");
 
     std::fs::remove_dir_all(&root).ok();
 }

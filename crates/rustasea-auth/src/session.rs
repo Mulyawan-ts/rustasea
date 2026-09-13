@@ -29,120 +29,29 @@ use crate::verify::{Argon2Verifier, PasswordVerifier};
 /// `session.lifetime` (minutes → seconds).
 const SESSION_TTL_SECS: u64 = 1_209_600;
 
-/// Hardening policy for session/cache serialization (FR-303/FR-304).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SessionPolicy {
-    /// Serialization format; `json` is the only supported default.
-    pub serialization: String,
-    /// Key prefix — must contain the hyphenated `-session-` marker.
-    pub prefix: String,
-    /// Fully-qualified type names allowed to deserialize.
-    pub serializable_classes: Vec<String>,
-}
+mod password;
+mod policy;
+mod provider;
 
-impl Default for SessionPolicy {
-    /// Laravel-13 defaults: JSON, hyphenated prefix, empty allow-list.
-    fn default() -> Self {
-        Self {
-            serialization: "json".to_string(),
-            prefix: "rustasea-session-".to_string(),
-            serializable_classes: Vec::new(),
-        }
-    }
-}
-
-impl SessionPolicy {
-    /// Create a policy with an explicit allow-list.
-    pub fn with_classes(classes: Vec<String>) -> Self {
-        Self {
-            serializable_classes: classes,
-            ..Self::default()
-        }
-    }
-
-    /// Verify the prefix uses hyphens, not underscores (`-session-`).
-    pub fn validate_prefix(&self) -> Result<()> {
-        if self.serialization != "json" {
-            return Err(AuthError::Disabled(format!(
-                "unsupported session serialization {:?} (only \"json\" is allowed)",
-                self.serialization
-            )));
-        }
-        if !self.prefix.contains("-session-") {
-            return Err(AuthError::Disabled(format!(
-                "session prefix {:?} must contain -session-",
-                self.prefix
-            )));
-        }
-        Ok(())
-    }
-
-    /// Verify a cache prefix uses the hyphenated `-cache-` marker.
-    ///
-    /// Separate from [`SessionPolicy::validate_prefix`] because cache keys
-    /// and session keys use different markers (FS-M3-03, TC-M3-07). A prefix
-    /// with the underscore variant (`_cache_`) is rejected, matching the
-    /// Laravel-13 hyphenation rule (#12).
-    pub fn validate_cache_prefix(prefix: &str) -> Result<()> {
-        if !prefix.contains("-cache-") {
-            return Err(AuthError::Disabled(format!(
-                "cache prefix {prefix:?} must contain -cache-"
-            )));
-        }
-        Ok(())
-    }
-
-    /// Gate a type name against the allow-list before deserialization.
-    pub fn allow(
-        &self,
-        type_name: &str,
-    ) -> std::result::Result<(), crate::error::SerializationError> {
-        if self.serializable_classes.iter().any(|c| c == type_name) {
-            Ok(())
-        } else {
-            Err(crate::error::SerializationError::NotAllowed {
-                type_name: type_name.to_string(),
-            })
-        }
-    }
-
-    /// Session key under which the guard stores the authenticated user.
-    ///
-    /// Derived from [`SessionPolicy::prefix`] so the `-session-` marker is
-    /// always present; the concrete [`SessionUser`] type is stored directly,
-    /// so no `serializable_classes` entry is needed (the allow-list continues
-    /// to gate polymorphic cache values, never weakened).
-    pub fn user_key(&self) -> String {
-        format!("{}user", self.prefix)
-    }
-}
-
-/// Allow-list contract for safe deserialization (FR-304, TC-M3-06).
-///
-/// Any store that deserializes values from untrusted bytes (sessions,
-/// caches) must gate the concrete type name against an explicit allow-list
-/// *before* `from_str`, so a poisoned cache entry can never decode into an
-/// attacker-chosen gadget type. Session and cache policies share this trait;
-/// both surface `SerializationError::NotAllowed { type_name }` on a miss.
-pub trait DeserializationAllowList {
-    /// Reject deserializing `type_name` unless it is allow-listed.
-    fn allow(&self, type_name: &str) -> std::result::Result<(), crate::error::SerializationError>;
-}
-
-impl DeserializationAllowList for SessionPolicy {
-    /// Delegates to [`SessionPolicy::allow`].
-    fn allow(&self, type_name: &str) -> std::result::Result<(), crate::error::SerializationError> {
-        SessionPolicy::allow(self, type_name)
-    }
-}
+pub use policy::{DeserializationAllowList, SessionPolicy};
 
 /// Identity stored inside a session for the session guard.
+///
+/// Carries the `users.email_verified_at` value so the `verified` gate can be
+/// enforced from the session round-trip alone (no per-request database hit).
+/// The password-confirmation timestamp is **not** part of the identity payload:
+/// like Laravel's `auth.password_confirmed_at` it lives under a dedicated
+/// session key ([`SessionPolicy::password_confirmed_key`]) and is read/written
+/// by [`SessionGuard::confirm_password`] / [`SessionGuard::password_confirmed_at`].
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SessionUser {
     /// Authenticated user UUID.
     pub id: String,
     /// Optional display email.
     pub email: Option<String>,
+    /// `users.email_verified_at` captured at login, or `None` when unverified.
+    #[serde(default)]
+    pub email_verified_at: Option<String>,
 }
 
 /// Session guard — resolves identity from a `tower-sessions` store.
@@ -358,7 +267,12 @@ impl<S: SessionStore> Guard for SessionGuard<S> {
                 .lookup
                 .email_for_id(&user_id)
                 .or_else(|| Some(creds.email.clone()));
-            let user = SessionUser { id: user_id, email };
+            let email_verified_at = self.lookup.email_verified_at_for_id(&user_id);
+            let user = SessionUser {
+                id: user_id,
+                email,
+                email_verified_at,
+            };
             let id = self.persist(&user).await?;
             Ok(self.issue(&id))
         })
@@ -377,6 +291,7 @@ impl<S: SessionStore> Guard for SessionGuard<S> {
             let user = SessionUser {
                 id: user_id.to_string(),
                 email: self.lookup.email_for_id(user_id),
+                email_verified_at: self.lookup.email_verified_at_for_id(user_id),
             };
             let id = self.persist(&user).await?;
             Ok(self.issue(&id))
@@ -396,10 +311,16 @@ impl<S: SessionStore> Guard for SessionGuard<S> {
                 .await
                 .map_err(|_| AuthError::StoreUnavailable)?;
             let user = user.ok_or(AuthError::InvalidToken)?;
+            // The password-confirmation timestamp lives under its own session
+            // key (mirroring Laravel's `auth.password_confirmed_at`), so it is
+            // read alongside the identity and projected onto the principal.
+            let password_confirmed_at = self.read_password_confirmed_at(&session).await?;
             Ok(AuthUser {
                 id: user.id,
                 email: user.email,
                 guard: self.name.clone(),
+                email_verified_at: user.email_verified_at,
+                password_confirmed_at,
             })
         })
     }

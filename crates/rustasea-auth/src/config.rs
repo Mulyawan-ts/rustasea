@@ -74,8 +74,27 @@ fn default_password_broker() -> String {
 }
 
 /// Default `password_timeout` (3 hours, Laravel parity).
+pub const DEFAULT_PASSWORD_TIMEOUT_SECS: u64 = 10_800;
+
+/// Default `password_timeout` (3 hours, Laravel parity).
 fn default_password_timeout() -> u64 {
-    10_800
+    DEFAULT_PASSWORD_TIMEOUT_SECS
+}
+
+/// Resolve the password-confirmation window in seconds for runtime gates.
+///
+/// Reads `AUTH_PASSWORD_TIMEOUT` (the documented environment override) and falls
+/// back to [`DEFAULT_PASSWORD_TIMEOUT_SECS`] when the variable is unset, blank,
+/// or not a non-negative integer. This is the runtime counterpart of
+/// [`AuthConfig::password_timeout`]: middleware that runs without a loaded
+/// [`AuthConfig`] (the app's `require_password_confirmed` gate) can still honour
+/// the configured window without threading the whole config through `AppState`.
+/// A malformed value falls back to the default rather than panicking, matching
+/// the fail-closed posture of the other gates.
+pub fn password_timeout_secs() -> u64 {
+    env_non_empty("AUTH_PASSWORD_TIMEOUT")
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_PASSWORD_TIMEOUT_SECS)
 }
 
 /// `auth.defaults` — the active guard and password broker.

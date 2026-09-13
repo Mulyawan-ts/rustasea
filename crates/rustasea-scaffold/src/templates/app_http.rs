@@ -265,11 +265,18 @@ pub mod profile_update_request;
 "##;
 
 const PROFILE_UPDATE_REQUEST: &str = r##"//! Validated profile-update input.
+//!
+//! Implemented against the real validation contract: the payload derives
+//! `serde::Deserialize` (required by `Validatable: DeserializeOwned`) and
+//! `serde::Serialize` (used to build the JSON value the rules run against),
+//! and `Validatable::validate` builds a `Rules` set with the fluent
+//! `Rules::field(field, "rule|rule")` grammar. Handlers consume it through the
+//! `rustasea::validation::FormRequest<ProfileUpdateRequest>` extractor.
 
-use rustasea::validation::{FormRequest, Rules, Validatable};
+use rustasea::validation::{ErrorBag, Rules, Validatable};
 
 /// Profile update form request.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct ProfileUpdateRequest {
     /// New display name.
     pub name: String,
@@ -278,24 +285,29 @@ pub struct ProfileUpdateRequest {
 }
 
 impl Validatable for ProfileUpdateRequest {
-    fn rules() -> Rules {
-        Rules::new()
-            .required("name")
-            .max("name", 255)
-            .required("email")
-            .email("email")
+    /// Validate `name` and `email` with the implemented rule grammar.
+    fn validate(&self) -> Result<(), ErrorBag> {
+        let rules = Rules::new()
+            .field("name", "required|max:255")
+            .field("email", "required|email");
+        let data = rustasea::validation::serde_json::to_value(self)
+            .map_err(|error| ErrorBag::from_message(error.to_string()))?;
+        rules.validate(&data)
     }
 }
-
-impl FormRequest for ProfileUpdateRequest {}
 "##;
 
 const PASSWORD_UPDATE_REQUEST: &str = r##"//! Validated password-update input.
+//!
+//! Implemented against the real validation contract. The confirmation is
+//! modelled as an explicit second field with a plain `required|min:12` rule
+//! because the `confirmed` rule does not exist yet (AUTH-005 adds it); the
+//! explicit field is the same shape the rule will compare against.
 
-use rustasea::validation::{FormRequest, Rules, Validatable};
+use rustasea::validation::{ErrorBag, Rules, Validatable};
 
 /// Password update form request.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct PasswordUpdateRequest {
     /// Current password, re-checked before rotation.
     pub current_password: String,
@@ -306,14 +318,17 @@ pub struct PasswordUpdateRequest {
 }
 
 impl Validatable for PasswordUpdateRequest {
-    fn rules() -> Rules {
-        Rules::new()
-            .required("current_password")
-            .required("password")
-            .min("password", 12)
-            .confirmed("password")
+    /// Validate the current/new/confirmation fields.
+    fn validate(&self) -> Result<(), ErrorBag> {
+        let rules = Rules::new()
+            .field("current_password", "required")
+            .field("password", "required|min:12")
+            // TODO(AUTH-005): replace this explicit field with `confirmed` on
+            // `password`, which compares it against `password_confirmation`.
+            .field("password_confirmation", "required|min:12");
+        let data = rustasea::validation::serde_json::to_value(self)
+            .map_err(|error| ErrorBag::from_message(error.to_string()))?;
+        rules.validate(&data)
     }
 }
-
-impl FormRequest for PasswordUpdateRequest {}
 "##;

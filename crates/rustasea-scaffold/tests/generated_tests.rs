@@ -163,3 +163,83 @@ fn generated_route_tables_use_the_router_dsl() {
         );
     }
 }
+
+/// The generated `users` schema carries every auth column the kit defines.
+///
+/// `laravel/livewire-starter-kit`'s `app/Models/User.php` is the schema
+/// contract; the generated migration, `User` model, and `UserFactory` must all
+/// agree on the full column set, and the four secret columns must never be
+/// serialized (the kit's `#[Hidden([...])]` analogue). This is a fast,
+/// string-level companion to the real `cargo check` gate in
+/// `tests/generated_compiles.rs`, which proves the added fields actually
+/// type-check against `rustasea::orm`.
+#[test]
+fn generated_user_schema_carries_the_auth_columns() {
+    // Columns added by AUTH-003 on top of the original six.
+    let columns = [
+        "two_factor_secret",
+        "two_factor_recovery_codes",
+        "two_factor_confirmed_at",
+        "remember_token",
+    ];
+    // Fields the model must hide from serialization (the kit's `Hidden`).
+    let hidden = [
+        "password",
+        "two_factor_secret",
+        "two_factor_recovery_codes",
+        "remember_token",
+    ];
+
+    for variant in StarterKitVariant::ALL {
+        let files = render(variant);
+        let find = |path: &str| {
+            files
+                .iter()
+                .find(|file| file.path == path)
+                .unwrap_or_else(|| panic!("missing {path} ({variant})"))
+                .contents
+                .as_str()
+        };
+
+        // Migration: every auth column, plus the pre-existing constraints.
+        let migration = find("database/migrations/create_users.rs");
+        for column in columns {
+            assert!(
+                migration.contains(column),
+                "CreateUsers migration must declare `{column}` ({variant})"
+            );
+        }
+        assert!(
+            migration.contains("email VARCHAR(255) NOT NULL UNIQUE"),
+            "CreateUsers migration must keep the email UNIQUE constraint ({variant})"
+        );
+        assert!(
+            migration.contains("deleted_at TIMESTAMPTZ NULL"),
+            "CreateUsers migration must keep the soft-delete column ({variant})"
+        );
+
+        // Model: the four fields, typed as `Option<…>`, with the secrets skipped.
+        let model = find("app/models/user.rs");
+        for column in columns {
+            assert!(
+                model.contains(&format!("pub {column}: Option<")),
+                "User model must declare `pub {column}: Option<…>` ({variant})"
+            );
+        }
+        for field in hidden {
+            assert!(
+                model.contains(&format!("#[serde(skip_serializing)]\n    pub {field}")),
+                "User model must `#[serde(skip_serializing)]` the `{field}` field ({variant})"
+            );
+        }
+
+        // Factory: the new fields default to `None` so factory rows match.
+        let factory = find("database/factories/user_factory.rs");
+        for column in columns {
+            assert!(
+                factory.contains(&format!("{column}: None,")),
+                "UserFactory must default `{column}` to `None` ({variant})"
+            );
+        }
+    }
+}

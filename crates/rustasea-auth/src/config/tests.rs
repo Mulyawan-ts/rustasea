@@ -274,3 +274,29 @@ fn auth_password_timeout_non_integer_is_typed_error() {
     assert!(matches!(err, AuthConfigError::Invalid(_)), "got {err}");
     assert_eq!(err.code(), "AuthConfigError::Invalid");
 }
+
+/// The runtime `password_timeout_secs` helper reads the environment override
+/// and falls back to the 3-hour default when unset or malformed.
+#[test]
+fn password_timeout_secs_reads_env_with_fail_closed_default() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear_auth_env();
+
+    // Unset → default.
+    assert_eq!(password_timeout_secs(), DEFAULT_PASSWORD_TIMEOUT_SECS);
+    assert_eq!(DEFAULT_PASSWORD_TIMEOUT_SECS, 10_800);
+
+    // Explicit override wins.
+    std::env::set_var("AUTH_PASSWORD_TIMEOUT", "3600");
+    assert_eq!(password_timeout_secs(), 3_600);
+
+    // Blank → default (treated as absent).
+    std::env::set_var("AUTH_PASSWORD_TIMEOUT", "   ");
+    assert_eq!(password_timeout_secs(), DEFAULT_PASSWORD_TIMEOUT_SECS);
+
+    // Malformed → default rather than panic.
+    std::env::set_var("AUTH_PASSWORD_TIMEOUT", "soon");
+    assert_eq!(password_timeout_secs(), DEFAULT_PASSWORD_TIMEOUT_SECS);
+
+    clear_auth_env();
+}

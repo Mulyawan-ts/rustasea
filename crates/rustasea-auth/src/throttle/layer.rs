@@ -132,7 +132,7 @@ impl<S> ThrottleService<S> {
 pub struct UserKey(pub String);
 
 /// Read the peer IP from the connection info extension.
-fn peer_ip(req: &Request<Body>) -> Option<String> {
+pub(crate) fn peer_ip(req: &Request<Body>) -> Option<String> {
     req.extensions()
         .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
         .map(|ci| ci.0.ip().to_string())
@@ -150,7 +150,10 @@ fn xff(req: &Request<Body>) -> Option<&str> {
 }
 
 /// Build the 429 JSON error envelope with `Retry-After` header.
-fn throttle_response(retry_after_secs: u64) -> Response<Body> {
+///
+/// Shared with [`crate::throttle::route`] so a named-limiter rejection emits the
+/// identical envelope and header as the key-first [`ThrottleService`].
+pub(crate) fn throttle_response(retry_after_secs: u64) -> Response<Body> {
     let error = serde_json::json!({
         "errors": [{
             "status": "429",
