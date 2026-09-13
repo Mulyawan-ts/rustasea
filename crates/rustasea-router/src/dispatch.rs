@@ -1,30 +1,47 @@
 //! Axum compilation — resolve bound actions and emit a dispatchable router.
+//!
+//! [`Router::try_into_axum_router`] is the fallible build path: it resolves
+//! each route's declared middleware through the [`MiddlewareRegistry`] and
+//! fails with [`RouteError::UnknownMiddleware`] when one is missing.
+//! [`Router::into_axum_router`] wraps it and fails closed — an unknown
+//! middleware yields a `500` fallback router rather than a silently
+//! under-protected route table.
 
+use axum::http::StatusCode;
 use axum::routing::MethodRouter;
 use axum::Router as AxumRouter;
 
 use crate::handler::{stub_handler, ActionFactory, BoundAction, Handler};
+use crate::metadata::{MiddlewareApply, RouteError};
 use crate::route::RouteEntry;
 use crate::router::Router;
 
 impl Router {
-    /// Convert into an Axum router that dispatches to real controller actions.
+    /// Convert into an Axum router, failing on unknown middleware.
     ///
     /// Iterates domain-first ordering via [`Router::get_routes`]; the first
     /// route to claim a method+path slot wins, so a domain-constrained route
     /// shadows an overlapping catch-all instead of triggering an Axum
     /// "Overlapping method route" panic. Each slot resolves to an explicitly
-    /// bound action, a controller-registry action, or the stub handler.
+    /// bound action, a controller-registry action, or the stub handler, then
+    /// has its declared middleware applied — first-declared outermost.
     ///
     /// Slot bookkeeping stays on the Laravel-style [`RouteEntry::path`], while
     /// the string handed to `axum::Router::route` is translated by
     /// [`to_axum_path`] — Axum 0.7 (matchit 0.7) understands `:param`, not
     /// `{param}`.
-    pub fn into_axum_router(self) -> AxumRouter {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RouteError::UnknownMiddleware`] when a route declares a
+    /// middleware identifier that was never registered with
+    /// [`Router::register_middleware`].
+    pub fn try_into_axum_router(self) -> Result<AxumRouter, RouteError> {
         let entries = self.get_routes();
         let mut actions = self.actions;
         let controller_actions = self.controller_actions;
         let layers = self.layers;
+        let registry = self.middleware_registry;
 
         let mut router = AxumRouter::new();
         let mut registered: Vec<(String, String)> = Vec::new();
@@ -36,15 +53,54 @@ impl Router {
                 continue;
             }
             registered.push((entry.method.clone(), entry.path.clone()));
-            let method_router = resolve(&entry, &mut actions, &controller_actions);
+            let mut method_router = resolve(&entry, &mut actions, &controller_actions);
+            method_router = apply_middleware(method_router, &entry, &registry)?;
             let axum_path = to_axum_path(&entry.path);
             router = router.merge(AxumRouter::new().route(&axum_path, method_router));
         }
         for apply in layers {
             router = apply(router);
         }
-        router
+        Ok(router)
     }
+
+    /// Convert into an Axum router, failing closed on build errors.
+    ///
+    /// Delegates to [`Router::try_into_axum_router`]; when that fails (an
+    /// unregistered middleware identifier), the returned router answers every
+    /// request with `500 Internal Server Error` so a misconfigured table never
+    /// silently serves routes without their declared middleware.
+    pub fn into_axum_router(self) -> AxumRouter {
+        match self.try_into_axum_router() {
+            Ok(router) => router,
+            Err(_) => AxumRouter::new().fallback(|| async { StatusCode::INTERNAL_SERVER_ERROR }),
+        }
+    }
+}
+
+/// Apply a route's declared middleware, first-declared outermost.
+///
+/// Middleware is resolved through `registry`; a missing identifier is a build
+/// error. Because `MethodRouter::layer` makes each successive layer the
+/// outermost one, the identifiers are applied in reverse declaration order so
+/// the first identifier declared ends up wrapping the route on the outside.
+fn apply_middleware(
+    method_router: MethodRouter<()>,
+    entry: &RouteEntry,
+    registry: &crate::metadata::MiddlewareRegistry,
+) -> Result<MethodRouter<()>, RouteError> {
+    let mut resolved: Vec<&MiddlewareApply> = Vec::with_capacity(entry.middleware.len());
+    for name in &entry.middleware {
+        let apply = registry
+            .get(name)
+            .ok_or_else(|| RouteError::UnknownMiddleware { name: name.clone() })?;
+        resolved.push(apply);
+    }
+    let mut router = method_router;
+    for apply in resolved.into_iter().rev() {
+        router = apply(router);
+    }
+    Ok(router)
 }
 
 /// Resolve the executable method router for a route entry.

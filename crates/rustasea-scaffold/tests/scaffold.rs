@@ -1,9 +1,8 @@
 //! Integration tests for the starter-kit scaffolder.
 //!
 //! Positive coverage: every variant generates the shared core plus its own
-//! `resources/` tree and `Cargo.toml` feature set. Negative coverage: unknown
-//! variants and invalid names are rejected. Storage-layout coverage lives in
-//! `tests/storage_layout.rs` (STG-002).
+//! `resources/` tree and `Cargo.toml` feature set; negative coverage rejects
+//! unknown variants and invalid names. Storage layout lives in `tests/storage_layout.rs`.
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -31,6 +30,7 @@ const REQUIRED_CORE: &[&str] = &[
     "app/http/controllers/dashboard_controller.rs",
     "app/http/controllers/settings/profile_controller.rs",
     "app/http/controllers/settings/password_controller.rs",
+    "app/http/controllers/settings/security_controller.rs",
     "app/http/middleware/ensure_email_is_verified.rs",
     "app/http/requests/settings/profile_update_request.rs",
     "app/http/requests/settings/password_update_request.rs",

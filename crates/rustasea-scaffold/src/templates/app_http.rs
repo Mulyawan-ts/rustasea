@@ -30,6 +30,10 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
             "app/http/controllers/settings/password_controller.rs",
             PASSWORD_CONTROLLER,
         ),
+        (
+            "app/http/controllers/settings/security_controller.rs",
+            SECURITY_CONTROLLER,
+        ),
         ("app/http/middleware/mod.rs", middleware_mod(variant)),
         (
             "app/http/middleware/ensure_email_is_verified.rs",
@@ -119,6 +123,16 @@ pub async fn show_register() -> Response {
 pub async fn register() -> Response {
     todo!("create the user, log in, and redirect")
 }
+
+/// GET /confirm-password — show the password-confirmation screen.
+pub async fn show_confirm_password() -> Response {
+    todo!("render the confirm-password screen for this variant")
+}
+
+/// POST /confirm-password — re-confirm the current password.
+pub async fn confirm_password() -> Response {
+    todo!("verify the current password and mark it confirmed for the session")
+}
 "##;
 
 const DASHBOARD_CONTROLLER_VIEW: &str = r##"//! Dashboard handler for server-rendered variants (blade / livewire).
@@ -147,10 +161,11 @@ pub async fn index() -> Response {
 }
 "##;
 
-const SETTINGS_CONTROLLERS_MOD: &str = r##"//! Settings controllers — profile and password screens.
+const SETTINGS_CONTROLLERS_MOD: &str = r##"//! Settings controllers — profile, password, and security screens.
 
 pub mod password_controller;
 pub mod profile_controller;
+pub mod security_controller;
 "##;
 
 const PROFILE_CONTROLLER: &str = r##"//! Profile settings handlers.
@@ -180,6 +195,20 @@ pub async fn edit() -> Response {
 /// PUT /settings/password — rotate the password.
 pub async fn update() -> Response {
     todo!("validate PasswordUpdateRequest, re-hash, and persist")
+}
+"##;
+
+const SECURITY_CONTROLLER: &str = r##"//! Security settings handlers.
+//!
+//! The security screen is where password and two-factor controls live in the
+//! kit; only the screen itself is scaffolded here. The 2FA and passkey flows
+//! are intentionally not generated (no backing infrastructure yet).
+
+use axum::response::Response;
+
+/// GET /settings/security — show the security screen.
+pub async fn edit() -> Response {
+    todo!("render the security settings screen")
 }
 "##;
 

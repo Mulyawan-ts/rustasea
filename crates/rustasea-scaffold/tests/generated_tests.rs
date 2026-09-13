@@ -87,3 +87,79 @@ fn generated_feature_tests_mirror_the_kit() {
         assert!(actions_test.contains("validate_name"));
     }
 }
+
+/// The generated route tables use the `rustasea::router` DSL (RTE-003).
+///
+/// Mirrors the kit route conventions: every route is named, `/settings`
+/// redirects to the profile screen, the security screen is registered, and the
+/// confirm-password screen is exposed. The tables are built with the expressive
+/// router (`named` / `redirect` / `middleware`) and compiled with
+/// `try_into_axum_router`, so the generated app boots without an
+/// `UnknownMiddleware` failure.
+#[test]
+fn generated_route_tables_use_the_router_dsl() {
+    for variant in StarterKitVariant::ALL {
+        let files = render(variant);
+        let find = |path: &str| {
+            files
+                .iter()
+                .find(|file| file.path == path)
+                .unwrap_or_else(|| panic!("missing {path} ({variant})"))
+                .contents
+                .as_str()
+        };
+
+        // Router table root: DSL build + the middleware ids the tables declare.
+        let routes_mod = find("routes/mod.rs");
+        assert!(routes_mod.contains("use rustasea::router::Router;"));
+        assert!(routes_mod.contains("try_into_axum_router()"));
+        for id in ["auth", "verified", "password.confirm"] {
+            assert!(
+                routes_mod.contains(&format!("register_middleware(\"{id}\"")),
+                "routes/mod.rs must register the `{id}` middleware id ({variant})"
+            );
+        }
+
+        // Web: named home + auth/verified dashboard.
+        let web = find("routes/web.rs");
+        assert!(web.contains(".named(\"home\")"));
+        assert!(web.contains(".named(\"dashboard\")"));
+        assert!(web.contains(".middleware(\"auth\")"));
+        assert!(web.contains(".middleware(\"verified\")"));
+
+        // Auth: named login/logout/register + confirm-password.
+        let auth = find("routes/auth.rs");
+        for name in ["login", "logout", "register", "password.confirm"] {
+            assert!(
+                auth.contains(&format!(".named(\"{name}\")")),
+                "routes/auth.rs must name `{name}` ({variant})"
+            );
+        }
+        assert!(auth.contains("/confirm-password"));
+
+        // Settings: redirect + named screens + password.confirm on security.
+        let settings = find("routes/settings.rs");
+        assert!(settings.contains(".redirect(\"/settings\", \"/settings/profile\")"));
+        for name in ["profile.edit", "password.edit", "security.edit"] {
+            assert!(
+                settings.contains(&format!(".named(\"{name}\")")),
+                "routes/settings.rs must name `{name}` ({variant})"
+            );
+        }
+        assert!(settings.contains("/settings/security"));
+        assert!(settings.contains(".middleware(\"password.confirm\")"));
+
+        // FIX-RTE-01 regression: the password PUT route must bind to the real
+        // controller action, never an unresolved `password_update` identifier.
+        assert!(
+            settings.contains(".put_action(\"/settings/password\", password_controller::update)"),
+            "routes/settings.rs must bind PUT /settings/password to \
+             password_controller::update ({variant})"
+        );
+        assert!(
+            !settings.contains("password_update,"),
+            "routes/settings.rs must not reference the unresolved `password_update` \
+             identifier ({variant})"
+        );
+    }
+}

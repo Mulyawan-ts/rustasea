@@ -1,32 +1,51 @@
-//! Web route handlers — real dispatch targets for `/`, `/health`, `/welcome`.
+//! Web routes — landing, health, welcome, and the authenticated dashboard.
 //!
-//! Mirrors the README-canonical `routes/web.rs` at the workspace root.
-//! `rustasea::Router` (M0) is currently a registration DSL whose
-//! `into_axum_router` wires stub handlers; until controller binding ships,
-//! the app keeps a single explicit handler map here that mirrors the DSL
-//! route table registered in `main.rs`.
+//! `/`, `/health`, and `/welcome` are ungated and keep their original
+//! behaviour; `/dashboard` is the authenticated surface, gated by the `auth`
+//! and `verified` middleware ids registered in [`super`].
 
 use std::sync::Arc;
 
-use axum::extract::State;
+use axum::extract::Extension;
 use axum::response::{Html, Response};
 
 use rustasea::http::AppState;
+use rustasea::router::Router as RouteTable;
+
+use super::{AUTH, VERIFIED};
 
 /// Welcome page markup, rendered from `resources/views/welcome.html`.
 const WELCOME_HTML: &str = include_str!("../../../../resources/views/welcome.html");
 
-/// Build the axum router serving the app routes.
-pub fn router(state: Arc<AppState>) -> axum::Router {
-    axum::Router::new()
-        .route("/", axum::routing::get(index))
-        .route("/health", axum::routing::get(health))
-        .route("/welcome", axum::routing::get(index))
-        .with_state(state)
+/// Minimal dashboard markup served once the `auth` gate is satisfied.
+const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Dashboard</title></head>
+<body><main><h1>Dashboard</h1>
+<p>You are authenticated. Application data lands here.</p>
+</main></body></html>"#;
+
+/// Register the web route table onto `table`.
+///
+/// `/dashboard` is registered inside a [`RouteTable::group`] because
+/// [`RouteTable::middleware`] is sticky — its pending middleware applies to
+/// every subsequent route on the same table. A group gives the gate its own
+/// scope so it cannot leak onto routes registered later (auth, settings,
+/// console).
+pub fn register(table: &mut RouteTable) {
+    table.get_action("/", index).named("home");
+    table.get_action("/health", health);
+    table.get_action("/welcome", index);
+    table.group(|group| {
+        group
+            .middleware(AUTH)
+            .middleware(VERIFIED)
+            .get_action("/dashboard", dashboard)
+            .named("dashboard");
+    });
 }
 
 /// GET / and /welcome — serve the Laravel-style welcome page.
-async fn index(State(_state): State<Arc<AppState>>) -> Html<&'static str> {
+async fn index() -> Html<&'static str> {
     Html(WELCOME_HTML)
 }
 
@@ -42,10 +61,15 @@ struct Health {
 }
 
 /// GET /health — JSON liveness probe with HTTP status.
-async fn health(State(state): State<Arc<AppState>>) -> Response {
+async fn health(Extension(state): Extension<Arc<AppState>>) -> Response {
     rustasea::http::JsonResponse::ok(Health {
         status: "ok",
         service: "rustasea-app",
         env: state.env.clone(),
     })
+}
+
+/// GET /dashboard — minimal authenticated page behind the `auth` gate.
+async fn dashboard() -> Html<&'static str> {
+    Html(DASHBOARD_HTML)
 }

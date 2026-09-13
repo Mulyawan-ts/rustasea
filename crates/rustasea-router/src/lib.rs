@@ -5,14 +5,26 @@
 //! compiles the table into a dispatching axum router: bound actions run for
 //! real, unbound routes fall back to the stub handler, and axum supplies
 //! path/query/body extraction, 404 and 405 semantics.
+//!
+//! Beyond dispatch the crate provides named routes with reverse URL resolution
+//! ([`Router::named`] / [`Router::url`] / [`NamedRoutes`]), redirect helpers
+//! ([`Router::redirect`]), and build-time enforcement of per-route and
+//! per-group middleware declared through [`Router::middleware`] and registered
+//! with [`Router::register_middleware`].
 
 mod dispatch;
 mod handler;
+mod metadata;
+mod redirect;
+mod resource;
 mod route;
 mod router;
 #[cfg(test)]
 mod tests;
+mod url;
 
 pub use handler::Handler;
+pub use metadata::{MiddlewareApply, MiddlewareRegistry, RouteError};
 pub use route::{ControllerRef, RouteEntry};
 pub use router::Router;
+pub use url::NamedRoutes;

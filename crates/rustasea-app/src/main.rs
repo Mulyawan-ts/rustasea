@@ -3,15 +3,15 @@
 //! Mirrors the canonical Laravel-style layout described in `README.md`:
 //! `crates/rustasea-app/src/bootstrap/app.rs` configures the [`Application`],
 //! the workspace-root `config/*.toml` + `.env` provide typed settings, and
-//! `routes/web.rs` owns the route table. This binary boots the framework,
-//! serves real dispatch handlers over HTTP, and shuts down gracefully on
-//! SIGINT/SIGTERM.
+//! `crates/rustasea-app/src/routes/` owns the concern-scoped route tables
+//! (`web`, `auth`, `settings`, `console`). This binary boots the framework,
+//! compiles the route tables into a real dispatch router, serves it over HTTP,
+//! and shuts down gracefully on SIGINT/SIGTERM.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use rustasea::http::AppState;
-use rustasea::router::Router as RouteTable;
 
 mod bootstrap;
 mod routes;
@@ -26,20 +26,19 @@ async fn main() -> anyhow::Result<()> {
     // `bootstrap/app.rs` — the README-mandated `Application::configure` home.
     let app = bootstrap::app::configure()?;
 
-    // Declare the web route table with the framework DSL (`Router::new()`,
-    // `.get(...)`). Until controller binding lands on rustasea::Router its
-    // `into_axum_router` compiles stub handlers only, so the routes below
-    // are mirrored by real dispatch handlers in `routes::web`.
-    let mut route_table = RouteTable::new();
-    route_table.get("/").get("/health").get("/welcome");
-    println!("registered {} routes:", route_table.get_routes().len());
-    for entry in route_table.get_routes() {
-        println!("  {} {}", entry.method, entry.path);
+    // Build the real route table from the concern-scoped tables
+    // (`routes::{web,auth,settings,console}`) and print what is actually
+    // served — the print reflects the compiled table, not a placeholder.
+    let table = routes::table();
+    println!("registered {} routes:", table.get_routes().len());
+    for entry in table.get_routes() {
+        let name = entry.name.as_deref().unwrap_or("-");
+        println!("  {:7} {:30} {}", entry.method, entry.path, name);
     }
 
-    // Compile real handlers into the axum router.
+    // Compile that exact table into a dispatch router with the shared state.
     let state = Arc::new(AppState::new("local", true));
-    let router = routes::web::router(state);
+    let router = routes::compile(table, state);
 
     // Bind and serve with graceful shutdown.
     let addr: SocketAddr = bind_address();
