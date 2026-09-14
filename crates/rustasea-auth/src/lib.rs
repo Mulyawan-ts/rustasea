@@ -23,6 +23,7 @@ pub mod guard;
 pub mod jwt;
 pub mod passkeys;
 pub mod password_reset;
+pub mod policy;
 pub mod session;
 pub mod session_cookie;
 pub mod signed_url;
@@ -52,6 +53,7 @@ pub use password_reset::{
     generate_token, DenyAllResetStore, MemoryPasswordResetStore, PasswordResetRecord,
     PasswordResetStore, RESET_TOKEN_LEN,
 };
+pub use policy::{Policy, PolicyAction, PolicyRegistry};
 pub use session::{
     DatabaseSessionStore, DeserializationAllowList, SessionGuard, SessionPolicy, SessionUser,
 };
