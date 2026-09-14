@@ -34,6 +34,11 @@ rustasea-config = { path = "../rustasea-config" }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 async-trait = { workspace = true }
+# Authenticated encryption for the `encrypted` attribute cast (ChaCha20-Poly1305)
+# and its key derivation (SHA-256); the hex envelope reuses the workspace codec.
+chacha20poly1305 = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
 # RFC 3986 percent-encoding for credentials interpolated into connection URLs.
 percent-encoding = "2"
 # Runtime API only — the compile-time `query!` macros are intentionally not

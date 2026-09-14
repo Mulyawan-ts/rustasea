@@ -121,7 +121,7 @@ pub trait ModelOps: Model + Sized {
     {
         let row = Self::query_with_trashed().where_key(id).first(pool).await?;
         match row {
-            Some(value) => Ok(Some(crate::builder::json_to_model(value)?)),
+            Some(value) => Ok(Some(crate::casts::hydrate::<Self>(value)?)),
             None => Ok(None),
         }
     }
@@ -141,7 +141,7 @@ pub trait ModelOps: Model + Sized {
             .first(pool)
             .await?;
         match row {
-            Some(value) => crate::builder::json_to_model(value),
+            Some(value) => crate::casts::hydrate::<Self>(value),
             None => Err(OrmError::NotFound),
         }
     }
@@ -262,9 +262,15 @@ fn build_update<T: Model + Serialize>(data: &T, dialect: &str) -> Result<(String
 }
 
 /// Extract the writable `(column, value)` pairs from a model's serde object.
-fn user_columns<T: Serialize>(data: &T) -> Result<Vec<(String, Value)>> {
+///
+/// Every declared attribute cast is applied first (in the persistence
+/// direction), so a `#[model(cast = "json")]` field binds as JSON rather than
+/// as its raw serde shape.
+fn user_columns<T: Model + Serialize>(data: &T) -> Result<Vec<(String, Value)>> {
     let value = serde_json::to_value(data)
         .map_err(|error| OrmError::Storage(format!("model serialization failed: {error}")))?;
+    let mut value = value;
+    apply_set_casts::<T>(&mut value)?;
     let object = value
         .as_object()
         .ok_or_else(|| OrmError::InvalidValue("model must serialize to a JSON object".into()))?;
@@ -277,6 +283,27 @@ fn user_columns<T: Serialize>(data: &T) -> Result<Vec<(String, Value)>> {
         columns.push((column.clone(), json_to_value(column, value)?));
     }
     Ok(columns)
+}
+
+/// Apply the persistence direction of every cast declared on `T` in place.
+///
+/// Columns absent from the serialized object are skipped, so an optional cast
+/// field that is `None` (and therefore omitted) does not error.
+fn apply_set_casts<T: Model>(value: &mut serde_json::Value) -> Result<()> {
+    let bindings = T::casts();
+    if bindings.is_empty() {
+        return Ok(());
+    }
+    let object = value
+        .as_object_mut()
+        .ok_or_else(|| OrmError::InvalidValue("model must serialize to a JSON object".into()))?;
+    for binding in &bindings {
+        if let Some(field) = object.get(binding.column).cloned() {
+            let bound = (binding.set)(binding.column, &field)?;
+            object.insert(binding.column.to_string(), bound.to_json());
+        }
+    }
+    Ok(())
 }
 
 /// Whether `column` holds a UUID and therefore must bind natively as one.

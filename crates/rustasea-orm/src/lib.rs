@@ -6,6 +6,7 @@
 
 pub mod blueprint;
 pub mod builder;
+pub mod casts;
 pub mod clause;
 pub mod connections;
 pub mod db;
@@ -29,6 +30,10 @@ pub mod vector;
 
 pub use blueprint::Blueprint;
 pub use builder::{Executor, Lock, OrderDirection, QueryBuilder, Raw};
+pub use casts::{
+    BooleanCast, CastBinding, CastsAttributes, DateTimeCast, EncryptedCast, FloatCast, IntegerCast,
+    JsonCast, NullableCast, StringCast,
+};
 pub use connections::{
     ConnectionConfig, ConnectionPair, ConnectionResolver, DatabaseConfig, DatabaseConnection,
     MigrationsConfig, PoolConfig, RedisConfig, RedisConnection, RedisOptions,

@@ -29,6 +29,52 @@ pub enum Value {
 }
 
 impl Value {
+    /// Build a bind value from a JSON scalar.
+    ///
+    /// Objects and arrays become [`Value::Json`]; integers prefer [`Value::Int`]
+    /// and fall back to [`Value::Float`]. Used by the cast hydration boundary to
+    /// reinterpret a decoded row cell as a bind value.
+    pub fn from_json(value: &serde_json::Value) -> Self {
+        match value {
+            serde_json::Value::Null => Value::Null,
+            serde_json::Value::Bool(flag) => Value::Bool(*flag),
+            serde_json::Value::Number(number) => match number.as_i64() {
+                Some(int) => Value::Int(int),
+                None => Value::Float(number.as_f64().unwrap_or_default()),
+            },
+            serde_json::Value::String(text) => Value::Text(text.clone()),
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                Value::Json(value.clone())
+            }
+        }
+    }
+
+    /// Render this bind value back to JSON (inverse of [`Value::from_json`]).
+    ///
+    /// Timestamps render as RFC3339 strings and UUIDs as canonical text so the
+    /// JSON representation is stable across drivers.
+    pub fn to_json(&self) -> serde_json::Value {
+        match self {
+            Value::Null => serde_json::Value::Null,
+            Value::Bool(flag) => serde_json::Value::Bool(*flag),
+            Value::Int(int) => serde_json::Value::from(*int),
+            Value::Float(float) => serde_json::Value::from(*float),
+            Value::Text(text) => serde_json::Value::String(text.clone()),
+            Value::Uuid(id) => serde_json::Value::String(id.to_string()),
+            Value::Timestamp(ts) => {
+                serde_json::Value::String(ts.to_rfc3339_opts(SecondsFormat::Micros, true))
+            }
+            Value::Json(json) => json.clone(),
+            #[cfg(feature = "vector")]
+            Value::Vector(vector) => serde_json::Value::Array(
+                vector
+                    .iter()
+                    .map(|float| serde_json::Value::from(*float))
+                    .collect(),
+            ),
+        }
+    }
+
     /// Render the value as a literal for `toRawSql` diagnostics.
     ///
     /// Always parameterized in real execution — raw SQL is display-only.

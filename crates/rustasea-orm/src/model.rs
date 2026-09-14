@@ -1,6 +1,7 @@
 //! Model trait, timestamps, soft deletes, and relations.
 
 use crate::builder::{QueryBuilder, Raw, SqlFragment};
+use crate::casts::CastBinding;
 use crate::error::{OrmError, Result};
 use crate::execution::count_sql;
 use crate::m2::{InsertBuilder, ModelScopes, UpsertBuilder};
@@ -156,6 +157,18 @@ pub trait Model: Send + Sync {
 
     /// Declared relations for eager loading.
     fn relations() -> Vec<Relation>
+    where
+        Self: Sized,
+    {
+        Vec::new()
+    }
+
+    /// Per-column attribute casts applied on hydration and persistence.
+    ///
+    /// `#[derive(Model)]` emits an override for every `#[model(cast = "...")]`
+    /// / `#[model(cast_with = "...")]` field; the default is an empty set, so
+    /// hand-written models opt in by returning their own bindings.
+    fn casts() -> Vec<CastBinding>
     where
         Self: Sized,
     {

@@ -67,6 +67,16 @@ pub enum OrmError {
         /// Actual embedding length.
         actual: usize,
     },
+
+    /// An attribute cast could not convert a column value between its database
+    /// representation and its Rust representation (corrupt or malformed data).
+    #[error("cast error on `{column}`: {message}")]
+    CastError {
+        /// Column whose cast failed.
+        column: String,
+        /// Human-readable failure reason.
+        message: String,
+    },
 }
 
 impl From<sqlx::Error> for OrmError {

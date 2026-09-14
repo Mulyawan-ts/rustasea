@@ -6,7 +6,8 @@
 //! compiles and behaves end to end.
 
 use chrono::{DateTime, Utc};
-use rustasea_orm::{Model, SoftDeletes, Timestamps};
+use rustasea_orm::{CastsAttributes, Model, SoftDeletes, Timestamps, Value};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Canonical derived model — snake_plural `users`, tracked timestamps and
@@ -123,6 +124,123 @@ struct Account {
     name: String,
     timestamps: Timestamps,
     soft_deletes: SoftDeletes,
+}
+
+/// A JSON-backed value type exercised by the `json` cast.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct Settings {
+    theme: String,
+}
+
+/// A custom cast proving `cast_with` accepts user-defined structs.
+struct UpperCast;
+
+impl CastsAttributes<String> for UpperCast {
+    /// Uppercase the stored text.
+    fn get(&self, _key: &str, value: &Value) -> rustasea_orm::Result<String> {
+        match value {
+            Value::Text(text) => Ok(text.to_uppercase()),
+            other => Err(rustasea_orm::OrmError::CastError {
+                column: "nickname".into(),
+                message: format!("expected text, got {other:?}"),
+            }),
+        }
+    }
+
+    /// Persist the text unchanged.
+    fn set(&self, _key: &str, value: &String) -> rustasea_orm::Result<Value> {
+        Ok(Value::Text(value.clone()))
+    }
+}
+
+/// Derived model exercising built-in and custom casts, plus a nullable cast.
+#[allow(dead_code)]
+#[derive(rustasea_macros::Model)]
+#[model(soft_deletes = "none", timestamps = "none")]
+struct Profile {
+    id: Uuid,
+    #[model(cast = "json")]
+    settings: Settings,
+    #[model(cast = "integer")]
+    score: i64,
+    #[model(cast = "boolean")]
+    active: bool,
+    #[model(cast = "json")]
+    nickname: Option<String>,
+    #[model(cast_with = "UpperCast")]
+    label: String,
+}
+
+/// Verifies the derive records every declared cast on `Model::casts`.
+#[test]
+fn derive_records_declared_casts() {
+    let columns: Vec<&str> = <Profile as Model>::casts()
+        .iter()
+        .map(|binding| binding.column)
+        .collect();
+    assert_eq!(
+        columns,
+        vec!["settings", "score", "active", "nickname", "label"]
+    );
+}
+
+/// Verifies a JSON cast hydrates a text column into the target struct and a
+/// corrupt payload is a typed cast error.
+#[test]
+fn derive_json_cast_hydrates_and_rejects_corrupt() {
+    let casts = <Profile as Model>::casts();
+    let settings = casts
+        .iter()
+        .find(|binding| binding.column == "settings")
+        .expect("settings cast is declared");
+
+    let hydrated =
+        (settings.get)("settings", Value::Text(r#"{"theme":"dark"}"#.to_string())).unwrap();
+    let parsed: Settings = serde_json::from_value(hydrated).unwrap();
+    assert_eq!(
+        parsed,
+        Settings {
+            theme: "dark".into()
+        }
+    );
+
+    let error = (settings.get)("settings", Value::Text("not-json".into()))
+        .expect_err("corrupt JSON must fail");
+    assert!(
+        matches!(error, rustasea_orm::OrmError::CastError { .. }),
+        "got {error:?}"
+    );
+}
+
+/// Verifies the custom `cast_with` cast is wired in both directions.
+#[test]
+fn derive_custom_cast_round_trips() {
+    let casts = <Profile as Model>::casts();
+    let label = casts
+        .iter()
+        .find(|binding| binding.column == "label")
+        .expect("label cast is declared");
+
+    let hydrated = (label.get)("label", Value::Text("hi".into())).unwrap();
+    assert_eq!(hydrated, serde_json::json!("HI"));
+
+    let bound = (label.set)("label", &serde_json::json!("hi")).unwrap();
+    assert_eq!(bound, Value::Text("hi".into()));
+}
+
+/// Verifies an optional cast hydrates NULL to a JSON null (→ `None`).
+#[test]
+fn derive_nullable_cast_handles_null() {
+    let casts = <Profile as Model>::casts();
+    let nickname = casts
+        .iter()
+        .find(|binding| binding.column == "nickname")
+        .expect("nickname cast is declared");
+
+    let hydrated = (nickname.get)("nickname", Value::Null).unwrap();
+    assert!(hydrated.is_null());
+    let bound = (nickname.set)("nickname", &serde_json::Value::Null).unwrap();
+    assert_eq!(bound, Value::Null);
 }
 
 /// Verifies wrapper-style structs without raw datetime columns report no
