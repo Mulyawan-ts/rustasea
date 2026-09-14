@@ -80,21 +80,19 @@ impl Router {
 
 /// Apply a route's declared middleware, first-declared outermost.
 ///
-/// Middleware is resolved through `registry`; a missing identifier is a build
-/// error. Because `MethodRouter::layer` makes each successive layer the
-/// outermost one, the identifiers are applied in reverse declaration order so
-/// the first identifier declared ends up wrapping the route on the outside.
+/// Middleware is resolved through `registry`; a missing identifier — or a
+/// parameterized spec whose factory rejects its parameters — is a build error.
+/// Because `MethodRouter::layer` makes each successive layer the outermost one,
+/// the identifiers are applied in reverse declaration order so the first
+/// identifier declared ends up wrapping the route on the outside.
 fn apply_middleware(
     method_router: MethodRouter<()>,
     entry: &RouteEntry,
     registry: &crate::metadata::MiddlewareRegistry,
 ) -> Result<MethodRouter<()>, RouteError> {
-    let mut resolved: Vec<&MiddlewareApply> = Vec::with_capacity(entry.middleware.len());
-    for name in &entry.middleware {
-        let apply = registry
-            .get(name)
-            .ok_or_else(|| RouteError::UnknownMiddleware { name: name.clone() })?;
-        resolved.push(apply);
+    let mut resolved: Vec<MiddlewareApply> = Vec::with_capacity(entry.middleware.len());
+    for spec in &entry.middleware {
+        resolved.push(registry.resolve(spec)?);
     }
     let mut router = method_router;
     for apply in resolved.into_iter().rev() {

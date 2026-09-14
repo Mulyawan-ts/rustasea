@@ -62,14 +62,22 @@ pub fn route(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// Grammar: `#[middleware("auth:jwt", "throttle:60,1")]` — a comma-separated
 /// list of string middleware specs. The function is re-emitted unchanged and
-/// a doc-hidden const `__RUSTASEA_MIDDLEWARE_<Fn>` records the middleware
-/// name list the router reads when wiring `tower::Layer` chains at build time
-/// (FS-M3-06):
+/// a doc-hidden `pub const __RUSTASEA_MIDDLEWARE_<Fn>` records the middleware
+/// name list the router consumes when wiring `tower::Layer` chains at build
+/// time (FS-M3-06):
 ///
 /// ```rust,ignore
 /// #[middleware("auth:jwt")]
 /// async fn profile() -> &'static str { "profile" }
+///
+/// router.middleware_meta(__RUSTASEA_MIDDLEWARE_profile)
+///       .route_meta(__RUSTASEA_ROUTE_profile, profile);
 /// ```
+///
+/// The const is `pub` (matching `#[route]`) so the controller module that owns
+/// the handler can hand its metadata to `Router::middleware_meta` at
+/// registration time; parameterized specs (`"throttle:60,1"`) are resolved
+/// through the router's middleware registry.
 #[proc_macro_attribute]
 pub fn middleware(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
@@ -85,7 +93,7 @@ pub fn middleware(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                 #[doc(hidden)]
                 #[allow(non_upper_case_globals)]
-                const #const_name: &[&str] = &[#(#specs),*];
+                pub const #const_name: &[&str] = &[#(#specs),*];
             };
             expanded.into()
         }
