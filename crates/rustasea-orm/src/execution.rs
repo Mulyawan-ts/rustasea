@@ -235,7 +235,13 @@ impl PageMeta {
     }
 }
 
-/// Execute a raw statement (stub — sqlx wiring lands with the driver crate).
+/// Build an executable raw statement with bound values.
+///
+/// The returned [`Raw`] carries `sql` (with `$n` placeholders) and its
+/// `bindings`; execute it with [`Raw::query`] (a `SELECT`) or [`Raw::execute`]
+/// (a mutation) against a [`DbPool`] or [`Transaction`]. Bindings are always
+/// passed as driver parameters — never interpolated — so caller values cannot
+/// alter the statement's structure.
 pub fn raw(sql: &str, bindings: Vec<Value>) -> Raw {
     Raw {
         sql: sql.to_string(),
@@ -243,7 +249,12 @@ pub fn raw(sql: &str, bindings: Vec<Value>) -> Raw {
     }
 }
 
-/// Raw SQL builder statement (fragment emission, display-only).
+/// Build an inline raw SQL fragment (spliced verbatim, never parameterized).
+///
+/// Execute it with [`crate::builder::SqlFragment::query`] /
+/// [`crate::builder::SqlFragment::execute`]. Because a fragment carries no bind
+/// values, it is interpolated into the statement as-is — never build one from
+/// user input; use [`raw`] with `$n` bindings for untrusted values.
 pub fn raw_sql(sql: &str) -> crate::builder::SqlFragment {
     crate::builder::SqlFragment {
         sql: sql.to_string(),

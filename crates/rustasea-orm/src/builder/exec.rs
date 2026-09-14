@@ -7,7 +7,7 @@
 //! model-agnostic; typed callers deserialize with [`json_to_model`]. Only the
 //! `sqlx` runtime API is used — never the compile-time `query!` macros.
 
-use super::QueryBuilder;
+use super::{QueryBuilder, Raw, SqlFragment};
 use crate::db::DbPool;
 use crate::error::{OrmError, Result};
 use crate::execution::Paginator;
@@ -88,12 +88,71 @@ impl<'a> Executor<'a> {
         }
     }
 
+    /// Run a raw, parameterized `SELECT`, decoding every row into a JSON object.
+    ///
+    /// Alias of [`Executor::fetch_json`] under the raw-execution name, so raw
+    /// fragments (`Raw` / `SqlFragment`) and fluent builders share one executor
+    /// surface. Bindings are passed as parameters — never interpolated.
+    pub async fn query_raw(
+        &mut self,
+        sql: &str,
+        bindings: &[Value],
+    ) -> Result<Vec<serde_json::Value>> {
+        self.fetch_json(sql, bindings).await
+    }
+
+    /// Run a raw, parameterized statement and return the number of affected rows.
+    ///
+    /// Alias of [`Executor::execute_bind`] under the raw-execution name.
+    pub async fn execute_raw(&mut self, sql: &str, bindings: &[Value]) -> Result<u64> {
+        self.execute_bind(sql, bindings).await
+    }
+
     /// Reborrow the executor so multi-statement methods can reuse it.
     fn reborrow(&mut self) -> Executor<'_> {
         match self {
             Executor::Pool(pool) => Executor::Pool(pool),
             Executor::Transaction(tx) => Executor::Transaction(tx),
         }
+    }
+}
+
+impl Raw {
+    /// Execute this raw fragment as a `SELECT`, returning every row as JSON.
+    ///
+    /// The fragment's own `sql`/`bindings` are used, so a `raw(sql, bindings)`
+    /// value produced by [`crate::execution::raw`] (or [`crate::Model::raw_select`])
+    /// can be executed directly against a pool or transaction. Bindings are
+    /// passed as parameters — never string-interpolated.
+    pub async fn query<'a>(
+        &self,
+        executor: impl Into<Executor<'a>>,
+    ) -> Result<Vec<serde_json::Value>> {
+        executor.into().query_raw(&self.sql, &self.bindings).await
+    }
+
+    /// Execute this raw fragment as a mutation, returning the affected row count.
+    pub async fn execute<'a>(&self, executor: impl Into<Executor<'a>>) -> Result<u64> {
+        executor.into().execute_raw(&self.sql, &self.bindings).await
+    }
+}
+
+impl SqlFragment {
+    /// Execute this inline fragment as a `SELECT`, returning every row as JSON.
+    ///
+    /// A [`SqlFragment`] carries no bind values (it is spliced verbatim), so the
+    /// statement is sent with an empty binding list. Never build a `SqlFragment`
+    /// from user input — it is interpolated, not parameterized.
+    pub async fn query<'a>(
+        &self,
+        executor: impl Into<Executor<'a>>,
+    ) -> Result<Vec<serde_json::Value>> {
+        executor.into().query_raw(&self.sql, &[]).await
+    }
+
+    /// Execute this inline fragment as a mutation, returning the affected rows.
+    pub async fn execute<'a>(&self, executor: impl Into<Executor<'a>>) -> Result<u64> {
+        executor.into().execute_raw(&self.sql, &[]).await
     }
 }
 

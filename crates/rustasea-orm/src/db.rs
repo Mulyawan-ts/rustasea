@@ -1,14 +1,14 @@
 //! Real database connection foundation backed by `sqlx`.
 //!
-//! [`DbPool`] wraps one live `sqlx` pool per supported driver (selected by URL
-//! scheme) and owns [`ConnectionConfig`] URL assembly; [`DbPool::fetch_json`]
-//! reads and [`DbPool::execute_bind`] writes.
+//! [`DbPool`] wraps one live `sqlx` pool per supported driver; [`DbPool::fetch_json`]
+//! reads, [`DbPool::execute_bind`] writes, and [`DbPool::query_raw`]/[`DbPool::execute_raw`] run raw SQL.
 
 use crate::connections::{ConnectionConfig, EndpointConfig};
 use crate::error::{ConnectionError, OrmError, Result};
 use std::time::Duration;
 
 mod exec;
+mod raw;
 
 /// Maximum connections held by a pool (SQLite in-memory is capped at one).
 const DEFAULT_MAX_CONNECTIONS: u32 = 10;

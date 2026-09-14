@@ -135,6 +135,25 @@ impl Transaction {
         inner.execute_bind(sql, bindings).await
     }
 
+    /// Run a raw, parameterized `SELECT` on the transaction connection.
+    ///
+    /// Alias of [`Transaction::fetch_json`] under the raw-execution name, so raw
+    /// fragments run on the same connection as the surrounding transaction.
+    pub async fn query_raw(
+        &mut self,
+        sql: &str,
+        bindings: &[Value],
+    ) -> Result<Vec<serde_json::Value>> {
+        self.fetch_json(sql, bindings).await
+    }
+
+    /// Run a raw, parameterized statement on the transaction connection.
+    ///
+    /// Alias of [`Transaction::execute_bind`] under the raw-execution name.
+    pub async fn execute_raw(&mut self, sql: &str, bindings: &[Value]) -> Result<u64> {
+        self.execute_bind(sql, bindings).await
+    }
+
     /// Execute a `;`-separated SQL script on the transaction connection.
     ///
     /// Used for multi-statement bodies (`sqlx::query` accepts one statement
