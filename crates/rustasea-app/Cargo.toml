@@ -19,6 +19,8 @@ tokio = { workspace = true }
 axum = { workspace = true }
 anyhow = "1"
 serde = { workspace = true, features = ["derive"] }
+# `serde_json::Value` renders config values for the `tinker` REPL source.
+serde_json = { workspace = true }
 # `ServeDir` serves `resources/` at `/assets/*`; `fs` is the file-service feature.
 tower-http = { workspace = true, features = ["fs"] }
 # `tower_sessions::cookie::Cookie` parses the session cookie the auth

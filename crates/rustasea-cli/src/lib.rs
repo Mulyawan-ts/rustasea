@@ -30,6 +30,8 @@ pub mod prompt;
 pub mod routes;
 #[cfg(feature = "cli")]
 pub mod shutdown;
+#[cfg(feature = "cli")]
+pub mod tinker;
 
 pub use artisan::{Artisan, Command, CommandMeta, CommandOutput, Io};
 pub use error::{exit_code, CliError, CliResult};
@@ -43,6 +45,11 @@ pub use async_trait;
 pub use generator::{Generator, GeneratorError};
 #[cfg(feature = "cli")]
 pub use shutdown::Shutdownable;
+#[cfg(feature = "cli")]
+pub use tinker::{
+    clear_tinker_source, set_tinker_source, tinker_source, TinkerOutcome, TinkerSession,
+    TinkerSource,
+};
 
 #[cfg(feature = "cli")]
 pub use cli::{Cli, CliCommand};

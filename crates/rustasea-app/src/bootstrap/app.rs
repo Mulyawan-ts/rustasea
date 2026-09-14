@@ -9,7 +9,7 @@
 use rustasea::foundation::BootError;
 use rustasea::Application;
 
-use crate::bootstrap::{commands, providers};
+use crate::bootstrap::{commands, providers, tinker};
 
 /// Build and boot the application.
 ///
@@ -32,7 +32,29 @@ pub fn configure() -> Result<Application, BootError> {
     // boot; the command reads it back (see `rustasea::cli::routes`).
     rustasea::cli::routes::set_route_source(|| crate::routes::table().get_routes());
     app.boot()?;
+    // Publish the application introspection source for `tinker`. Like the route
+    // source, the CLI cannot depend on this app crate, so the app pushes a
+    // snapshot into the CLI's process-wide tinker registry after boot (once the
+    // container bindings + config loader are populated).
+    publish_tinker_source(&app);
     Ok(app)
+}
+
+/// Publish the booted application's [`tinker`] source into the CLI registry.
+///
+/// Best-effort: without a boot-time config loader or environment binding the
+/// source is skipped, leaving the REPL's framework-generic surfaces usable.
+fn publish_tinker_source(app: &Application) {
+    let Some(loader) = app.config().cloned() else {
+        return;
+    };
+    let environment = app
+        .container
+        .get::<String>(providers::ENVIRONMENT_KEY)
+        .cloned()
+        .unwrap_or_else(|| providers::app_environment_from(app));
+    let source = tinker::AppTinkerSource::from_booted(loader, environment, &app.container);
+    rustasea::cli::set_tinker_source(source);
 }
 
 #[cfg(test)]

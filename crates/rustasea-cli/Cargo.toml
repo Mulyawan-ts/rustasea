@@ -24,6 +24,7 @@ cli = [
     "dep:indicatif",
     "dep:console",
     "dep:comfy-table",
+    "dep:rustyline",
     "dep:rustasea-router",
 ]
 
@@ -50,3 +51,5 @@ dialoguer = { workspace = true, optional = true }
 indicatif = { workspace = true, optional = true }
 console = { workspace = true, optional = true }
 comfy-table = { workspace = true, optional = true }
+# Readline backend for the interactive `tinker` REPL (line editing, history).
+rustyline = { workspace = true, optional = true }

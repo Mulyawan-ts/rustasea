@@ -11,3 +11,4 @@ pub mod app;
 pub mod auth;
 pub mod commands;
 pub mod providers;
+pub mod tinker;

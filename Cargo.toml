@@ -71,6 +71,10 @@ indicatif = "0.17"
 console = "0.15"
 strsim = "0.11"
 comfy-table = "7"
+# Readline backend for the interactive `tinker` REPL. Default features are
+# disabled so the build pulls neither `radix_trie` (custom bindings) nor `home`
+# (history directory discovery); the in-memory history is all `tinker` needs.
+rustyline = { version = "18", default-features = false }
 # Test infrastructure (M5)
 testcontainers = "0.23"
 dotenvy = "0.15"

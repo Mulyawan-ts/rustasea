@@ -8,6 +8,7 @@ pub mod builtins;
 pub mod inspect;
 pub mod ops;
 pub mod queue;
+pub mod tinker;
 
 use crate::registry::CommandRegistry;
 
@@ -41,6 +42,7 @@ pub fn register_all_into(reg: &mut CommandRegistry) {
     reg.register(ops::Migrate);
     reg.register(ops::MigrateFresh);
     reg.register(ops::MigrateRollback);
+    reg.register(tinker::Tinker);
 }
 
 /// Register every built-in command into the global process registry.
