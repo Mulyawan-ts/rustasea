@@ -22,7 +22,8 @@ pub use database::DatabaseDriver;
 #[cfg(feature = "redis")]
 pub use redis::RedisDriver;
 pub use worker::{
-    default_resolver, register_job, register_job_handler, run_worker, run_worker_with,
+    default_resolver, register_job, register_job_handler, register_job_with_policy, run_worker,
+    run_worker_with,
 };
 
 /// Canonical name of the inline `sync` connection.

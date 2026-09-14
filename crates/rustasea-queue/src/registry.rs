@@ -208,27 +208,25 @@ impl Queue {
     /// nor retried. The driver buffer is untouched.
     async fn execute_sync(handle: &DispatchHandle) -> Result<JobOutcome> {
         let outcome = run_erased(handle.exec.as_ref()).await;
-        match outcome {
-            JobOutcome::Failed => {
-                record_failed(FailedJob::new(
-                    SYNC_CONNECTION,
-                    handle.exec.type_key(),
-                    handle.exec.as_json(),
-                    "JobError::MaxAttemptsExceeded",
-                ));
-                Ok(outcome)
-            }
-            JobOutcome::Retrying { attempt, .. } => {
-                record_failed(FailedJob::new(
-                    SYNC_CONNECTION,
-                    handle.exec.type_key(),
-                    handle.exec.as_json(),
-                    format!("JobError::MaxAttemptsExceeded (sync retry {attempt} not schedulable)"),
-                ));
-                Ok(outcome)
-            }
-            JobOutcome::Succeeded | JobOutcome::Skipped => Ok(outcome),
-        }
+        // A sync dispatch has no later worker to release a retry, so both
+        // `Failed` and `Retrying` are dead-lettered with the attempt's trace.
+        let (trace, suffix) = match &outcome {
+            JobOutcome::Failed { exception } => (exception.as_str(), String::new()),
+            JobOutcome::Retrying {
+                attempt, exception, ..
+            } => (
+                exception.as_str(),
+                format!(" (sync retry {attempt} not schedulable)"),
+            ),
+            JobOutcome::Succeeded | JobOutcome::Skipped => return Ok(outcome),
+        };
+        record_failed(FailedJob::new(
+            SYNC_CONNECTION,
+            handle.exec.type_key(),
+            handle.exec.as_json(),
+            format!("JobError::MaxAttemptsExceeded: {trace}{suffix}"),
+        ));
+        Ok(outcome)
     }
 
     /// Execute a typed job inline on the sync connection.
@@ -251,7 +249,10 @@ impl Queue {
         for exec in jobs {
             let outcome = run_erased(exec.as_ref()).await;
             let stopped = !matches!(outcome, JobOutcome::Succeeded);
-            if matches!(outcome, JobOutcome::Failed | JobOutcome::Retrying { .. }) {
+            if matches!(
+                outcome,
+                JobOutcome::Failed { .. } | JobOutcome::Retrying { .. }
+            ) {
                 record_failed(FailedJob::new(
                     SYNC_CONNECTION,
                     exec.type_key(),

@@ -258,9 +258,10 @@ pub fn validate(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Attribute: job retry budget.
 ///
-/// Grammar: `#[tries(3)]` on a job type. The value is a usize; the helper
-/// const `__RUSTASEA_TRIES_<Type>` records the declarative budget that queue
-/// workers honour (an explicit `#[tries]` shadows `ShouldRetry`).
+/// Grammar: `#[tries(3)]` on a job type. The value is a usize; the `pub`
+/// helper const `__RUSTASEA_TRIES_<Type>` records the declarative budget that
+/// queue workers honour (an explicit `#[tries]` shadows `ShouldRetry`). Bind it
+/// to the runtime with `rustasea_queue::register_job_with_policy::<T>(...)`.
 #[proc_macro_attribute]
 pub fn tries(attr: TokenStream, item: TokenStream) -> TokenStream {
     attrs::usize_attr(attr, item, "tries", "TRIES")
@@ -269,7 +270,8 @@ pub fn tries(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Attribute: base retry backoff.
 ///
 /// Grammar: `#[backoff(10)]` — base delay in **seconds** before the first
-/// retry (later attempts double). Emits `__RUSTASEA_BACKOFF_SECS_<Type>`.
+/// retry (later attempts double). Emits the `pub` const
+/// `__RUSTASEA_BACKOFF_SECS_<Type>`.
 #[proc_macro_attribute]
 pub fn backoff(attr: TokenStream, item: TokenStream) -> TokenStream {
     attrs::usize_attr(attr, item, "backoff", "BACKOFF_SECS")
@@ -278,7 +280,8 @@ pub fn backoff(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Attribute: per-attempt timeout.
 ///
 /// Grammar: `#[timeout(30)]` — per-attempt timeout in **seconds**; `0`
-/// disables the timeout. Emits `__RUSTASEA_TIMEOUT_SECS_<Type>`.
+/// disables the timeout. Emits the `pub` const
+/// `__RUSTASEA_TIMEOUT_SECS_<Type>`.
 #[proc_macro_attribute]
 pub fn timeout(attr: TokenStream, item: TokenStream) -> TokenStream {
     attrs::usize_attr(attr, item, "timeout", "TIMEOUT_SECS")

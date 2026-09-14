@@ -13,12 +13,13 @@ use std::time::Duration;
 use crate::driver::QueueDriver;
 use crate::error::Result;
 use crate::job::{run_erased, ConcreteJob, ErasedJob, FailedJob, Job, JobOutcome, JobPayload};
+use crate::policy::JobPolicy;
 
 /// How long a worker blocks on `pop` before concluding a queue is drained.
 const POP_TIMEOUT: Duration = Duration::from_millis(250);
 
 /// Factory that rebuilds an erased handler from a serialized job body.
-type HandlerFactory = fn(&serde_json::Value) -> Option<Arc<dyn ErasedJob>>;
+type HandlerFactory = Arc<dyn Fn(&serde_json::Value) -> Option<Arc<dyn ErasedJob>> + Send + Sync>;
 
 /// Process-wide map from job type name to its deserializing handler factory.
 static HANDLERS: OnceLock<RwLock<HashMap<&'static str, HandlerFactory>>> = OnceLock::new();
@@ -32,15 +33,46 @@ fn handlers() -> &'static RwLock<HashMap<&'static str, HandlerFactory>> {
 ///
 /// A worker resolving a payload whose `job` equals `J`'s type name deserializes
 /// the JSON body into `J` and runs it through the standard retry/timeout path.
-/// Registering the same type twice replaces the prior factory.
+/// Registering the same type twice replaces the prior factory. The retry policy
+/// is taken from the job's own `tries`/`backoff`/`timeout` accessors; use
+/// [`register_job_with_policy`] to bind a declarative policy instead.
 pub fn register_job<J>()
 where
     J: Job + serde::de::DeserializeOwned + 'static,
 {
-    register_job_handler(std::any::type_name::<J>(), |body| {
-        let job: J = serde_json::from_value(body.clone()).ok()?;
-        Some(Arc::new(ConcreteJob::new(job)))
-    });
+    register_job_handler(
+        std::any::type_name::<J>(),
+        Arc::new(|body: &serde_json::Value| {
+            let job: J = serde_json::from_value(body.clone()).ok()?;
+            Some(Arc::new(ConcreteJob::new(job)))
+        }),
+    );
+}
+
+/// Register a handler for job type `J` that runs under an explicit `policy`.
+///
+/// This is the runtime binding point for the `#[tries]`/`#[backoff]`/
+/// `#[timeout]` attribute bundle: an application builds a [`JobPolicy`] from the
+/// macro-emitted `__RUSTASEA_TRIES_<Type>` / `__RUSTASEA_BACKOFF_SECS_<Type>` /
+/// `__RUSTASEA_TIMEOUT_SECS_<Type>` consts (e.g.
+/// `JobPolicy::from_seconds(__RUSTASEA_TRIES_Foo, __RUSTASEA_BACKOFF_SECS_Foo,
+/// __RUSTASEA_TIMEOUT_SECS_Foo)`) and registers it here at boot. Rust has no
+/// reflection, so this explicit registration — mirroring the `middleware_meta`
+/// precedent — is how the worker learns the declarative policy per job type.
+///
+/// The policy takes precedence over the job's own accessors; registering the
+/// same type twice replaces the prior factory.
+pub fn register_job_with_policy<J>(policy: JobPolicy)
+where
+    J: Job + serde::de::DeserializeOwned + 'static,
+{
+    register_job_handler(
+        std::any::type_name::<J>(),
+        Arc::new(move |body: &serde_json::Value| {
+            let job: J = serde_json::from_value(body.clone()).ok()?;
+            Some(Arc::new(ConcreteJob::with_policy(job, policy)))
+        }),
+    );
 }
 
 /// Register a handler factory for an explicit `type_key`.
@@ -130,9 +162,17 @@ fn dead_letter_payload(payload: &JobPayload) -> serde_json::Value {
 
 /// Execute one reserved payload and finalize it on the driver.
 ///
-/// Success/skip `ack`s the reservation; a retryable failure `release`s it when
-/// the attempt budget remains, otherwise it is dead-lettered and the
-/// reservation removed.
+/// The job's [`JobPolicy`] (from the registered handler — see
+/// [`register_job_with_policy`]) drives retry handling:
+///
+/// * success/skip `ack`s the reservation;
+/// * a retryable failure whose attempt budget remains is `release`d after the
+///   policy's exponential backoff delay (`#[backoff(secs)]`);
+/// * a failure once `#[tries(n)]` attempts are exhausted is dead-lettered to
+///   `failed_jobs` with the attempt's exception trace.
+///
+/// Timeout enforcement happens inside [`crate::job::run_erased`] using the same
+/// policy, so `#[timeout(secs)]` is honoured per attempt.
 async fn process_one<F>(driver: &dyn QueueDriver, payload: &JobPayload, resolver: &F) -> Result<()>
 where
     F: Fn(&JobPayload) -> Option<Arc<dyn ErasedJob>> + Send + Sync,
@@ -150,21 +190,25 @@ where
         return Ok(());
     };
 
-    let tries = exec.tries();
+    let policy = exec.policy();
     match run_erased(exec.as_ref()).await {
         JobOutcome::Succeeded | JobOutcome::Skipped => {
             driver.ack(payload).await?;
         }
-        JobOutcome::Retrying { delay, .. } if payload.attempts < tries => {
+        JobOutcome::Retrying { .. } if policy.allows_retry(payload.attempts) => {
+            // The worker owns the global attempt count, so the backoff delay is
+            // recomputed from the policy rather than trusting the single-attempt
+            // outcome — this keeps exponential growth correct across runs.
+            let delay = policy.delay_for_attempt(payload.attempts);
             driver.release(payload, delay).await?;
         }
-        JobOutcome::Failed | JobOutcome::Retrying { .. } => {
+        JobOutcome::Failed { exception } | JobOutcome::Retrying { exception, .. } => {
             driver
                 .dead_letter(FailedJob::new(
                     payload.connection.clone(),
                     payload.queue.clone(),
                     dead_letter_payload(payload),
-                    "JobError::MaxAttemptsExceeded",
+                    format!("JobError::MaxAttemptsExceeded: {exception}"),
                 ))
                 .await?;
             driver.ack(payload).await?;

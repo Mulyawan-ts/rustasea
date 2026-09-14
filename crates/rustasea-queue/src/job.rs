@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::JobError;
-use crate::Result;
+use crate::policy::JobPolicy;
 
 /// Unique identifier for an enqueued job (UUIDv4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -56,9 +56,19 @@ pub enum JobOutcome {
     /// `#[deleteWhenMissingModels]`). A skipped job is never retried.
     Skipped,
     /// `handle` returned `Err` and the retry budget is exhausted.
-    Failed,
+    Failed {
+        /// Rendered exception from the failed attempt (dead-letter trace).
+        exception: String,
+    },
     /// `handle` returned `Err`; the job will be retried after `delay`.
-    Retrying { attempt: u32, delay: Duration },
+    Retrying {
+        /// 1-based attempt number the retry will be.
+        attempt: u32,
+        /// Delay to wait before the retry is available again.
+        delay: Duration,
+        /// Rendered exception from the failed attempt (dead-letter trace).
+        exception: String,
+    },
 }
 
 /// Serialized job envelope stored on a queue.
@@ -230,6 +240,14 @@ pub trait ErasedJob: Send + Sync {
     /// Serialize the captured body into its JSON payload.
     fn as_json(&self) -> serde_json::Value;
 
+    /// Consolidated retry/timing policy (`#[tries]`/`#[backoff]`/`#[timeout]`).
+    ///
+    /// Defaults to the individual `tries`/`backoff`/`timeout` accessors so an
+    /// implementor that only overrides those still exposes a policy.
+    fn policy(&self) -> JobPolicy {
+        JobPolicy::new(self.tries(), self.backoff(), self.timeout())
+    }
+
     /// Maximum attempts.
     fn tries(&self) -> u32;
 
@@ -256,9 +274,7 @@ pub trait ErasedJob: Send + Sync {
 pub struct ConcreteJob<J: Job> {
     body: Mutex<Option<J>>,
     key: &'static str,
-    tries: u32,
-    backoff: Duration,
-    timeout: Duration,
+    policy: JobPolicy,
     delete_when_missing: bool,
 }
 
@@ -267,19 +283,33 @@ impl<J: Job> ConcreteJob<J> {
     ///
     /// The registry key is the job's `std::any` type name, which is the same
     /// `'static` identity `Queue::route::<J>` registers under — it is resolved
-    /// once here, not leaked from a formatted string.
+    /// once here, not leaked from a formatted string. The policy is taken from
+    /// the job's `tries`/`backoff`/`timeout` accessors.
     pub fn new(job: J) -> Self {
         let key = job.queue_name();
-        let tries = job.tries();
-        let backoff = job.backoff();
-        let timeout = job.timeout();
+        let policy = JobPolicy::new(job.tries(), job.backoff(), job.timeout());
         let delete_when_missing = job.delete_when_missing_models();
         Self {
             body: Mutex::new(Some(job)),
             key,
-            tries,
-            backoff,
-            timeout,
+            policy,
+            delete_when_missing,
+        }
+    }
+
+    /// Capture a concrete job with an explicit retry/timing `policy`.
+    ///
+    /// Used by [`crate::driver::register_job_with_policy`] so a worker honours a
+    /// policy registered from the declarative `#[tries]`/`#[backoff]`/
+    /// `#[timeout]` attribute consts even when the job's accessors are not
+    /// overridden.
+    pub fn with_policy(job: J, policy: JobPolicy) -> Self {
+        let key = job.queue_name();
+        let delete_when_missing = job.delete_when_missing_models();
+        Self {
+            body: Mutex::new(Some(job)),
+            key,
+            policy,
             delete_when_missing,
         }
     }
@@ -301,19 +331,24 @@ impl<J: Job> ErasedJob for ConcreteJob<J> {
             .unwrap_or(serde_json::Value::Null)
     }
 
+    /// Consolidated retry/timing policy captured at dispatch.
+    fn policy(&self) -> JobPolicy {
+        self.policy
+    }
+
     /// Maximum attempts captured at dispatch.
     fn tries(&self) -> u32 {
-        self.tries
+        self.policy.max_tries
     }
 
     /// Base backoff captured at dispatch.
     fn backoff(&self) -> Duration {
-        self.backoff
+        self.policy.backoff
     }
 
     /// Timeout captured at dispatch.
     fn timeout(&self) -> Duration {
-        self.timeout
+        self.policy.timeout
     }
 
     /// Suppression marker captured at dispatch.
@@ -326,7 +361,7 @@ impl<J: Job> ErasedJob for ConcreteJob<J> {
         let guard = self.body.lock().unwrap_or_else(|p| p.into_inner());
         match guard.as_ref() {
             Some(job) => job.should_retry(attempt, err),
-            None => attempt < self.tries,
+            None => self.policy.allows_retry(attempt),
         }
     }
 
@@ -372,7 +407,7 @@ impl<J: Job> ErasedJob for ConcreteJob<J> {
             .unwrap_or_else(|p| p.into_inner())
             .take()
             .expect("erased job executed twice");
-        let timeout = self.timeout;
+        let timeout = self.policy.timeout;
         let deadline = if timeout.is_zero() {
             None
         } else {
@@ -393,70 +428,22 @@ impl<J: Job> ErasedJob for ConcreteJob<J> {
 
         match result {
             Ok(()) => JobOutcome::Succeeded,
-            Err(e) if self.should_retry(1, &e) && self.tries > 1 => JobOutcome::Retrying {
+            Err(e) if self.policy.allows_retry(1) => JobOutcome::Retrying {
                 attempt: 2,
-                delay: retry_delay(self.backoff, 1),
+                delay: self.policy.delay_for_attempt(1),
+                exception: e.to_string(),
             },
-            Err(_) => JobOutcome::Failed,
+            Err(e) => JobOutcome::Failed {
+                exception: e.to_string(),
+            },
         }
     }
-}
-
-/// Compute the delay before retry `attempt + 1` (exponential on the base).
-fn retry_delay(base: Duration, failed_attempt: u32) -> Duration {
-    if base.is_zero() || failed_attempt <= 1 {
-        return base;
-    }
-    let factor = 1u32 << (failed_attempt - 1).min(30);
-    base.saturating_mul(factor)
 }
 
 /// Chainable per-dispatch overrides returned by `Job::dispatch`.
 ///
-/// Every override mutates a shared plan; the terminal `await` performs the
-/// enqueue through the resolved connection's driver.
-#[derive(Clone)]
-pub struct DispatchHandle {
-    pub(crate) exec: Arc<dyn ErasedJob>,
-    pub(crate) queue: Option<String>,
-    pub(crate) connection: Option<String>,
-    pub(crate) delay: Duration,
-}
-
-impl DispatchHandle {
-    /// Create a dispatch handle for an erased job with no overrides yet.
-    pub fn new(exec: Arc<dyn ErasedJob>) -> Self {
-        Self {
-            exec,
-            queue: None,
-            connection: None,
-            delay: Duration::ZERO,
-        }
-    }
-
-    /// Route this single dispatch to `queue`, overriding the routed queue.
-    pub fn on_queue(mut self, queue: impl Into<String>) -> Self {
-        self.queue = Some(queue.into());
-        self
-    }
-
-    /// Route this single dispatch to `connection`, overriding the routed one.
-    pub fn on_connection(mut self, connection: impl Into<String>) -> Self {
-        self.connection = Some(connection.into());
-        self
-    }
-
-    /// Delay this single dispatch by `delay` (sets `available_at`).
-    pub fn delay(mut self, delay: Duration) -> Self {
-        self.delay = delay;
-        self
-    }
-
-    /// Enqueue the job through the resolved connection and queue.
-    pub async fn dispatch(self) -> Result<JobId> {
-        crate::registry::Queue::dispatch_handle(self).await
-    }
-}
+/// Defined in [`crate::dispatch`]; re-exported here for source parity.
+pub use crate::dispatch::DispatchHandle;
 
 /// Dead-letter record for a permanently failed job.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -312,7 +312,9 @@ fn resource_id_from_target(expr: &syn::Expr) -> String {
 /// Emit a usize-typed helper const for the annotated item.
 ///
 /// Grammar: `#[tries(3)]`, `#[backoff(10)]`, `#[timeout(30)]` — appends
-/// `const __RUSTASEA_{KEY}_{Type}: usize` after the unchanged item.
+/// `pub const __RUSTASEA_{KEY}_{Type}: usize` after the unchanged item. The
+/// const is `pub` so the queue runtime can bind it to a job's retry policy
+/// (`register_job_with_policy`), mirroring the `#[authorize]` metadata surface.
 pub(crate) fn usize_attr(
     attr: TokenStream,
     item: TokenStream,
@@ -328,7 +330,7 @@ pub(crate) fn usize_attr(
                 #input
                 #[doc(hidden)]
                 #[allow(non_upper_case_globals)]
-                const #const_name: usize = #value;
+                pub const #const_name: usize = #value;
             }
             .into()
         }

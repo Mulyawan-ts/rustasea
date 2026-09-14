@@ -9,12 +9,14 @@
 
 pub mod batch;
 pub mod config;
+pub mod dispatch;
 pub mod driver;
 pub mod error;
 pub mod job;
 pub mod metrics;
 pub mod migrations;
 pub mod notification;
+pub mod policy;
 pub mod registry;
 pub mod retry;
 pub mod wiring;
@@ -28,9 +30,9 @@ pub use config::{
 #[cfg(feature = "redis")]
 pub use driver::RedisDriver;
 pub use driver::{
-    default_resolver, failed_jobs, register_job, register_job_handler, retry_failed, run_worker,
-    run_worker_with, DatabaseDriver, QueueDriver, SyncDriver, DATABASE_CONNECTION, DATABASE_DRIVER,
-    REDIS_CONNECTION, REDIS_DRIVER, SYNC_CONNECTION,
+    default_resolver, failed_jobs, register_job, register_job_handler, register_job_with_policy,
+    retry_failed, run_worker, run_worker_with, DatabaseDriver, QueueDriver, SyncDriver,
+    DATABASE_CONNECTION, DATABASE_DRIVER, REDIS_CONNECTION, REDIS_DRIVER, SYNC_CONNECTION,
 };
 pub use error::{JobError, QueueConfigError, QueueError, Result};
 pub use job::{
@@ -43,6 +45,7 @@ pub use notification::{
     should_suppress, skipped_notifications, NotificationGuard, NotificationSkipReason,
     NotificationSkipped,
 };
+pub use policy::JobPolicy;
 #[cfg(feature = "redis")]
 pub use registry::register_redis_driver;
 pub use registry::{register_database_driver, Queue, QueueRegistry, Route};
