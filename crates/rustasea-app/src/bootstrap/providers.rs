@@ -40,22 +40,49 @@ pub const DESTRUCTIVE_COMMANDS_PROHIBITED_KEY: &str = "app.prohibits_destructive
 /// 2. The `app_env` key from `config/app.toml` (itself overlaid by `APP_ENV`).
 /// 3. [`rustasea::orm::PRODUCTION`] — the fail-closed default, matching Laravel.
 pub fn app_environment() -> String {
-    if let Some(env) = std::env::var("APP_ENV")
+    let loader = ConfigLoader::load_from(&["config/app"]).ok();
+    resolve_environment(loader.as_ref())
+}
+
+/// Resolve the active environment from the container-mounted [`ConfigLoader`].
+///
+/// Prefers the boot-time loader bound under
+/// [`CONFIG_LOADER_KEY`](rustasea::foundation::CONFIG_LOADER_KEY) — the single
+/// source of truth for config — and falls back to [`app_environment`] when the
+/// application was not booted (so direct `register` calls still resolve).
+pub fn app_environment_from(app: &Application) -> String {
+    match app.config() {
+        Some(loader) => resolve_environment(Some(loader.as_ref())),
+        None => app_environment(),
+    }
+}
+
+/// Apply the environment precedence rule to an optional layered loader.
+fn resolve_environment(loader: Option<&ConfigLoader>) -> String {
+    if let Some(env) = env_override() {
+        return env;
+    }
+    if let Some(env) = loader.and_then(environment_from_loader) {
+        return env;
+    }
+    rustasea::orm::PRODUCTION.to_string()
+}
+
+/// The trimmed, non-blank `APP_ENV` override, when set.
+fn env_override() -> Option<String> {
+    std::env::var("APP_ENV")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-    {
-        return env;
-    }
-    if let Ok(loader) = ConfigLoader::load_from(&["config/app"]) {
-        if let Ok(env) = loader.get_key::<String>("app_env") {
-            let env = env.trim();
-            if !env.is_empty() {
-                return env.to_string();
-            }
-        }
-    }
-    rustasea::orm::PRODUCTION.to_string()
+}
+
+/// The trimmed, non-blank `app_env` value from `loader`, when present.
+fn environment_from_loader(loader: &ConfigLoader) -> Option<String> {
+    loader
+        .get_key::<String>("app_env")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 /// Whether destructive commands are prohibited for `environment`.
@@ -95,7 +122,7 @@ impl ServiceProvider for AppServiceProvider {
 
     /// Resolve and install the environment-derived policy defaults.
     fn register(&self, app: &mut Application) {
-        let environment = app_environment();
+        let environment = app_environment_from(app);
         let policy = password_policy_for(&environment);
         let prohibited = prohibits_destructive_commands(&environment);
 
@@ -253,5 +280,33 @@ mod tests {
                 Some(&true)
             );
         });
+    }
+
+    /// `AppServiceProvider` reads `app_env` from the container-mounted loader.
+    #[test]
+    fn register_prefers_container_mounted_loader() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let previous = std::env::var("APP_ENV").ok();
+        std::env::remove_var("APP_ENV");
+
+        let dir = std::env::temp_dir().join(format!(
+            "rustasea-app-provider-config-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp config dir");
+        std::fs::write(dir.join("app.toml"), "app_env = \"staging\"\n").expect("write config");
+
+        let loader = rustasea::foundation::load_config_loader(&dir).expect("load config loader");
+        let mut app = Application::configure(|_| {});
+        app.container
+            .instance(rustasea::foundation::CONFIG_LOADER_KEY, loader);
+
+        assert_eq!(app_environment_from(&app), "staging");
+
+        std::fs::remove_dir_all(&dir).ok();
+        match previous {
+            Some(previous) => std::env::set_var("APP_ENV", previous),
+            None => std::env::remove_var("APP_ENV"),
+        }
     }
 }

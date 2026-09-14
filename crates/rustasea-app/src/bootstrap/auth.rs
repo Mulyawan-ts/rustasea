@@ -37,7 +37,7 @@ use rustasea::auth::users::AuthUserRecord;
 use rustasea::auth::verify::{Argon2Verifier, PasswordVerifier};
 use rustasea::auth::{DenyAllProvider, MemoryUserProvider, SessionGuard, UserProvider};
 use rustasea::config::ConfigLoader;
-use rustasea::foundation::Container;
+use rustasea::foundation::{Container, CONFIG_LOADER_KEY};
 
 /// Container key under which the built [`SessionGuard`] is installed.
 ///
@@ -76,14 +76,32 @@ pub const USER_PROVIDER_KEY: &str = "auth.user_provider";
 ///
 /// [`SessionConfig::from_loader`]: rustasea::auth::SessionConfig::from_loader
 pub fn build_session_guard() -> Option<SessionGuard> {
-    let loader = match ConfigLoader::load() {
-        Ok(loader) => loader,
+    match ConfigLoader::load() {
+        Ok(loader) => build_session_guard_from(&loader),
         Err(error) => {
             eprintln!("auth: config load failed, session auth disabled: {error}");
-            return None;
+            None
         }
-    };
-    let session = match rustasea::auth::SessionConfig::from_loader(&loader) {
+    }
+}
+
+/// Build the session guard from an already-loaded layered [`ConfigLoader`].
+///
+/// [`install_session_guard`] passes the container-mounted loader here so the
+/// guard and the rest of the app share one configuration source. Deserializes
+/// the `[session]` table with [`SessionConfig::from_loader`] (applying the
+/// `SESSION_*` environment overrides and validating the driver) and constructs a
+/// [`SessionGuard`] over the fail-closed [`StaticLookup`].
+///
+/// # Returns
+///
+/// `None` when the `[session]` table is malformed or selects an unimplemented
+/// driver — the app then runs unauthenticated rather than panicking.
+///
+/// [`SessionConfig::from_loader`]: rustasea::auth::SessionConfig::from_loader
+/// [`StaticLookup`]: rustasea::auth::users::StaticLookup
+pub fn build_session_guard_from(loader: &ConfigLoader) -> Option<SessionGuard> {
+    let session = match rustasea::auth::SessionConfig::from_loader(loader) {
         Ok(session) => session,
         Err(error) => {
             eprintln!("auth: invalid session config, session auth disabled: {error}");
@@ -105,6 +123,12 @@ pub fn build_session_guard() -> Option<SessionGuard> {
 /// calls it during `register`, and [`crate::bootstrap::app`] calls it before
 /// boot so `main` can resolve the guard to seed `AppState`.
 ///
+/// It prefers the boot-time [`ConfigLoader`] mounted under
+/// [`CONFIG_LOADER_KEY`] (see `rustasea_foundation::Application::boot`) and only
+/// falls back to a direct [`ConfigLoader::load`] when the application was not
+/// booted — so the guard reads the same configuration source as the rest of the
+/// app.
+///
 /// # Returns
 ///
 /// `true` when a guard was built and installed; `false` when the guard could
@@ -115,7 +139,16 @@ pub fn install_session_guard(container: &mut Container) -> bool {
     // together in a single call. The provider is fail-closed (see
     // [`build_user_provider`]) and its install never fails.
     install_user_provider(container);
-    match build_session_guard() {
+    // Prefer the boot-time loader mounted under `CONFIG_LOADER_KEY`; fall back
+    // to a direct load when the app was not booted.
+    let guard = match container
+        .get::<Arc<ConfigLoader>>(CONFIG_LOADER_KEY)
+        .cloned()
+    {
+        Some(loader) => build_session_guard_from(&loader),
+        None => build_session_guard(),
+    };
+    match guard {
         Some(guard) => {
             container.instance(SESSION_GUARD_KEY, Arc::new(guard));
             true

@@ -13,10 +13,13 @@ use crate::bootstrap::{commands, providers};
 
 /// Build and boot the application.
 ///
-/// Returns [`BootError`] when the provider graph contains a cycle or an
-/// unresolved dependency, so a misconfigured boot never starts the server.
-/// Registering the default command surface also registers the framework's
-/// queue migrations.
+/// Returns [`BootError`] when the config loader cannot be built or the provider
+/// graph contains a cycle or an unresolved dependency, so a misconfigured boot
+/// never starts the server. [`Application::boot`] mounts the layered
+/// [`ConfigLoader`](rustasea::ConfigLoader) (from `config/*.toml` + environment)
+/// into the container before providers register, so they resolve configuration
+/// from `app.container` instead of loading it themselves. Registering the
+/// default command surface also registers the framework's queue migrations.
 pub fn configure() -> Result<Application, BootError> {
     let mut app = Application::configure(|_| {});
     for provider in providers::providers() {

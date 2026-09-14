@@ -31,9 +31,30 @@
 //! (`1`/`true`/`on`/`yes` and `0`/`false`/`off`/`no`); any other value is a
 //! typed [`AppConfigError`].
 
+use std::path::Path;
+use std::sync::Arc;
+
 use serde::Deserialize;
 
 use rustasea_config::ConfigLoader;
+
+/// Default directory the boot-time [`ConfigLoader`] discovers (`config/*.toml`).
+pub const DEFAULT_CONFIG_DIR: &str = "config";
+
+/// Container key holding the boot-time [`ConfigLoader`] as an `Arc<ConfigLoader>`.
+pub const CONFIG_LOADER_KEY: &str = "config.loader";
+
+/// Load the boot-time config loader from `dir` (optional) + environment overlay.
+///
+/// Discovers every `config/*.toml` in `dir` and overlays the process environment
+/// (env wins). A missing directory is tolerated — the loader then yields an
+/// environment-only configuration. Malformed TOML surfaces the loader error as a
+/// `String` the caller maps onto its boot error.
+pub fn load_config_loader(dir: &Path) -> Result<Arc<ConfigLoader>, String> {
+    ConfigLoader::load_from_dir(dir)
+        .map(Arc::new)
+        .map_err(|error| error.to_string())
+}
 
 /// Application name used when `app_name` is absent.
 pub const DEFAULT_NAME: &str = "RustaSea";

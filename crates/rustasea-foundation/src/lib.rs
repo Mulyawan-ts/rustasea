@@ -1,13 +1,21 @@
 //! RustaSea foundation — Application, Container, ServiceProvider, shutdown.
 
 pub mod config;
+pub mod shutdown;
 
-pub use config::{AppConfig, AppConfigError, MaintenanceConfig};
+pub use config::{
+    load_config_loader, AppConfig, AppConfigError, MaintenanceConfig, CONFIG_LOADER_KEY,
+    DEFAULT_CONFIG_DIR,
+};
 
 use std::any::Any;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
+
+use rustasea_config::ConfigLoader;
 
 /// Service provider lifecycle.
 ///
@@ -199,6 +207,11 @@ pub enum BootError {
         /// The unresolved dependency name.
         dependency: String,
     },
+    /// The boot-time [`ConfigLoader`] could not be built.
+    Config {
+        /// Human-readable loader error.
+        message: String,
+    },
 }
 
 impl std::fmt::Display for BootError {
@@ -219,6 +232,9 @@ impl std::fmt::Display for BootError {
                 f,
                 "provider `{provider}` depends on unknown provider `{dependency}`"
             ),
+            Self::Config { message } => {
+                write!(f, "config loader failed: {message}")
+            }
         }
     }
 }
@@ -231,6 +247,8 @@ pub struct Application {
     pub container: Container,
     providers: Vec<Box<dyn ServiceProvider>>,
     booted: bool,
+    /// Directory the boot-time [`ConfigLoader`] discovers (`config/*.toml`).
+    config_dir: PathBuf,
 }
 
 impl Default for Application {
@@ -240,6 +258,7 @@ impl Default for Application {
             container: Container::new(),
             providers: Vec::new(),
             booted: false,
+            config_dir: PathBuf::from(DEFAULT_CONFIG_DIR),
         }
     }
 }
@@ -260,6 +279,43 @@ impl Application {
         app
     }
 
+    /// Borrow the directory the boot-time [`ConfigLoader`] discovers.
+    pub fn config_dir(&self) -> &Path {
+        &self.config_dir
+    }
+
+    /// Set the directory the boot-time [`ConfigLoader`] discovers.
+    ///
+    /// Defaults to [`DEFAULT_CONFIG_DIR`]. A missing directory is tolerated:
+    /// the loader then yields an environment-only configuration.
+    pub fn set_config_dir(&mut self, dir: impl Into<PathBuf>) -> &mut Self {
+        self.config_dir = dir.into();
+        self
+    }
+
+    /// Resolve the boot-time [`ConfigLoader`] bound under [`CONFIG_LOADER_KEY`].
+    ///
+    /// Returns `None` before [`Application::boot`] runs.
+    pub fn config(&self) -> Option<&Arc<ConfigLoader>> {
+        self.container.get::<Arc<ConfigLoader>>(CONFIG_LOADER_KEY)
+    }
+
+    /// Mount the boot-time [`ConfigLoader`] into the container.
+    ///
+    /// Discovers every `config/*.toml` in [`Application::config_dir`] and
+    /// overlays the process environment (env wins). A caller that already bound
+    /// [`CONFIG_LOADER_KEY`] keeps their binding. A missing directory is
+    /// tolerated; malformed TOML surfaces [`BootError::Config`].
+    fn mount_config(&mut self) -> Result<(), BootError> {
+        if self.container.bound(CONFIG_LOADER_KEY) {
+            return Ok(());
+        }
+        let loader = load_config_loader(&self.config_dir)
+            .map_err(|message| BootError::Config { message })?;
+        self.container.instance(CONFIG_LOADER_KEY, loader);
+        Ok(())
+    }
+
     /// Register a service provider.
     pub fn provider<P>(&mut self, provider: P) -> &mut Self
     where
@@ -271,15 +327,18 @@ impl Application {
 
     /// Run register then boot for all providers in dependency order.
     ///
-    /// Providers are topologically sorted by [`ServiceProvider::dependencies`];
-    /// independent providers keep their registration order as the tie-breaker.
-    /// Returns [`BootError`] when the graph contains a cycle or an unresolved
-    /// dependency. On error nothing is registered or booted and the
-    /// application stays unbooted.
+    /// The boot-time [`ConfigLoader`] is mounted into the container first, so
+    /// providers can resolve it during `register`. Providers are then
+    /// topologically sorted by [`ServiceProvider::dependencies`]; independent
+    /// providers keep their registration order as the tie-breaker. Returns
+    /// [`BootError`] when the config loader cannot be built or the graph
+    /// contains a cycle or an unresolved dependency. On error nothing is
+    /// registered or booted and the application stays unbooted.
     pub fn boot(&mut self) -> Result<(), BootError> {
         if self.booted {
             return Ok(());
         }
+        self.mount_config()?;
         let order = self.topological_order()?;
         let providers = std::mem::take(&mut self.providers);
         for &index in &order {
@@ -429,51 +488,6 @@ impl Application {
     /// Graceful shutdown stub.
     pub async fn shutdown(self) {
         shutdown::graceful(Duration::from_secs(30)).await;
-    }
-}
-
-use std::time::Duration;
-
-/// Graceful shutdown utilities.
-pub mod shutdown {
-    use super::Duration;
-
-    /// Wait for SIGTERM/SIGINT then drain with timeout.
-    pub async fn graceful(_timeout: Duration) {
-        #[cfg(unix)]
-        {
-            let mut term =
-                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).ok();
-            let mut int =
-                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).ok();
-            tokio::select! {
-                _ = async { if let Some(s) = term.as_mut() { s.recv().await; } } => {},
-                _ = async { if let Some(s) = int.as_mut() { s.recv().await; } } => {},
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = tokio::signal::ctrl_c().await;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-
-    /// Shutdown handle wrapping a timeout.
-    pub struct ShutdownHandle {
-        /// Timeout for drain.
-        pub timeout: Duration,
-    }
-
-    impl ShutdownHandle {
-        /// Create a new handle.
-        pub fn new(timeout: Duration) -> Self {
-            Self { timeout }
-        }
-
-        /// Run graceful shutdown.
-        pub async fn drain(self) {
-            graceful(self.timeout).await;
-        }
     }
 }
 
