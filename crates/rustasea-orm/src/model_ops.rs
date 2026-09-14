@@ -2,9 +2,11 @@
 //!
 //! [`ModelOps`] is blanket-implemented for every [`Model`]. Column values are
 //! taken from the model's `serde` representation, so the operations stay generic
-//! across derived models; `created_at`/`updated_at`/`deleted_at` are written as
-//! dialect-aware current timestamps. Only the `sqlx` runtime API is used — never
-//! the compile-time `query!` macros.
+//! across derived models; `created_at`/`updated_at` are populated on insert and
+//! `updated_at` is refreshed on update, each rendered for the runtime dialect.
+//! A timestamp the caller already supplied is preserved (Laravel's
+//! `updateTimestamps` only fills a stamp that is not already set). Only the
+//! `sqlx` runtime API is used — never the compile-time `query!` macros.
 
 use crate::db::DbPool;
 use crate::error::{OrmError, Result};
@@ -152,13 +154,17 @@ impl<T: Model> ModelOps for T {}
 /// Collect the insertable `(column, value)` pairs for a model instance.
 ///
 /// User columns come from the model's `serde` object (reserved fields skipped);
-/// the primary key is first and `created_at`/`updated_at` are appended as the
-/// current timestamp. Shared by [`build_insert`] and [`build_upsert`].
+/// the primary key is first and each tracked timestamp column is appended. A
+/// timestamp the model already set is preserved; one left unset is filled with
+/// the current UTC time — the Laravel `updateTimestamps` contract, where a
+/// stamp that is already populated is not overwritten. Shared by
+/// [`build_insert`] and [`build_upsert`].
 fn insert_columns_and_bindings<T: Model + Serialize>(
     data: &T,
     dialect: &str,
 ) -> Result<(Vec<String>, Vec<Value>)> {
-    let columns = user_columns(data)?;
+    let object = model_object(data)?;
+    let columns = columns_from_object(&object)?;
     let timestamps = T::insert_columns();
 
     let mut names: Vec<String> = Vec::with_capacity(columns.len() + timestamps.len() + 1);
@@ -170,10 +176,11 @@ fn insert_columns_and_bindings<T: Model + Serialize>(
         bindings.push(value.clone());
     }
     if !timestamps.is_empty() {
-        let now = timestamp_value(Utc::now(), dialect);
+        let now = Utc::now();
         for ts in &timestamps {
+            let stamp = provided_timestamp(&object, ts).unwrap_or(now);
             names.push((*ts).to_string());
-            bindings.push(now.clone());
+            bindings.push(timestamp_value(stamp, dialect));
         }
     }
     Ok((names, bindings))
@@ -238,7 +245,8 @@ fn mysql_upsert_sql(table: &str, columns: &[String]) -> String {
 /// Build the UPDATE statement and bindings for a model instance.
 ///
 /// The primary key is `$1`; `updated_at` is appended as a bound timestamp shaped
-/// for `dialect`.
+/// for `dialect`. `created_at` is reserved and never reassigned, so an update
+/// refreshes `updated_at` without disturbing the creation stamp.
 fn build_update<T: Model + Serialize>(data: &T, dialect: &str) -> Result<(String, Vec<Value>)> {
     let table = T::table_name();
     let columns = user_columns(data)?;
@@ -261,17 +269,30 @@ fn build_update<T: Model + Serialize>(data: &T, dialect: &str) -> Result<(String
     Ok((sql, bindings))
 }
 
-/// Extract the writable `(column, value)` pairs from a model's serde object.
+/// Serialize a model to its JSON object with persistence casts applied.
 ///
 /// Every declared attribute cast is applied first (in the persistence
-/// direction), so a `#[model(cast = "json")]` field binds as JSON rather than
-/// as its raw serde shape.
-fn user_columns<T: Model + Serialize>(data: &T) -> Result<Vec<(String, Value)>> {
-    let value = serde_json::to_value(data)
+/// direction), so a `#[model(cast = "json")]` field is already JSON rather than
+/// its raw serde shape. The owned object is returned so callers can both read a
+/// caller-supplied timestamp and derive the bind columns from it.
+fn model_object<T: Model + Serialize>(data: &T) -> Result<serde_json::Value> {
+    let mut value = serde_json::to_value(data)
         .map_err(|error| OrmError::Storage(format!("model serialization failed: {error}")))?;
-    let mut value = value;
     apply_set_casts::<T>(&mut value)?;
-    let object = value
+    if !value.is_object() {
+        return Err(OrmError::InvalidValue(
+            "model must serialize to a JSON object".into(),
+        ));
+    }
+    Ok(value)
+}
+
+/// Extract the writable `(column, value)` pairs from a serialized model object.
+///
+/// Reserved columns (`id`, the timestamps, `deleted_at`, `relations`) are
+/// skipped: the primary key and timestamps are managed by the write path.
+fn columns_from_object(object: &serde_json::Value) -> Result<Vec<(String, Value)>> {
+    let object = object
         .as_object()
         .ok_or_else(|| OrmError::InvalidValue("model must serialize to a JSON object".into()))?;
 
@@ -283,6 +304,34 @@ fn user_columns<T: Model + Serialize>(data: &T) -> Result<Vec<(String, Value)>> 
         columns.push((column.clone(), json_to_value(column, value)?));
     }
     Ok(columns)
+}
+
+/// Read a caller-supplied timestamp column from a serialized model object.
+///
+/// Returns `None` when the column is absent or `null`, so the write path can
+/// fall back to the current time. `chrono` serializes a `DateTime<Utc>` as an
+/// RFC3339 string by default; a numeric Unix timestamp is accepted too, matching
+/// the alternative `serde` representation.
+fn provided_timestamp(object: &serde_json::Value, column: &str) -> Option<DateTime<Utc>> {
+    match object.get(column)? {
+        serde_json::Value::String(text) => DateTime::parse_from_rfc3339(text)
+            .ok()
+            .map(|stamp| stamp.with_timezone(&Utc)),
+        serde_json::Value::Number(number) => number
+            .as_i64()
+            .and_then(|seconds| DateTime::from_timestamp(seconds, 0)),
+        _ => None,
+    }
+}
+
+/// Extract the writable `(column, value)` pairs from a model's serde object.
+///
+/// Every declared attribute cast is applied first (in the persistence
+/// direction), so a `#[model(cast = "json")]` field binds as JSON rather than
+/// as its raw serde shape.
+fn user_columns<T: Model + Serialize>(data: &T) -> Result<Vec<(String, Value)>> {
+    let object = model_object(data)?;
+    columns_from_object(&object)
 }
 
 /// Apply the persistence direction of every cast declared on `T` in place.
@@ -359,35 +408,4 @@ fn timestamp_value(now: DateTime<Utc>, dialect: &str) -> Value {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A fixed UUID string used across the type-fidelity assertions.
-    const UUID_TEXT: &str = "f3c1f3c1-0000-4000-8000-000000000000";
-
-    /// Verifies `*_id`/`*_uuid` strings bind as native UUIDs, not text.
-    #[test]
-    fn uuid_columns_bind_native_uuid() {
-        for column in ["id", "user_id", "owner_uuid"] {
-            let value =
-                json_to_value(column, &serde_json::Value::String(UUID_TEXT.into())).unwrap();
-            assert_eq!(value, Value::Uuid(Uuid::parse_str(UUID_TEXT).unwrap()));
-        }
-    }
-
-    /// Verifies ordinary text columns keep a UUID-looking string as text.
-    #[test]
-    fn non_uuid_columns_keep_text() {
-        let value =
-            json_to_value("nickname", &serde_json::Value::String(UUID_TEXT.into())).unwrap();
-        assert_eq!(value, Value::Text(UUID_TEXT.into()));
-    }
-
-    /// Verifies a non-UUID string in a UUID column is a typed error, not a bind.
-    #[test]
-    fn invalid_uuid_column_value_is_typed_error() {
-        let error = json_to_value("user_id", &serde_json::Value::String("not-a-uuid".into()))
-            .expect_err("must reject non-UUID in a UUID column");
-        assert!(matches!(error, OrmError::InvalidValue(_)), "got {error:?}");
-    }
-}
+mod tests;
