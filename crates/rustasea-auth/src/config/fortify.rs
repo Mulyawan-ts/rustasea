@@ -16,12 +16,11 @@
 //!
 //! # Inert parity surface
 //!
-//! Passkeys and two-factor authentication are **parity-only**: the keys parse and
-//! validate, but no runtime wiring consumes them yet — the same posture as the
-//! recognised-but-unimplemented logging channels. [`FortifyConfig::resolve_passkeys`]
-//! derives the WebAuthn relying party from [`rustasea_foundation::AppConfig`] so a
-//! future implementation has a single, tested resolution path; today it is a pure
-//! projection with no side effects.
+//! Two-factor authentication's *config* remains parity-only (the keys parse and
+//! validate; the AUTH-016 runtime reads the `window` field). Passkeys are fully
+//! wired (AUTH-017): [`FortifyConfig::resolve_passkeys`] derives the WebAuthn
+//! relying party from [`rustasea_foundation::AppConfig`] and the app routes
+//! consume the resolved value plus `features.passkeys`.
 
 use serde::Deserialize;
 
@@ -156,18 +155,26 @@ impl Default for FortifyTwoFactorConfig {
     }
 }
 
-/// `[fortify.features.passkeys]` (inert parity).
+/// `[fortify.features.passkeys]`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct FortifyPasskeyFeatureConfig {
+    /// Enable the passkey routes; disabled routes answer `404`.
+    ///
+    /// Laravel enables a Fortify feature by listing it in `features`; RustaSea's
+    /// static route table cannot be removed at runtime, so this explicit toggle
+    /// is the closest honest analogue (defaults to enabled, matching the kit).
+    #[serde(default = "default_true")]
+    pub enabled: bool,
     /// Require password confirmation before managing passkeys.
     #[serde(default = "default_true")]
     pub confirm_password: bool,
 }
 
 impl Default for FortifyPasskeyFeatureConfig {
-    /// Laravel defaults: password confirmation required.
+    /// Laravel defaults: enabled, password confirmation required.
     fn default() -> Self {
         Self {
+            enabled: true,
             confirm_password: true,
         }
     }
@@ -382,6 +389,9 @@ impl FortifyConfig {
             self.features.email_verification =
                 parse_bool("FORTIFY_EMAIL_VERIFICATION", &verification)?;
         }
+        if let Some(enabled) = env_non_empty("FORTIFY_PASSKEYS_ENABLED") {
+            self.features.passkeys.enabled = parse_bool("FORTIFY_PASSKEYS_ENABLED", &enabled)?;
+        }
         Ok(())
     }
 
@@ -389,9 +399,8 @@ impl FortifyConfig {
     ///
     /// The relying-party id is the host of `app.url` unless the file sets
     /// `relying_party_id`; the allowed origins default to `[app.url]`; and the
-    /// user-handle secret falls back to `app.key` when blank. This is a pure
-    /// projection — passkeys remain an inert parity surface with no runtime
-    /// wiring — but it gives a future implementation a single resolution path.
+    /// user-handle secret falls back to `app.key` when blank. Consumed by the
+    /// AUTH-017 passkey service to build registration/authentication ceremonies.
     pub fn resolve_passkeys(&self, app: &AppConfig) -> ResolvedPasskeys {
         let relying_party_id = self
             .passkeys

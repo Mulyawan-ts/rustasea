@@ -51,7 +51,9 @@ use rustasea::auth::{
 };
 use rustasea::foundation::AppConfig;
 use rustasea::ConfigLoader;
-use rustasea_mail::{mailer_from_config, Mail, MailAddress, MailConfig, Mailable, Mailer};
+use rustasea_mail::{
+    mailer_from_config, Mail, MailConfig, Mailer, MinijinjaEngine, TemplateMailable, ViewEngine,
+};
 
 use crate::routes::helpers::{
     field, fortify_config, json_error, parse_form, see_other, user_provider,
@@ -154,14 +156,13 @@ pub(super) async fn verify_email_resend(
     };
     let link = format!("{}{path}?{query}", app_url());
 
-    if mailer().is_none() {
+    let Some(mailer) = mailer() else {
         return fail_closed(MAILER_UNAVAILABLE);
-    }
-    let mail = VerifyEmailMail {
-        to: record.email.clone(),
-        link,
     };
-    if Mail::send(&mail).await.is_err() {
+    let Ok(message) = verify_email_message(record.email.clone(), link) else {
+        return fail_closed(MAILER_UNAVAILABLE);
+    };
+    if Mail::deliver_with(&mailer, message).await.is_err() {
         return fail_closed(MAILER_UNAVAILABLE);
     }
     see_other("/verify-email")
@@ -222,36 +223,49 @@ pub(super) async fn verify_email_confirm(
     see_other("/dashboard")
 }
 
-/// A mailable carrying the signed verification link.
-///
-/// Defined here (not in a shared module) because it is the only mail this app
-/// sends; the [`Mailable`] contract keeps it transport-agnostic.
-struct VerifyEmailMail {
-    /// Recipient address.
-    to: String,
-    /// Absolute signed verification URL.
+/// Serializable context for the `mail/verify-email.html` template.
+#[derive(serde::Serialize)]
+struct VerifyEmailContext {
+    /// Absolute signed verification URL rendered into the body.
     link: String,
 }
 
-impl Mailable for VerifyEmailMail {
-    /// Subject line for the verification email.
-    fn subject(&self) -> String {
-        "Verify your email address".to_string()
-    }
+/// Render the verification email from `resources/views/mail/verify-email.html`.
+///
+/// Uses the shared runtime minijinja engine (AUTH-018), so the branded template
+/// the app ships is the one it mails. A missing template or a render failure is
+/// a typed [`rustasea_mail::MailError`], never an empty body.
+fn verify_email_message(
+    to: String,
+    link: String,
+) -> rustasea_mail::Result<rustasea_mail::MailMessage> {
+    let mailable = TemplateMailable::new(
+        mail_engine(),
+        "mail/verify-email.html",
+        VerifyEmailContext { link },
+    )?
+    .subject("Verify your email address")
+    .to(rustasea_mail::MailAddress::from_email(to));
+    mailable.try_build()
+}
 
-    /// The single recipient (the address being verified).
-    fn to(&self) -> Vec<MailAddress> {
-        vec![MailAddress::from_email(self.to.clone())]
-    }
-
-    /// HTML body containing the signed link.
-    fn html_body(&self) -> String {
-        format!(
-            "<p>Please confirm your email address by following the link below.</p>\
-             <p><a href=\"{}\">Verify email address</a></p>",
-            self.link
-        )
-    }
+/// Runtime template engine for mail bodies, rooted at the shared views dir.
+///
+/// Mirrors the web layer's engine selection: the process-relative
+/// [`rustasea::view::VIEWS_DIR`] wins when present (a deployed app / `cargo run`
+/// from the workspace root); otherwise the workspace `resources/views` derived
+/// from `CARGO_MANIFEST_DIR` is used, so `cargo test -p rustasea-app` (crate-root
+/// cwd) renders the same templates.
+fn mail_engine() -> Arc<dyn ViewEngine> {
+    static ENGINE: OnceLock<Arc<dyn ViewEngine>> = OnceLock::new();
+    Arc::clone(ENGINE.get_or_init(|| {
+        let engine = if std::path::Path::new(rustasea::view::VIEWS_DIR).is_dir() {
+            MinijinjaEngine::from_default_root()
+        } else {
+            MinijinjaEngine::new(crate::routes::resources_root().join("views"))
+        };
+        Arc::new(engine)
+    }))
 }
 
 /// Lowercase-hex SHA-256 of `email` — the `{hash}` link segment.

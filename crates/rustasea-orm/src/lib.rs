@@ -15,6 +15,7 @@ pub mod execution;
 pub mod factory;
 pub mod m2;
 pub mod migration;
+pub mod migration_guard;
 pub mod model;
 pub mod model_ops;
 pub mod naming;
@@ -44,6 +45,9 @@ pub use m2::{InsertBuilder, ModelScopes, UpsertBuilder};
 pub use migration::{
     register_migration, register_seeder, registered_migrator, Migration, MigrationError,
     MigrationRecord, Migrator, Seeder,
+};
+pub use migration_guard::{
+    guard_destructive_command, is_production, DestructiveCommandRefused, PRODUCTION,
 };
 pub use model::{Model, Relation, RelationKind, Relations, SoftDeletes, Timestamps};
 pub use model_ops::ModelOps;

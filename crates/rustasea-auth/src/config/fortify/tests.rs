@@ -28,6 +28,7 @@ const FORTIFY_ENV_KEYS: &[&str] = &[
     "FORTIFY_RESET_PASSWORDS",
     "FORTIFY_EMAIL_VERIFICATION",
     "PASSKEYS_USER_HANDLE_SECRET",
+    "FORTIFY_PASSKEYS_ENABLED",
 ];
 
 /// Unique temporary directory removed when dropped.

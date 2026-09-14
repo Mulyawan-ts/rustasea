@@ -53,15 +53,15 @@ use rustasea::auth::{
 };
 use rustasea::validation::serde_json::{Map, Value};
 use rustasea::validation::{PasswordPolicy, Rules};
-use rustasea_mail::{Mail, MailAddress, Mailable};
+use rustasea_mail::Mail;
 
 use crate::routes::helpers::{field, json_error, parse_form, see_other, user_provider};
 use crate::routes::LOGIN_PATH;
 
 use super::{fail_closed, throttle_response, AUTH_UNAVAILABLE};
 use wiring::{
-    app_url, broker_expire_minutes, mailer, reset_off, reset_registry, reset_store, signer,
-    MAILER_UNAVAILABLE, PASSWORD_EMAIL, SIGNER_UNAVAILABLE, STORE_UNAVAILABLE,
+    app_url, broker_expire_minutes, mailer, reset_off, reset_password_message, reset_registry,
+    reset_store, signer, MAILER_UNAVAILABLE, PASSWORD_EMAIL, SIGNER_UNAVAILABLE, STORE_UNAVAILABLE,
 };
 
 #[cfg(test)]
@@ -165,14 +165,13 @@ pub(super) async fn forgot_password_submit(body: Bytes) -> Response {
     let Ok(link) = reset_link(&signer, &user.email, &token) else {
         return fail_closed(SIGNER_UNAVAILABLE);
     };
-    if mailer().is_none() {
+    let Some(mailer) = mailer() else {
         return fail_closed(MAILER_UNAVAILABLE);
-    }
-    let mail = ResetPasswordMail {
-        to: user.email.clone(),
-        link,
     };
-    if Mail::send(&mail).await.is_err() {
+    let Ok(message) = reset_password_message(user.email.clone(), link) else {
+        return fail_closed(MAILER_UNAVAILABLE);
+    };
+    if Mail::deliver_with(&mailer, message).await.is_err() {
         return fail_closed(MAILER_UNAVAILABLE);
     }
     see_other(FORGOT_PATH)
@@ -407,35 +406,6 @@ fn html_escape(input: &str) -> String {
         }
     }
     out
-}
-
-/// A mailable carrying the signed reset link.
-struct ResetPasswordMail {
-    /// Recipient address.
-    to: String,
-    /// Absolute signed reset URL.
-    link: String,
-}
-
-impl Mailable for ResetPasswordMail {
-    /// Subject line for the reset email.
-    fn subject(&self) -> String {
-        "Reset your password".to_string()
-    }
-
-    /// The single recipient (the account owner).
-    fn to(&self) -> Vec<MailAddress> {
-        vec![MailAddress::from_email(self.to.clone())]
-    }
-
-    /// HTML body containing the signed reset link.
-    fn html_body(&self) -> String {
-        format!(
-            "<p>You requested a password reset. Follow the link below to choose a new password.</p>\
-             <p><a href=\"{}\">Reset your password</a></p>",
-            self.link
-        )
-    }
 }
 
 /// `404` returned when password resets are disabled.

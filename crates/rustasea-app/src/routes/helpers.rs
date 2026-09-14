@@ -185,6 +185,11 @@ pub(crate) fn json_error(status: StatusCode, code: &str, detail: &str) -> Respon
 /// `PATCH`/`PUT`, the password-reset writes) and the still-`501` POST stubs, for
 /// consistency.
 pub(crate) fn csrf_protected(method: &axum::http::Method, path: &str) -> bool {
+    // The passkey delete route is parameterised (`/user/passkeys/{id}`), so it
+    // is matched by prefix rather than the exact `(method, path)` allow-list.
+    if method == axum::http::Method::DELETE && path.starts_with("/user/passkeys/") {
+        return true;
+    }
     matches!(
         (method.as_str(), path),
         ("POST", "/login")
@@ -194,6 +199,13 @@ pub(crate) fn csrf_protected(method: &axum::http::Method, path: &str) -> bool {
             | ("POST", "/email/verification-notification")
             | ("POST", "/forgot-password")
             | ("POST", "/reset-password")
+            | ("POST", "/two-factor-challenge")
+            | ("POST", "/user/two-factor-authentication")
+            | ("POST", "/user/confirmed-two-factor-authentication")
+            | ("DELETE", "/user/two-factor-authentication")
+            | ("POST", "/user/two-factor-recovery-codes")
+            | ("POST", "/user/passkeys")
+            | ("POST", "/passkeys/login")
             | ("PATCH", "/settings/profile")
             | ("PUT", "/settings/password")
     )

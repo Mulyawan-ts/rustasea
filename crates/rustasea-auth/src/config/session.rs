@@ -1,12 +1,14 @@
 //! Typed `[session]` table (Laravel 13.x `config/session.php` parity).
 //!
 //! [`SessionConfig`] mirrors Laravel's `config/session.php`. RustaSea implements
-//! a single backing store: `memory`, the tower-sessions `MemoryStore`
-//! (per-process). The remaining Laravel drivers (`redis`, `database`, `file`,
-//! `cookie`, `array`) are recognised by name but **not yet implemented**;
-//! selecting one is a typed [`AuthConfigError::UnsupportedSessionDriver`] at
-//! load time rather than a silent fallback, so a misconfigured production driver
-//! can never degrade into a store that drops sessions on restart.
+//! two backing stores: `memory`, the tower-sessions `MemoryStore` (per-process,
+//! the default), and `database`, a [`crate::session::DatabaseSessionStore`] over
+//! the ORM connection pool (selected by `connection` + `table`). The remaining
+//! Laravel drivers (`redis`, `file`, `cookie`, `array`) are recognised by name
+//! but **not yet implemented**; selecting one is a typed
+//! [`AuthConfigError::UnsupportedSessionDriver`] at load time rather than a
+//! silent fallback, so a misconfigured production driver can never degrade into
+//! a store that drops sessions on restart.
 //!
 //! [`SessionConfig::from_loader`] deserializes the table from a layered
 //! [`rustasea_config::ConfigLoader`], applies the documented single-underscore
@@ -28,7 +30,7 @@ use crate::session_cookie::SessionCookieConfig;
 
 use super::ConfigResult;
 
-/// Default session driver (`memory`; the only implemented store).
+/// Default session driver (`memory`; the default store).
 fn default_session_driver() -> String {
     "memory".to_string()
 }
@@ -91,7 +93,7 @@ fn default_serialization() -> String {
 /// Typed `[session]` table (Laravel 13.x `config/session.php` shape).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct SessionConfig {
-    /// Backing store; only `memory` is implemented.
+    /// Backing store; `memory` (default) or `database`.
     #[serde(default = "default_session_driver")]
     pub driver: String,
     /// Lifetime in **minutes** (converted to seconds by [`SessionConfig::ttl_secs`]).
@@ -100,16 +102,21 @@ pub struct SessionConfig {
     /// Destroy the session when the browser closes.
     #[serde(default)]
     pub expire_on_close: bool,
-    /// Encrypt the session payload at rest (reserved for persistent drivers).
+    /// Encrypt the session payload at rest (**not implemented**).
+    ///
+    /// Reserved for parity with Laravel: neither the `memory` nor the
+    /// `database` store encrypts its payload (the database store writes
+    /// plaintext JSON to the `payload` column), so setting this `true` has no
+    /// effect.
     #[serde(default)]
     pub encrypt: bool,
     /// Directory for the (unimplemented) file driver.
     #[serde(default = "default_files")]
     pub files: String,
-    /// Connection name for the (unimplemented) database/redis drivers.
+    /// Connection name for the database driver (`redis` unimplemented).
     #[serde(default = "default_connection")]
     pub connection: String,
-    /// Table for the (unimplemented) database driver.
+    /// Table for the database driver.
     #[serde(default = "default_table")]
     pub table: String,
     /// Named store within a driver (parity).
@@ -183,8 +190,8 @@ impl SessionConfig {
     ///
     /// [`AuthConfigError::Invalid`] on malformed TOML or an unparsable
     /// `SESSION_LIFETIME` / boolean override, or
-    /// [`AuthConfigError::UnsupportedSessionDriver`] when `driver` is not
-    /// `memory`.
+    /// [`AuthConfigError::UnsupportedSessionDriver`] when `driver` is neither
+    /// `memory` nor `database`.
     pub fn from_loader(loader: &ConfigLoader) -> ConfigResult<Self> {
         let mut config = match loader.get_key::<SessionConfig>("session") {
             Ok(config) => config,
@@ -277,21 +284,40 @@ impl SessionConfig {
         Ok(())
     }
 
-    /// Accept the config only when `driver = "memory"` (the sole store).
+    /// Accept the config only when `driver` is an implemented store.
+    ///
+    /// `memory` (the default) and `database` are implemented; any other driver —
+    /// including the recognised-but-unimplemented `redis`/`file`/`cookie`/
+    /// `array` — is rejected so a misconfigured production driver fails closed at
+    /// load time rather than degrading into a store that drops sessions.
     ///
     /// # Errors
     ///
-    /// [`AuthConfigError::UnsupportedSessionDriver`] for any other driver,
-    /// including the recognised-but-unimplemented `redis`/`database`/`file`/
-    /// `cookie`/`array`.
+    /// [`AuthConfigError::UnsupportedSessionDriver`] for any driver other than
+    /// `memory` or `database`.
     pub fn validate_driver(&self) -> ConfigResult<()> {
-        if self.driver.eq_ignore_ascii_case("memory") {
+        if self.is_memory_driver() || self.is_database_driver() {
             Ok(())
         } else {
             Err(AuthConfigError::UnsupportedSessionDriver(
                 self.driver.clone(),
             ))
         }
+    }
+
+    /// Whether the selected driver is the in-memory store (`memory`).
+    pub fn is_memory_driver(&self) -> bool {
+        self.driver.eq_ignore_ascii_case("memory")
+    }
+
+    /// Whether the selected driver is the database store (`database`).
+    ///
+    /// When `true`, build the guard with the async
+    /// [`SessionGuard::from_config_database`](crate::session::SessionGuard::from_config_database);
+    /// otherwise use the in-memory
+    /// [`SessionGuard::from_config`](crate::session::SessionGuard::from_config).
+    pub fn is_database_driver(&self) -> bool {
+        self.driver.eq_ignore_ascii_case("database")
     }
 
     /// Lifetime in seconds (`lifetime_minutes * 60`).

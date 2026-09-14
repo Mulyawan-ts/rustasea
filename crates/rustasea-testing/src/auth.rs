@@ -48,22 +48,24 @@ pub enum FortifyFeature {
 /// - [`FortifyFeature::ResetPasswords`] → `features.reset_passwords`
 /// - [`FortifyFeature::EmailVerification`] → `features.email_verification`
 /// - [`FortifyFeature::TwoFactorAuthentication`] → always `true`
-/// - [`FortifyFeature::Passkeys`] → always `true`
+/// - [`FortifyFeature::Passkeys`] → `features.passkeys.enabled`
 ///
-/// Two-factor authentication and passkeys are modelled as always-present
-/// nested configs (`FortifyTwoFactorConfig` / `FortifyPasskeyFeatureConfig`)
-/// with no enable/disable flag — mirroring Laravel Fortify, where a feature is
-/// enabled by its presence in the `features` array. RustaSea's parity model
-/// therefore treats both as enabled; their inner keys only tune behaviour
-/// (`confirm`, `confirm_password`, `window`).
+/// Two-factor authentication is modelled as an always-present nested config
+/// (`FortifyTwoFactorConfig`) with no enable/disable flag — mirroring Laravel
+/// Fortify, where a feature is enabled by its presence in the `features` array;
+/// its inner keys only tune behaviour (`confirm`, `confirm_password`, `window`).
+/// Passkeys add an explicit `enabled` toggle (AUTH-017) because RustaSea's static
+/// route table cannot be removed at runtime, so the `404`-when-disabled analogue
+/// needs a config flag.
 pub fn fortify_feature_enabled(config: &FortifyConfig, feature: FortifyFeature) -> bool {
     let features = &config.features;
     match feature {
         FortifyFeature::Registration => features.registration,
         FortifyFeature::ResetPasswords => features.reset_passwords,
         FortifyFeature::EmailVerification => features.email_verification,
-        // No disable toggle exists in the parity config: presence = enabled.
-        FortifyFeature::TwoFactorAuthentication | FortifyFeature::Passkeys => true,
+        // No disable toggle exists for two-factor: presence = enabled.
+        FortifyFeature::TwoFactorAuthentication => true,
+        FortifyFeature::Passkeys => features.passkeys.enabled,
     }
 }
 

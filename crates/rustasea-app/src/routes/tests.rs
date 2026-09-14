@@ -40,6 +40,14 @@ mod confirmation_verification;
 /// `tests.rs` stays under the cap.
 mod password_reset;
 
+/// Two-factor authentication (AUTH-016) tests, split into a sibling module so
+/// `tests.rs` stays under the cap.
+mod two_factor;
+
+/// Passkey / WebAuthn (AUTH-017) tests, split into a sibling module so
+/// `tests.rs` stays under the cap.
+mod passkeys;
+
 /// Build the served router with a throwaway state.
 fn app() -> Router {
     compile(table(), Arc::new(AppState::new("testing", true)))

@@ -71,5 +71,7 @@ confirm_password = true
 # window = 0
 
 [fortify.features.passkeys]
+# Enable the passkey routes; disabled routes answer 404. env: FORTIFY_PASSKEYS_ENABLED
+enabled = true
 # Require password confirmation before managing passkeys.
 confirm_password = true

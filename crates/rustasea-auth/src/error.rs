@@ -63,6 +63,34 @@ pub enum AuthError {
         /// Identifier (UUID) that resolved to no user.
         id: String,
     },
+
+    /// A login was interrupted because the account has confirmed two-factor
+    /// authentication, and the challenge has not been completed.
+    #[error("two-factor authentication required")]
+    TwoFactorRequired,
+
+    /// The supplied TOTP code or recovery code did not verify.
+    #[error("invalid two-factor code")]
+    InvalidTwoFactorCode,
+
+    /// Two-factor secret handling failed (crypto, sealing, or key config).
+    #[error("two-factor error: {0}")]
+    TwoFactor(String),
+
+    /// The account has no usable passkey, or the presented credential is
+    /// unknown — the ceremony cannot proceed.
+    #[error("passkey authentication required")]
+    PasskeyRequired,
+
+    /// A WebAuthn assertion failed verification (signature, origin, challenge,
+    /// or signature-counter regression).
+    #[error("invalid passkey assertion")]
+    InvalidPasskeyAssertion,
+
+    /// Passkey ceremony handling failed (malformed input, CBOR/COSE decoding,
+    /// unsupported attestation, or credential persistence).
+    #[error("passkey error: {0}")]
+    Passkey(String),
 }
 
 impl AuthError {
@@ -79,6 +107,12 @@ impl AuthError {
             AuthError::StoreUnavailable => "StoreUnavailable",
             AuthError::UserExists { .. } => "UserExists",
             AuthError::UserNotFound { .. } => "UserNotFound",
+            AuthError::TwoFactorRequired => "TwoFactorRequired",
+            AuthError::InvalidTwoFactorCode => "InvalidTwoFactorCode",
+            AuthError::TwoFactor(_) => "TwoFactor",
+            AuthError::PasskeyRequired => "PasskeyRequired",
+            AuthError::InvalidPasskeyAssertion => "InvalidPasskeyAssertion",
+            AuthError::Passkey(_) => "Passkey",
         };
         format!("AuthError::{variant}")
     }
@@ -100,6 +134,12 @@ impl AuthError {
                 "Choose a different email address; this one is already registered."
             }
             AuthError::UserNotFound { .. } => "Re-check the user identifier.",
+            AuthError::TwoFactorRequired => "Complete the two-factor challenge to continue.",
+            AuthError::InvalidTwoFactorCode => "Enter a valid authenticator or recovery code.",
+            AuthError::TwoFactor(_) => "Check the two-factor key configuration and retry.",
+            AuthError::PasskeyRequired => "Register a passkey or use another sign-in method.",
+            AuthError::InvalidPasskeyAssertion => "Use a registered passkey for this site.",
+            AuthError::Passkey(_) => "Check the passkey relying-party configuration and retry.",
         }
     }
 }
@@ -128,8 +168,15 @@ pub enum AuthConfigError {
     UnsupportedSerialization(String),
 
     /// `session.driver` names a store that is not implemented yet.
-    #[error("unsupported session driver {0:?} (only \"memory\" is implemented)")]
+    #[error("unsupported session driver {0:?} (only \"memory\" and \"database\" are implemented)")]
     UnsupportedSessionDriver(String),
+
+    /// The configured database session store could not be opened.
+    ///
+    /// Raised while wiring `driver = "database"`: the named connection could not
+    /// be resolved or reached. The message carries the underlying cause.
+    #[error("session store unavailable: {0}")]
+    SessionStoreUnavailable(String),
 
     /// The named guard is not declared in `[auth.guards]`.
     #[error("unknown auth guard {0:?}")]
@@ -154,6 +201,7 @@ impl AuthConfigError {
             AuthConfigError::InvalidSameSite(_) => "InvalidSameSite",
             AuthConfigError::UnsupportedSerialization(_) => "UnsupportedSerialization",
             AuthConfigError::UnsupportedSessionDriver(_) => "UnsupportedSessionDriver",
+            AuthConfigError::SessionStoreUnavailable(_) => "SessionStoreUnavailable",
             AuthConfigError::UnknownGuard(_) => "UnknownGuard",
             AuthConfigError::MissingGuardProvider { .. } => "MissingGuardProvider",
         };
@@ -173,7 +221,10 @@ impl AuthConfigError {
                 "Set session.serialization to \"json\"."
             }
             AuthConfigError::UnsupportedSessionDriver(_) => {
-                "Set session.driver to \"memory\" (the only implemented store)."
+                "Set session.driver to \"memory\" or \"database\"."
+            }
+            AuthConfigError::SessionStoreUnavailable(_) => {
+                "Check the session.connection name and that the database is reachable."
             }
             AuthConfigError::UnknownGuard(_) => {
                 "Declare the guard under [auth.guards.<name>] or fix auth.defaults.guard."

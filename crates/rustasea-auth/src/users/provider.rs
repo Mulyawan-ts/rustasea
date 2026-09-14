@@ -105,6 +105,24 @@ pub trait UserProvider: Send + Sync {
         email: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<Option<AuthUserRecord>>> + Send + 'a>>;
 
+    /// Resolve the full user record for `user_id` (async DB-backed read).
+    ///
+    /// Returns `Ok(None)` when no user matches. Used to resolve the owning
+    /// account after a passkey assertion (AUTH-017). The default implementation
+    /// is fail-closed: an un-wired provider returns `Err`, never a silent
+    /// `Ok(None)`, so a passkey login can never resolve a phantom user. Existing
+    /// implementors keep compiling and keep failing closed until they opt in.
+    fn find_by_id<'a>(
+        &'a self,
+        _user_id: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<AuthUserRecord>>> + Send + 'a>> {
+        Box::pin(async move {
+            Err(AuthError::Disabled(
+                "no user provider find_by_id is wired; denying access".to_string(),
+            ))
+        })
+    }
+
     /// Persist a new user, returning the stored record (with its minted id).
     ///
     /// Must fail with [`AuthError::UserExists`] when `new_user.email` collides
@@ -296,6 +314,13 @@ impl UserProvider for MemoryUserProvider {
                 .map_err(|_| AuthError::StoreUnavailable)?;
             Ok(by_email.get(email).cloned())
         })
+    }
+
+    fn find_by_id<'a>(
+        &'a self,
+        user_id: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<AuthUserRecord>>> + Send + 'a>> {
+        Box::pin(async move { Ok(self.by_id(user_id)) })
     }
 
     fn create<'a>(

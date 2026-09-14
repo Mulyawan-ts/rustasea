@@ -6,6 +6,19 @@
 /// always mints a **new** session id (session-fixation defense), `refresh`
 /// cycles the id, and `logout` destroys the record and rotates the id.
 ///
+/// Two drivers are selectable via `config/session.toml` `driver`:
+///
+/// - `memory` (default) — the per-process [`MemoryStore`], built by
+///   [`SessionGuard::from_config`]. Sessions do not survive a restart.
+/// - `database` — a [`DatabaseSessionStore`] over the ORM connection pool,
+///   built by the async [`SessionGuard::from_config_database`] (needs a
+///   [`rustasea_orm::ConnectionResolver`] to open the configured connection).
+///   Sessions survive a restart; see the store's module doc for the operational
+///   trade-offs (per-request round trip, required GC task, unencrypted payload).
+///
+/// Any other driver is rejected at config load time with a typed
+/// [`crate::error::AuthConfigError::UnsupportedSessionDriver`].
+///
 /// `SessionPolicy` encodes the Laravel-13 hardening defaults: JSON
 /// serialization, hyphenated `-session-`/`-cache-` key prefixes, and a
 /// `serializable_classes` allow-list checked before any deserialization.
@@ -21,6 +34,8 @@ use crate::session_cookie::SessionCookieConfig;
 use crate::users::UserLookup;
 use crate::verify::{Argon2Verifier, PasswordVerifier};
 
+use rustasea_orm::ConnectionResolver;
+
 /// Session lifetime advertised on issued tokens (two weeks, tower-sessions default).
 ///
 /// Kept as the fallback when a guard is built without an explicit TTL (e.g.
@@ -29,10 +44,12 @@ use crate::verify::{Argon2Verifier, PasswordVerifier};
 /// `session.lifetime` (minutes → seconds).
 const SESSION_TTL_SECS: u64 = 1_209_600;
 
+mod database;
 mod password;
 mod policy;
 mod provider;
 
+pub use database::DatabaseSessionStore;
 pub use policy::{DeserializationAllowList, SessionPolicy};
 
 /// Identity stored inside a session for the session guard.
@@ -110,6 +127,30 @@ impl SessionGuard<MemoryStore> {
     /// typed errors (invalid serialization, same_site, or cookie name).
     pub fn from_config(config: &SessionConfig) -> crate::config::ConfigResult<Self> {
         Self::new(SessionPolicy::default()).with_config(config)
+    }
+}
+
+impl SessionGuard<DatabaseSessionStore> {
+    /// Build a guard from a typed [`SessionConfig`] over the database store.
+    ///
+    /// Resolves the configured `session.connection` through `resolver`, opens a
+    /// [`DatabaseSessionStore`] over the resulting pool, and applies the config's
+    /// cookie, TTL, and serialization policy. Intended for
+    /// `driver = "database"`; the memory driver uses the synchronous
+    /// [`SessionGuard::from_config`] instead.
+    ///
+    /// # Errors
+    ///
+    /// [`AuthConfigError::SessionStoreUnavailable`] when the configured
+    /// connection cannot be opened, or any
+    /// [`SessionConfig::to_policy`] / [`SessionConfig::to_cookie_config`] typed
+    /// error.
+    pub async fn from_config_database(
+        config: &SessionConfig,
+        resolver: &ConnectionResolver,
+    ) -> crate::config::ConfigResult<Self> {
+        let store = Arc::new(DatabaseSessionStore::from_config(config, resolver).await?);
+        Self::with_store(SessionPolicy::default(), store).with_config(config)
     }
 }
 

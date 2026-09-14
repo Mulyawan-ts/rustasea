@@ -10,6 +10,22 @@
 //! `[mail]` table from `config/mail.toml` and [`mailer_from_config`] builds a
 //! ready [`Mailer`] from it (honouring `MAIL_*` environment overrides).
 //!
+//! # Known deviation: process-wide `set_mailer` (ADR-0007)
+//!
+//! This crate predates the mail template hook and exposes a process-wide mailer
+//! registry through [`Mail::set_mailer`] / [`mailer`]. That conflicts with
+//! ADR-0007 ("Facades Replaced by AppState Arc"), which forbids global facades
+//! in favour of `AppState`-injected dependencies: a global mailer prevents
+//! per-test isolation and hides the mailer's lifecycle from the container.
+//!
+//! The migration path is the **explicit injection** constructors added here —
+//! [`Mail::send_with`] and [`TemplateMailable`] — which take an
+//! `Arc<dyn Mailer>` / `Arc<dyn ViewEngine>` directly, so a caller can thread
+//! the mailer through `AppState` instead of reaching for the global. The
+//! global remains for backward compatibility and for queued notifications
+//! ([`QueuedNotification`] resolves its mailer at worker time, where no
+//! `AppState` is in scope); new code should prefer the explicit path.
+//!
 //! ```no_run
 //! use std::sync::Arc;
 //! use rustasea_mail::{ArrayMailer, Mail, MailAddress, Mailable};
@@ -37,6 +53,8 @@ pub mod message;
 pub mod notification;
 #[cfg(feature = "smtp")]
 pub mod smtp;
+#[cfg(feature = "templates")]
+pub mod template;
 
 use std::sync::Arc;
 
@@ -49,6 +67,10 @@ pub use message::MailMessage;
 pub use notification::{MailNotification, QueuedNotification};
 #[cfg(feature = "smtp")]
 pub use smtp::SmtpMailer;
+#[cfg(feature = "templates")]
+pub use template::TemplateMailable;
+#[cfg(feature = "templates")]
+pub use template::{MinijinjaEngine, ViewEngine, ViewError};
 
 /// Entry point for sending and queueing mail.
 pub struct Mail;
@@ -70,6 +92,23 @@ impl Mail {
         let mailer =
             mailer::mailer().ok_or_else(|| MailError::Transport("no mailer installed".into()))?;
         mailer.send(mailable.build()).await
+    }
+
+    /// Deliver a mailable immediately through an explicitly supplied mailer.
+    ///
+    /// This is the ADR-0007-compliant path: a caller threads the mailer (for
+    /// example from `AppState`) instead of relying on the process-wide registry.
+    /// See the crate docs' "Known deviation" note for the migration rationale.
+    pub async fn send_with<M: Mailable>(mailer: &Arc<dyn Mailer>, mailable: &M) -> Result<()> {
+        mailer.send(mailable.build()).await
+    }
+
+    /// Deliver a pre-built [`MailMessage`] through an explicitly supplied mailer.
+    ///
+    /// Pairs with [`TemplateMailable::try_build`], whose fallible rendering must
+    /// complete before delivery; the caller passes the resolved mailer directly.
+    pub async fn deliver_with(mailer: &Arc<dyn Mailer>, message: MailMessage) -> Result<()> {
+        mailer.send(message).await
     }
 
     /// Queue a notification for asynchronous delivery.

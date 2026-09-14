@@ -10,6 +10,10 @@ default = []
 # SMTP transport backed by `lettre` (TLS via rustls); opt-in to keep the core
 # build free of the transport stack.
 smtp = ["dep:lettre"]
+# Template rendering hook (AUTH-018): render mailables from minijinja templates
+# through `rustasea-view`. Opt-in so the default build stays dependency-light
+# and never links a template engine.
+templates = ["dep:rustasea-view", "rustasea-view/runtime-templates"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -21,6 +25,9 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
+# Runtime view engine used by the `templates` feature; optional so the default
+# build does not pull in `rustasea-view`/minijinja.
+rustasea-view = { path = "../rustasea-view", optional = true }
 lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"], optional = true }
 
 [dev-dependencies]

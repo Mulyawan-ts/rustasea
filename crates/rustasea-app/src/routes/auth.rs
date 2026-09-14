@@ -17,8 +17,14 @@
 
 /// Password-confirmation flow (AUTH-011).
 pub(crate) mod confirmation;
+/// Static login/register page markup.
+pub(crate) mod pages;
+/// Passkeys / WebAuthn flow (AUTH-017).
+pub(crate) mod passkeys;
 /// Password-reset flow (AUTH-013).
 pub(crate) mod password_reset;
+/// Two-factor authentication flow (AUTH-016).
+pub(crate) mod two_factor;
 /// Email-verification flow (AUTH-014).
 pub(crate) mod verification;
 
@@ -41,31 +47,7 @@ use rustasea::validation::{ErrorBag, PasswordPolicy, Rules, ValidationContext, V
 
 use super::helpers::{field, fortify_config, json_error, parse_form, see_other, user_provider};
 use super::session_id_from_headers;
-
-/// Login page markup (placeholder form).
-const LOGIN_HTML: &str = r#"<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Log in</title></head>
-<body><main><h1>Log in</h1>
-<form method="post" action="/login">
-<label>Email <input type="email" name="email" required></label>
-<label>Password <input type="password" name="password" required></label>
-<button type="submit">Log in</button>
-</form>
-<p><a href="/register">Create an account</a></p>
-</main></body></html>"#;
-
-/// Registration page markup (placeholder form).
-const REGISTER_HTML: &str = r#"<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Register</title></head>
-<body><main><h1>Register</h1>
-<form method="post" action="/register">
-<label>Name <input type="text" name="name" required></label>
-<label>Email <input type="email" name="email" required></label>
-<label>Password <input type="password" name="password" required></label>
-<button type="submit">Register</button>
-</form>
-<p><a href="/login">Already registered?</a></p>
-</main></body></html>"#;
+use pages::{LOGIN_HTML, REGISTER_HTML};
 
 /// Detail used for both the unknown-email and wrong-password `422` responses.
 ///
@@ -136,6 +118,8 @@ pub fn register(table: &mut RouteTable) {
     table
         .post_action("/reset-password", password_reset::reset_password_submit)
         .named("password.store");
+    two_factor::register(table);
+    passkeys::register(table);
 }
 
 /// GET /login — render the login form (static markup; no template dir ships).
@@ -206,6 +190,12 @@ async fn login_submit(
                 THROTTLE_MISCONFIGURED,
             );
         }
+    }
+
+    // Two-factor interception: a confirmed account's login is paused for the
+    // challenge; a non-enrolled account falls through to the normal path.
+    if let Some(response) = two_factor::intercept_login(&guard, &username, password).await {
+        return response;
     }
 
     let credentials = Credentials {

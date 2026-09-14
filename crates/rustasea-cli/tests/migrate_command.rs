@@ -61,6 +61,8 @@ async fn migrate_command_executes_against_pool() {
     let _env = ENV_LOCK.lock().await;
     std::env::remove_var("DATABASE__URL");
     std::env::set_var("DATABASE_URL", &url);
+    // `--fresh` is refused in production; this is the non-production happy path.
+    std::env::set_var("APP_ENV", "local");
 
     register_migration(CreateUsers);
     register_seeder(UserSeeder);
@@ -109,4 +111,74 @@ async fn migrate_command_executes_against_pool() {
 
     let _ = std::fs::remove_file(&db_path);
     std::env::remove_var("DATABASE_URL");
+    std::env::remove_var("APP_ENV");
+}
+
+/// Creates the `guard_widgets` table (distinct name avoids registry collisions).
+struct CreateGuardWidgets;
+
+impl Migration for CreateGuardWidgets {
+    fn name(&self) -> &str {
+        "0001_create_guard_widgets_table"
+    }
+
+    fn up(&self) -> OrmResult<String> {
+        Ok("CREATE TABLE guard_widgets (id INTEGER PRIMARY KEY);".into())
+    }
+
+    fn down(&self) -> OrmResult<String> {
+        Ok("DROP TABLE guard_widgets;".into())
+    }
+}
+
+/// `migrate:fresh` refuses to run in production unless `--force` is passed.
+#[tokio::test]
+async fn migrate_fresh_is_guarded_in_production() {
+    let db_path = std::env::temp_dir().join(format!(
+        "rustasea-cli-guard-{}-{}.sqlite",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default()
+    ));
+    let url = format!("sqlite://{}?mode=rwc", db_path.display());
+
+    let _env = ENV_LOCK.lock().await;
+    std::env::remove_var("DATABASE__URL");
+    std::env::set_var("DATABASE_URL", &url);
+    std::env::set_var("APP_ENV", "production");
+
+    register_migration(CreateGuardWidgets);
+    rustasea_cli::load_default_commands();
+
+    // Negative: production without `--force` is refused with the typed error.
+    let refused = Artisan::call("migrate:fresh", vec![]).await.expect("call");
+    assert!(!refused.is_success(), "stdout: {}", refused.stdout);
+    assert_eq!(refused.exit_code, 6, "stderr: {}", refused.stderr);
+    assert!(
+        refused.stderr.contains("production"),
+        "stderr: {}",
+        refused.stderr
+    );
+    assert!(
+        refused.stderr.contains("--force"),
+        "stderr: {}",
+        refused.stderr
+    );
+
+    // Positive: production WITH `--force` runs.
+    let forced = Artisan::call("migrate:fresh", vec!["--force".into()])
+        .await
+        .expect("call");
+    assert!(forced.is_success(), "stderr: {}", forced.stderr);
+    assert!(
+        forced.stdout.contains("Dropped all tables"),
+        "stdout: {}",
+        forced.stdout
+    );
+
+    let _ = std::fs::remove_file(&db_path);
+    std::env::remove_var("DATABASE_URL");
+    std::env::remove_var("APP_ENV");
 }

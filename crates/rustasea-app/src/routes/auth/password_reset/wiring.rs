@@ -20,7 +20,11 @@ use rustasea::auth::{
 };
 use rustasea::foundation::AppConfig;
 use rustasea::ConfigLoader;
-use rustasea_mail::{mailer_from_config, Mail, MailConfig, Mailer};
+use rustasea_mail::{
+    mailer_from_config, Mail, MailConfig, MailMessage, Mailer, MinijinjaEngine, TemplateMailable,
+    ViewEngine,
+};
+use serde::Serialize;
 
 use crate::routes::helpers::fortify_config;
 
@@ -139,6 +143,51 @@ pub(super) fn mailer() -> Option<Arc<dyn Mailer>> {
             built
         })
         .clone()
+}
+
+/// Serializable context for the `mail/reset-password.html` template.
+#[derive(Serialize)]
+struct ResetPasswordContext {
+    /// Absolute signed reset URL rendered into the body.
+    link: String,
+}
+
+/// Runtime template engine for mail bodies, rooted at the shared views dir.
+///
+/// Mirrors the web layer's engine selection: the process-relative
+/// [`rustasea::view::VIEWS_DIR`] wins when present (a deployed app / `cargo run`
+/// from the workspace root); otherwise the workspace `resources/views` derived
+/// from `CARGO_MANIFEST_DIR` is used, so `cargo test -p rustasea-app` (crate-root
+/// cwd) renders the same templates.
+fn mail_engine() -> Arc<dyn ViewEngine> {
+    static ENGINE: OnceLock<Arc<dyn ViewEngine>> = OnceLock::new();
+    Arc::clone(ENGINE.get_or_init(|| {
+        let engine = if std::path::Path::new(rustasea::view::VIEWS_DIR).is_dir() {
+            MinijinjaEngine::from_default_root()
+        } else {
+            MinijinjaEngine::new(crate::routes::resources_root().join("views"))
+        };
+        Arc::new(engine)
+    }))
+}
+
+/// Render the reset email from `resources/views/mail/reset-password.html`.
+///
+/// Uses the shared runtime minijinja engine (AUTH-018), so the branded template
+/// the app ships is the one it mails. A missing template or a render failure is
+/// a typed [`rustasea_mail::MailError`], never an empty body.
+pub(super) fn reset_password_message(
+    to: String,
+    link: String,
+) -> rustasea_mail::Result<MailMessage> {
+    TemplateMailable::new(
+        mail_engine(),
+        "mail/reset-password.html",
+        ResetPasswordContext { link },
+    )?
+    .subject("Reset your password")
+    .to(rustasea_mail::MailAddress::from_email(to))
+    .try_build()
 }
 
 /// Process-wide [`PasswordResetStore`] cell, fail-closed to [`DenyAllResetStore`].

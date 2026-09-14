@@ -62,11 +62,50 @@ pub(crate) fn database_url() -> CliResult<String> {
     ))
 }
 
+/// Resolve the active application environment, highest precedence first.
+///
+/// Precedence:
+/// 1. `APP_ENV` — plain process environment variable.
+/// 2. The `app_env` key from `config/app.toml` (itself overlaid by `APP_ENV`).
+/// 3. [`rustasea_orm::PRODUCTION`] — the fail-closed default, matching Laravel.
+///
+/// The environment drives the destructive-command guard: an unset value must
+/// resolve to production so a `migrate:fresh` never runs unguarded by accident.
+pub(crate) fn app_env() -> String {
+    if let Some(env) = std::env::var("APP_ENV")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        return env;
+    }
+    if let Ok(loader) = rustasea_config::ConfigLoader::load_from(&["config/app"]) {
+        if let Ok(env) = loader.get_key::<String>("app_env") {
+            let env = env.trim();
+            if !env.is_empty() {
+                return env.to_string();
+            }
+        }
+    }
+    rustasea_orm::PRODUCTION.to_string()
+}
+
 /// Shared body for `migrate` and `migrate:fresh`.
 ///
 /// Opens a real pool from config and executes the process-wide registry;
-/// `fresh` drops every table first, `seed` runs the seeders afterwards.
-async fn run_migrate(fresh: bool, seed: bool, io: &mut Io) -> CliResult<()> {
+/// `fresh` drops every table first, `seed` runs the seeders afterwards. A
+/// `fresh` run is refused in production unless `force` is set.
+async fn run_migrate(fresh: bool, seed: bool, force: bool, io: &mut Io) -> CliResult<()> {
+    if fresh {
+        let environment = app_env();
+        rustasea_orm::guard_destructive_command("migrate:fresh", &environment, force).map_err(
+            |refused| CliError::DestructiveCommand {
+                command: refused.command,
+                environment: refused.environment,
+            },
+        )?;
+    }
+
     let migrator: Migrator = rustasea_orm::registered_migrator();
 
     if migrator.is_empty() {
@@ -132,6 +171,7 @@ async fn run_migrate(fresh: bool, seed: bool, io: &mut Io) -> CliResult<()> {
 /// Opens a real pool from config and executes the process-wide registry built
 /// by `register_migration`/`register_seeder` at application boot. `--fresh`
 /// drops every table first; `--seed` runs the registered seeders afterwards.
+/// A `--fresh` run is refused in production unless `--force` is also passed.
 pub struct Migrate;
 
 #[async_trait]
@@ -142,7 +182,7 @@ impl Command for Migrate {
     }
     /// Usage line rendered by `list`.
     fn usage(&self) -> Option<&'static str> {
-        Some("migrate [--fresh] [--seed]")
+        Some("migrate [--fresh] [--seed] [--force]")
     }
     /// One-line help rendered by `list`.
     fn help(&self) -> Option<&'static str> {
@@ -152,14 +192,16 @@ impl Command for Migrate {
     async fn run(&self, args: Vec<String>, io: &mut Io) -> CliResult<()> {
         let fresh = args.iter().any(|a| a == "--fresh");
         let seed = args.iter().any(|a| a == "--seed");
-        run_migrate(fresh, seed, io).await
+        let force = args.iter().any(|a| a == "--force" || a == "-f");
+        run_migrate(fresh, seed, force, io).await
     }
 }
 
 /// `migrate:fresh` — drop all tables then re-run every migration.
 ///
 /// Equivalent to `migrate --fresh`; `--seed` additionally runs the registered
-/// seeders after the schema is rebuilt.
+/// seeders after the schema is rebuilt. Refused in production unless `--force`
+/// is passed.
 pub struct MigrateFresh;
 
 #[async_trait]
@@ -170,7 +212,7 @@ impl Command for MigrateFresh {
     }
     /// Usage line rendered by `list`.
     fn usage(&self) -> Option<&'static str> {
-        Some("migrate:fresh [--seed]")
+        Some("migrate:fresh [--seed] [--force]")
     }
     /// One-line help rendered by `list`.
     fn help(&self) -> Option<&'static str> {
@@ -179,7 +221,8 @@ impl Command for MigrateFresh {
     /// Execute: drop all tables, re-migrate, optionally seed.
     async fn run(&self, args: Vec<String>, io: &mut Io) -> CliResult<()> {
         let seed = args.iter().any(|a| a == "--seed");
-        run_migrate(true, seed, io).await
+        let force = args.iter().any(|a| a == "--force" || a == "-f");
+        run_migrate(true, seed, force, io).await
     }
 }
 

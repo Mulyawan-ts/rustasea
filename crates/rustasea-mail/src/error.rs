@@ -22,6 +22,14 @@ pub enum MailError {
     #[error("mail message could not be built: {0}")]
     Render(String),
 
+    /// A template-backed body could not be rendered (AUTH-018).
+    ///
+    /// Carries the originating [`rustasea_view::ViewError`], so a missing
+    /// template is a typed `TemplateNotFound` rather than an empty body.
+    #[cfg(feature = "templates")]
+    #[error(transparent)]
+    Template(#[from] rustasea_view::ViewError),
+
     /// A mailer could not be built from configuration.
     #[error(transparent)]
     Config(#[from] MailConfigError),

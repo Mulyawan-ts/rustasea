@@ -36,8 +36,20 @@ validator = { version = "0.19", features = ["derive"] }
 # supplies the constant-time comparison used for signature checks.
 hmac = "0.12"
 sha2 = "0.10"
+sha1 = "0.10"
 hex = "0.4"
 subtle = "2"
+# Two-factor authentication (AUTH-016) — TOTP uses HMAC-SHA1 (the RFC 6238 /
+# authenticator-app default); the secret/recovery payloads are sealed with an
+# authenticated cipher (ChaCha20-Poly1305) keyed from `app.key`.
+chacha20poly1305 = "0.10"
+# Passkeys / WebAuthn (AUTH-017) — `p256` verifies ES256 (ECDSA P-256)
+# assertions; `ciborium` parses the CBOR attestation object / COSE public key;
+# `base64` decodes the base64url ceremony fields. All three are already in the
+# lock (`p256` via `jsonwebtoken`), so this adds no new upstream source.
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+ciborium = "0.2"
+base64 = "0.22"
 # Macros (M0)
 syn = { version = "2", features = ["full"] }
 quote = "1"

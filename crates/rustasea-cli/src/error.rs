@@ -67,6 +67,23 @@ pub enum CliError {
     /// A schedule/queue operation surfaced a downstream error.
     #[error("{0}")]
     Domain(String),
+
+    /// A destructive command (`migrate:fresh`, a drop/wipe) was refused in a
+    /// protected environment and no `--force` flag was supplied.
+    ///
+    /// The message names both the command and the environment so the operator
+    /// sees exactly what was blocked and why (kit
+    /// `DB::prohibitDestructiveCommands`).
+    #[error(
+        "refusing to run `{command}` in the `{environment}` environment; \
+         pass `--force` to override"
+    )]
+    DestructiveCommand {
+        /// The refused command.
+        command: String,
+        /// The environment that triggered the refusal.
+        environment: String,
+    },
 }
 
 /// Convenience alias for CLI results.
@@ -93,6 +110,7 @@ pub fn exit_code(err: &CliError) -> i32 {
         CliError::InvalidArguments { .. } => 3,
         CliError::AlreadyExists { .. } => 4,
         CliError::ShutdownTimeout(_) => 5,
+        CliError::DestructiveCommand { .. } => 6,
         CliError::NotAProject { .. }
         | CliError::GenerationFailed { .. }
         | CliError::Io(_)

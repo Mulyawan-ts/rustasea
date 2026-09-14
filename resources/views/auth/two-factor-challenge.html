@@ -1,0 +1,13 @@
+{% extends "layouts/auth.html" %}
+{% block title %}Two-factor challenge{% endblock %}
+{% block content %}
+<header>
+  <h1>Two-factor authentication</h1>
+  <p>Enter the six-digit code from your authenticator app, or use a recovery code.</p>
+</header>
+<form method="post" action="/two-factor-challenge">
+  <label>Code <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" autofocus /></label>
+  <label>Recovery code <input type="text" name="recovery_code" autocomplete="off" /></label>
+  <button type="submit">Verify</button>
+</form>
+{% endblock %}
