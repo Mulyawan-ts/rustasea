@@ -5334,6 +5334,7 @@ dependencies = [
  "rustasea-events",
  "rustasea-foundation",
  "rustasea-http",
+ "rustasea-i18n",
  "rustasea-inertia",
  "rustasea-inertia-adapters",
  "rustasea-inertia-client",
@@ -5530,6 +5531,16 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http",
+]
+
+[[package]]
+name = "rustasea-i18n"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "toml 0.8.23",
 ]
 
 [[package]]

@@ -4,6 +4,7 @@ pub use rustasea_cache as cache;
 pub use rustasea_config as config;
 pub use rustasea_events as events;
 pub use rustasea_foundation as foundation;
+pub use rustasea_i18n as i18n;
 pub use rustasea_queue as queue;
 pub use rustasea_schedule as schedule;
 
@@ -40,6 +41,17 @@ pub use events::{
 pub use schedule::{
     Schedule, ScheduleBuilder, ScheduleCommand, ScheduleError, SchedulePaused, ScheduleResumed,
     ScheduleState, Scheduler, SchedulerStatus,
+};
+
+pub use i18n::__ as i18n_trans;
+/// i18n re-exports for translation ergonomics (M3). The free `__` /
+/// `trans_choice` helpers are aliased to keep the umbrella's root namespace
+/// explicit.
+pub use i18n::{
+    choose_form as i18n_choose_form, clear_translator as i18n_clear_translator,
+    interpolate as i18n_interpolate, set_translator as i18n_set_translator,
+    trans_choice as i18n_trans_choice, translator as i18n_translator, I18nError,
+    Param as I18nParam, TranslationLoader, Translations, Translator, DEFAULT_LANG_DIR,
 };
 
 pub use orm::{

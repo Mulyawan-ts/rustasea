@@ -17,6 +17,8 @@ rustasea-queue = { path = "../rustasea-queue" }
 rustasea-cache = { path = "../rustasea-cache" }
 rustasea-events = { path = "../rustasea-events" }
 rustasea-schedule = { path = "../rustasea-schedule" }
+# Internationalization (M3): TOML/JSON dictionaries, `__` / `trans_choice`.
+rustasea-i18n = { path = "../rustasea-i18n" }
 rustasea-cli = { path = "../rustasea-cli" }
 rustasea-testing = { path = "../rustasea-testing" }
 # M6 advanced crates (Sprint 07). rustasea-ai is opt-in (NFR-Sca-02):
