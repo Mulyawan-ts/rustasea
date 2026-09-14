@@ -33,6 +33,15 @@ impl QueryBuilder {
         &self.eager
     }
 
+    /// The declared relation metadata attached via
+    /// [`QueryBuilder::with_relations`].
+    ///
+    /// Lets callers (and tests) confirm a builder still carries its model's
+    /// relations before [`QueryBuilder::get_eager`] resolves `with` names.
+    pub fn declared_relations(&self) -> &[Relation] {
+        &self.eager_declared
+    }
+
     /// Whether eager loading was requested.
     pub fn has_eager(&self) -> bool {
         !self.eager.is_empty()
@@ -47,8 +56,9 @@ impl QueryBuilder {
         executor: impl Into<Executor<'a>>,
     ) -> Result<Vec<serde_json::Value>> {
         let mut executor = executor.into();
-        let sql = self.to_sql()?;
-        let bindings = self.bindings().to_vec();
+        let resolved = self.resolved();
+        let sql = resolved.to_sql()?;
+        let bindings = resolved.bindings().to_vec();
         let mut rows = executor.fetch_json(&sql, &bindings).await?;
         if self.eager.is_empty() {
             return Ok(rows);

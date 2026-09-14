@@ -6,6 +6,7 @@ use crate::error::{OrmError, Result};
 use crate::execution::count_sql;
 use crate::m2::{InsertBuilder, ModelScopes, UpsertBuilder};
 use crate::naming::snake_plural;
+use crate::scopes::{GlobalScopeEntry, SoftDeletesScope};
 use crate::types::Value;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -222,6 +223,30 @@ pub trait Model: Send + Sync {
         Self::uses_soft_deletes().then_some("deleted_at")
     }
 
+    /// Global scopes applied automatically to every query on this model.
+    ///
+    /// Defaults to [`SoftDeletesScope`] when [`Model::uses_soft_deletes`] is
+    /// true; the process-wide registry ([`crate::scopes::register_global_scope`])
+    /// is consulted too, so application-registered scopes (e.g. tenancy) join the
+    /// model's built-in ones. Bypass them with
+    /// [`QueryBuilder::without_global_scopes`] / [`QueryBuilder::without_global_scope`].
+    fn global_scopes() -> Vec<GlobalScopeEntry>
+    where
+        Self: Sized,
+    {
+        let mut scopes = Vec::new();
+        if Self::uses_soft_deletes() {
+            scopes.push(GlobalScopeEntry::new(SoftDeletesScope));
+        }
+        for entry in crate::scopes::registered_global_scopes(&Self::table_name()) {
+            if scopes.iter().any(|existing| existing.id() == entry.id()) {
+                continue;
+            }
+            scopes.push(entry);
+        }
+        scopes
+    }
+
     /// Update tracked timestamps in memory (derive macro also emits `touch`).
     fn touch(&mut self) {}
 
@@ -272,30 +297,44 @@ pub trait Model: Send + Sync {
         format!("UPDATE {table} SET deleted_at = NULL WHERE id = $1")
     }
 
-    /// Start a filtered query on the model table with the soft-delete guard.
+    /// Start a filtered query on the model table with its global scopes.
+    ///
+    /// The model's [`Model::global_scopes`] (soft deletes plus any registered
+    /// application scopes) are attached and applied when the query executes, so
+    /// deleted rows are hidden by default. Bypass with
+    /// [`QueryBuilder::without_global_scopes`].
     fn query() -> QueryBuilder
     where
         Self: Sized,
     {
         QueryBuilder::table(Self::table_name())
-            .with_soft_deletes(Self::uses_soft_deletes())
+            .with_global_scopes(Self::global_scopes())
             .with_relations(Self::relations())
     }
 
     /// Query that includes soft-deleted rows.
+    ///
+    /// Delegates to [`Model::query`] so the model's declared relations metadata
+    /// ([`Model::relations`]) is preserved for eager loading, then bypasses the
+    /// built-in [`SoftDeletesScope`].
     fn query_with_trashed() -> QueryBuilder
     where
         Self: Sized,
     {
-        QueryBuilder::table(Self::table_name()).with_trashed()
+        Self::query().without_global_scope::<SoftDeletesScope>()
     }
 
     /// Query restricted to soft-deleted rows.
+    ///
+    /// Delegates to [`Model::query`] (preserving relations metadata) and keeps
+    /// only rows where the soft-delete marker is set.
     fn query_only_trashed() -> QueryBuilder
     where
         Self: Sized,
     {
-        QueryBuilder::table(Self::table_name()).only_trashed()
+        Self::query()
+            .without_global_scope::<SoftDeletesScope>()
+            .only_trashed()
     }
 
     /// Raw SELECT fragment over the model table (`Model::raw_sql`).
@@ -325,7 +364,8 @@ pub trait Model: Send + Sync {
     where
         Self: Sized,
     {
-        let base = QueryBuilder::table(Self::table_name());
+        let base =
+            QueryBuilder::table(Self::table_name()).with_global_scopes(Self::global_scopes());
         base.where_eq("id", Value::Uuid(id))
             .for_update_with_dialect(dialect)
     }

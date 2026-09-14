@@ -58,7 +58,11 @@ pub use model::{Model, Relation, RelationKind, Relations, SoftDeletes, Timestamp
 pub use model_ops::ModelOps;
 pub use naming::snake_plural;
 pub use schema::{Column, ColumnKind, DefaultValue, Schema, SchemaBlueprint};
-pub use scopes::{Scope, ScopeRegistry};
+pub use scopes::{
+    register_global_scope, registered_global_scopes, reset_global_scopes,
+    try_registered_global_scopes, CallbackScope, GlobalScope, GlobalScopeEntry,
+    GlobalScopeRegistry, Scope, ScopeRegistry, SoftDeletesScope,
+};
 pub use tx::{Transaction, TransactionError};
 pub use types::{ColumnType, JsonFilter};
 pub use value::Value;

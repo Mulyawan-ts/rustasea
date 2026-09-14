@@ -106,8 +106,9 @@ impl QueryBuilder {
         self,
         executor: impl Into<Executor<'a>>,
     ) -> Result<Vec<serde_json::Value>> {
-        let sql = self.to_sql()?;
-        let bindings = self.bindings().to_vec();
+        let resolved = self.resolved();
+        let sql = resolved.to_sql()?;
+        let bindings = resolved.bindings().to_vec();
         executor.into().fetch_json(&sql, &bindings).await
     }
 
@@ -130,8 +131,9 @@ impl QueryBuilder {
 
     /// Run the `COUNT(*)` projection over the current filters.
     pub async fn count<'a>(self, executor: impl Into<Executor<'a>>) -> Result<u64> {
-        let sql = crate::execution::count_sql(&self)?;
-        let bindings = self.bindings().to_vec();
+        let resolved = self.resolved();
+        let sql = crate::execution::count_sql(&resolved)?;
+        let bindings = resolved.bindings().to_vec();
         let rows = executor.into().fetch_json(&sql, &bindings).await?;
         Ok(scalar_count(rows.first()))
     }
@@ -155,13 +157,14 @@ impl QueryBuilder {
         let per_page = per_page.max(1);
         let mut executor = executor.into();
 
-        let count_sql = crate::execution::count_sql(&self)?;
-        let count_bindings = self.bindings().to_vec();
+        let resolved = self.resolved();
+        let count_sql = crate::execution::count_sql(&resolved)?;
+        let count_bindings = resolved.bindings().to_vec();
         let count_rows = executor.fetch_json(&count_sql, &count_bindings).await?;
         let total = scalar_count(count_rows.first());
 
         let offset = page.saturating_sub(1).saturating_mul(per_page);
-        let window = self.limit(per_page).offset(offset);
+        let window = resolved.limit(per_page).offset(offset);
         let items = window.get(executor.reborrow()).await?;
 
         Ok(Paginator::new(items, page, per_page, total).with_links())

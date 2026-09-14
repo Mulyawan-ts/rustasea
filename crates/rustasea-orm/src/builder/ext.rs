@@ -79,15 +79,11 @@ impl QueryBuilder {
     /// Apply the soft-delete guard when the model uses `deleted_at`.
     ///
     /// Applies `deleted_at IS NULL` once; re-application is idempotent. With
-    /// the model untouched this is a no-op — `Model::query()` gates queries.
+    /// the model untouched this is a no-op — `Model::query()` attaches the
+    /// [`crate::scopes::SoftDeletesScope`] global scope instead.
     pub fn with_soft_deletes(mut self, uses: bool) -> Self {
-        if uses && self.soft_delete_guard.is_none() {
-            self.soft_delete_guard = Some(false);
-            self.conditions.push(Condition {
-                glue: "AND",
-                sql: "deleted_at IS NULL".into(),
-                bindings: Vec::new(),
-            });
+        if uses {
+            self.apply_soft_delete_guard();
         }
         self
     }
@@ -109,11 +105,8 @@ impl QueryBuilder {
             self.conditions.retain(|c| c.sql != "deleted_at IS NULL");
         }
         self.soft_delete_guard = Some(true);
-        self.conditions.push(Condition {
-            glue: "AND",
-            sql: "deleted_at IS NOT NULL".into(),
-            bindings: Vec::new(),
-        });
+        self.conditions
+            .push(Condition::new("AND", "deleted_at IS NOT NULL"));
         self
     }
 
@@ -156,11 +149,7 @@ impl QueryBuilder {
             OrderDirection::Asc => ">",
             OrderDirection::Desc => "<",
         };
-        self.conditions.push(Condition {
-            glue: "AND",
-            sql: format!("{column} {op} ${idx}"),
-            bindings: Vec::new(),
-        });
+        self.push_condition("AND", format!("{column} {op} ${idx}"));
         self
     }
 
@@ -261,11 +250,7 @@ impl QueryBuilder {
         let idx = self.bindings.len();
         let op = sim.metric.operator();
         self.orders = Vec::new();
-        self.conditions.push(Condition {
-            glue: "AND",
-            sql: format!("{column} IS NOT NULL"),
-            bindings: Vec::new(),
-        });
+        self.push_condition("AND", format!("{column} IS NOT NULL"));
         self.orders.push(OrderBy {
             column: format!("{column} {op} ${idx}"),
             direction: OrderDirection::Asc,

@@ -99,6 +99,55 @@ fn derive_query_helpers_emit_soft_delete_guards() {
         .ends_with("WHERE deleted_at IS NOT NULL"));
 }
 
+/// Hand-written model declaring a relation, used to prove the trashed query
+/// helpers preserve relation metadata.
+struct Author {
+    id: Uuid,
+}
+
+impl Model for Author {
+    fn type_name() -> &'static str {
+        "Author"
+    }
+
+    fn primary_key(&self) -> Uuid {
+        self.id
+    }
+
+    fn assign_id(&mut self) -> Uuid {
+        self.id = Uuid::now_v7();
+        self.id
+    }
+
+    fn relations() -> Vec<rustasea_orm::Relation> {
+        vec![rustasea_orm::Relation::has_many("posts", "posts", "Author")]
+    }
+}
+
+/// Verifies the trashed query helpers preserve the model's declared relations
+/// metadata, so `with(&[...]).get_eager()` can resolve relation names.
+#[test]
+fn derive_trashed_queries_preserve_relations() {
+    use rustasea_orm::SoftDeletesScope;
+
+    let expected = Author::relations();
+
+    let trashed = <Author as Model>::query_with_trashed();
+    assert!(!trashed.has_global_scope::<SoftDeletesScope>());
+    assert_eq!(trashed.declared_relations(), expected.as_slice());
+
+    let only = <Author as Model>::query_only_trashed();
+    assert!(!only.has_global_scope::<SoftDeletesScope>());
+    assert_eq!(only.declared_relations(), expected.as_slice());
+
+    // Sanity: the helpers still emit the expected soft-delete shapes.
+    assert_eq!(trashed.to_sql().unwrap(), "SELECT * FROM authors");
+    assert!(only
+        .to_sql()
+        .unwrap()
+        .ends_with("WHERE deleted_at IS NOT NULL"));
+}
+
 /// Verifies `touch` bumps only the tracked updated_at field.
 #[test]
 fn derive_touch_bumps_updated_at() {

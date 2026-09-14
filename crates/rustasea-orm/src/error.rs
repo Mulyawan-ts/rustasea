@@ -23,6 +23,11 @@ pub enum OrmError {
     #[error("invalid bind value: {0}")]
     InvalidValue(String),
 
+    /// A global scope was registered or combined illegally (duplicate id,
+    /// empty table name, poisoned registry).
+    #[error("invalid scope: {0}")]
+    Scope(String),
+
     /// The configured driver is unsupported for this operation.
     #[error("unsupported driver: {0}")]
     UnsupportedDriver(String),
