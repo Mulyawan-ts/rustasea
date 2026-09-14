@@ -18,6 +18,7 @@
 pub mod config;
 pub mod csrf;
 pub mod error;
+pub mod gate;
 pub mod guard;
 pub mod jwt;
 pub mod passkeys;
@@ -39,6 +40,7 @@ pub use config::{
 };
 pub use csrf::{CsrfLayer, PreventRequestForgery, SecFetchSite};
 pub use error::{AuthConfigError, AuthError, CsrfError, SerializationError, ThrottleError};
+pub use gate::{AbilityCallback, AfterCallback, AuthorizationError, BeforeCallback, Gate};
 pub use guard::{Auth, AuthManager, AuthUser, Credentials, Guard, GuardRegistrar, Token};
 pub use jwt::{JwtClaims, JwtConfig, JwtGuard};
 pub use passkeys::{
