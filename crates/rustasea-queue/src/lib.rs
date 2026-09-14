@@ -19,6 +19,7 @@ pub mod notification;
 pub mod policy;
 pub mod registry;
 pub mod retry;
+pub mod unique;
 pub mod wiring;
 
 pub use async_trait::async_trait;
@@ -50,4 +51,9 @@ pub use policy::JobPolicy;
 pub use registry::register_redis_driver;
 pub use registry::{register_database_driver, Queue, QueueRegistry, Route};
 pub use retry::{ShouldRetry, ShouldRetryUntil};
+pub use unique::{
+    acquire_lease, clear_unique_store, register_unique, release_unique, set_unique_store,
+    unique_spec, unique_store, DispatchOutcome, LeaseState, ShouldBeUnique, UniqueGuard,
+    DEFAULT_UNIQUE_FOR, UNIQUE_KEY_PREFIX,
+};
 pub use wiring::{configured_default_connection, register_from_config, register_from_config_with};

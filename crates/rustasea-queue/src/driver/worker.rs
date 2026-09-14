@@ -14,6 +14,7 @@ use crate::driver::QueueDriver;
 use crate::error::Result;
 use crate::job::{run_erased, ConcreteJob, ErasedJob, FailedJob, Job, JobOutcome, JobPayload};
 use crate::policy::JobPolicy;
+use crate::unique::release_unique;
 
 /// How long a worker blocks on `pop` before concluding a queue is drained.
 const POP_TIMEOUT: Duration = Duration::from_millis(250);
@@ -194,11 +195,14 @@ where
     match run_erased(exec.as_ref()).await {
         JobOutcome::Succeeded | JobOutcome::Skipped => {
             driver.ack(payload).await?;
+            release_lease(payload).await;
         }
         JobOutcome::Retrying { .. } if policy.allows_retry(payload.attempts) => {
             // The worker owns the global attempt count, so the backoff delay is
             // recomputed from the policy rather than trusting the single-attempt
-            // outcome — this keeps exponential growth correct across runs.
+            // outcome — this keeps exponential growth correct across runs. The
+            // unique lease is intentionally kept: the job is still in flight and
+            // must not be re-dispatched until it reaches a terminal outcome.
             let delay = policy.delay_for_attempt(payload.attempts);
             driver.release(payload, delay).await?;
         }
@@ -212,7 +216,21 @@ where
                 ))
                 .await?;
             driver.ack(payload).await?;
+            release_lease(payload).await;
         }
     }
     Ok(())
+}
+
+/// Release the unique lease for a payload that reached a terminal outcome.
+///
+/// Best-effort: a release failure is swallowed so it never masks the job's
+/// already-recorded outcome (ack/dead-letter). Only payloads whose `job` type
+/// name resolves to a registered unique type and whose application installed a
+/// cache store are affected; everything else is a no-op.
+async fn release_lease(payload: &JobPayload) {
+    let Some(type_key) = payload.job.as_deref() else {
+        return;
+    };
+    let _ = release_unique(type_key, &payload.payload).await;
 }

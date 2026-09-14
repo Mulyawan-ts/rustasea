@@ -12,6 +12,7 @@ use crate::job::{
     run_erased, DispatchHandle, ErasedJob, FailedJob, Job, JobId, JobOutcome, JobPayload,
 };
 use crate::metrics::{QueueMetrics, Queues};
+use crate::unique::DispatchOutcome;
 
 /// Lock-free post-boot state shared by every `Queue` facade.
 static REGISTRY: OnceLock<RwLock<RegistryInner>> = OnceLock::new();
@@ -73,7 +74,7 @@ fn insert_route(type_key: &'static str, route: Route) -> Result<()> {
 }
 
 /// Build the serialized payload envelope for a dispatch.
-fn to_payload(
+pub(crate) fn to_payload(
     job: &str,
     payload: serde_json::Value,
     queue: String,
@@ -165,32 +166,29 @@ impl Queue {
     /// `Retrying`, which cannot re-enqueue without a real worker — into the
     /// `failed_jobs` sink. `database`/`redis` connections push the serialized
     /// payload to their registered driver for a worker to drain.
+    ///
+    /// When the job type is registered as unique (see
+    /// [`crate::unique::register_unique`]) and a cache store is installed, a
+    /// deduplicated dispatch is a silent no-op that still yields a fresh
+    /// [`JobId`] (Laravel semantics). Use [`Queue::dispatch_handle_outcome`] to
+    /// observe the deduplication explicitly.
     pub async fn dispatch_handle(handle: DispatchHandle) -> Result<JobId> {
-        let routed = Self::resolve(handle.exec.type_key()).ok();
-        let connection = match (&handle.connection, &routed) {
-            (Some(c), _) => c.clone(),
-            (None, Some(r)) => r.connection.to_string(),
-            (None, None) => return Err(QueueError::Unrouted(handle.exec.type_key().to_string())),
-        };
-        let queue = match (&handle.queue, &routed) {
-            (Some(q), _) => q.clone(),
-            (None, Some(r)) => r.queue.to_string(),
-            (None, None) => return Err(QueueError::Unrouted(handle.exec.type_key().to_string())),
-        };
-        if connection == SYNC_CONNECTION {
-            // Inline sync dispatch: do NOT buffer the payload — the queue must
-            // stay empty (pending_size == 0) once the job has run.
-            return Self::execute_sync(&handle).await.map(|_| JobId::new());
-        }
-        let payload = to_payload(
-            handle.exec.type_key(),
-            handle.exec.as_json(),
-            queue.clone(),
-            connection.clone(),
-            handle.delay,
-        )?;
-        driver(&connection)?.push(payload).await?;
-        Ok(JobId::new())
+        Ok(match Self::dispatch_handle_outcome(handle).await? {
+            DispatchOutcome::Enqueued(id) => id,
+            DispatchOutcome::Deduplicated { .. } => JobId::new(),
+        })
+    }
+
+    /// Enqueue a dispatch handle, reporting whether it was enqueued or deduped.
+    ///
+    /// Acquires the job's unique lease (when the type is registered unique and a
+    /// store is configured) before enqueuing. A [`LeaseState::Held`] result
+    /// short-circuits to [`DispatchOutcome::Deduplicated`] without touching the
+    /// driver. Non-unique jobs and applications without a store behave exactly
+    /// as [`Queue::dispatch_handle`] always has. See
+    /// [`crate::dispatch::dispatch_outcome`] for the gate itself.
+    pub async fn dispatch_handle_outcome(handle: DispatchHandle) -> Result<DispatchOutcome> {
+        crate::dispatch::dispatch_outcome(handle).await
     }
 
     /// Enqueue a typed job through its routed connection/queue.
@@ -206,7 +204,7 @@ impl Queue {
     /// silently drops a failed job. `Skipped` outcomes (missing-model
     /// suppression, FR-605) are recorded as diagnostics but never dead-lettered
     /// nor retried. The driver buffer is untouched.
-    async fn execute_sync(handle: &DispatchHandle) -> Result<JobOutcome> {
+    pub(crate) async fn execute_sync(handle: &DispatchHandle) -> Result<JobOutcome> {
         let outcome = run_erased(handle.exec.as_ref()).await;
         // A sync dispatch has no later worker to release a retry, so both
         // `Failed` and `Retrying` are dead-lettered with the attempt's trace.
@@ -352,7 +350,7 @@ fn metric_targets() -> Vec<(String, String)> {
 }
 
 /// Resolve a driver by connection name.
-fn driver(connection: &str) -> Result<Arc<dyn QueueDriver>> {
+pub(crate) fn driver(connection: &str) -> Result<Arc<dyn QueueDriver>> {
     let reg = registry();
     let guard = reg.read().map_err(QueueError::from)?;
     guard

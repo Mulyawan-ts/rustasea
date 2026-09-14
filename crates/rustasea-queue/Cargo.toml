@@ -21,6 +21,10 @@ chrono = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 rustasea-orm = { path = "../rustasea-orm" }
+# Cache store + `Lock` backing the optional `ShouldBeUnique` dedup lease. The
+# dependency is always compiled in (memory store needs no feature); unique
+# locking simply disengages when no store is installed at boot.
+rustasea-cache = { path = "../rustasea-cache" }
 # Layered `config/*.toml` loader — the queue owns parsing of the `[queue]` table
 # (`QueueConfig::from_loader`), mirroring `rustasea-orm`'s `[database]` parsing.
 rustasea-config = { path = "../rustasea-config" }

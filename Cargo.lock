@@ -5664,6 +5664,7 @@ dependencies = [
  "chrono",
  "deadpool-redis",
  "redis",
+ "rustasea-cache",
  "rustasea-config",
  "rustasea-orm",
  "serde",
