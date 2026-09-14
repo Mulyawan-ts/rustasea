@@ -15,7 +15,17 @@ required-features = ["cli"]
 
 [features]
 default = ["cli"]
-cli = ["dep:clap", "dep:dialoguer", "dep:indicatif", "dep:console", "dep:comfy-table"]
+# `dep:rustasea-router` backs the `routes` registry that `route:list` reads
+# (see `src/routes.rs`); it stays optional so a core build that only needs the
+# command registry never links axum.
+cli = [
+    "dep:clap",
+    "dep:dialoguer",
+    "dep:indicatif",
+    "dep:console",
+    "dep:comfy-table",
+    "dep:rustasea-router",
+]
 
 [dependencies]
 tokio = { workspace = true }
@@ -32,6 +42,9 @@ rustasea-queue = { path = "../rustasea-queue" }
 rustasea-schedule = { path = "../rustasea-schedule" }
 rustasea-macros = { path = "../rustasea-macros" }
 rustasea-orm = { path = "../rustasea-orm" }
+# `route:list` reads the application route table (`RouteEntry`); optional so the
+# router/axum tree is only linked with the `cli` feature.
+rustasea-router = { path = "../rustasea-router", optional = true }
 clap = { workspace = true, optional = true }
 dialoguer = { workspace = true, optional = true }
 indicatif = { workspace = true, optional = true }

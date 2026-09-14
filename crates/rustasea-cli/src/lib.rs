@@ -27,6 +27,8 @@ pub mod output;
 #[cfg(feature = "cli")]
 pub mod prompt;
 #[cfg(feature = "cli")]
+pub mod routes;
+#[cfg(feature = "cli")]
 pub mod shutdown;
 
 pub use artisan::{Artisan, Command, CommandMeta, CommandOutput, Io};

@@ -23,6 +23,28 @@ pub fn configure() -> Result<Application, BootError> {
         app.provider(provider);
     }
     commands::register_default();
+    // Publish the live route table so `route:list` introspects the real routes.
+    // `rustasea-cli` is framework-generic and cannot depend on this app crate,
+    // so the app pushes its table into the CLI's process-wide route registry at
+    // boot; the command reads it back (see `rustasea::cli::routes`).
+    rustasea::cli::routes::set_route_source(|| crate::routes::table().get_routes());
     app.boot()?;
     Ok(app)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Booting publishes the live route table `route:list` reads back.
+    #[test]
+    fn configure_publishes_route_table() {
+        configure().expect("app boots");
+
+        let routes = rustasea::cli::routes::routes();
+        let paths: Vec<&str> = routes.iter().map(|route| route.path.as_str()).collect();
+        for expected in ["/login", "/dashboard", "/settings/profile"] {
+            assert!(paths.contains(&expected), "missing {expected} in {paths:?}");
+        }
+    }
 }

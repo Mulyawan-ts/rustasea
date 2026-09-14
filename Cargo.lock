@@ -5456,6 +5456,7 @@ dependencies = [
  "rustasea-macros",
  "rustasea-orm",
  "rustasea-queue",
+ "rustasea-router",
  "rustasea-schedule",
  "serde",
  "serde_json",
