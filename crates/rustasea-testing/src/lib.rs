@@ -25,6 +25,7 @@ pub mod fixtures;
 pub mod http;
 pub mod migration;
 pub mod paginator;
+pub mod refresh;
 pub mod test_case;
 
 #[cfg(feature = "auth")]
@@ -45,4 +46,5 @@ pub use fixtures::{FixtureError, PostgresTestDb};
 pub use http::request_json;
 pub use migration::{migrate_once, MigrateHarness};
 pub use paginator::{bootstrap_3, paginator_view};
+pub use refresh::{RefreshDatabase, RefreshGuard};
 pub use test_case::{TestCase, TestConfig};

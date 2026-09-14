@@ -71,6 +71,17 @@ impl PostgresTestDb {
         &self.pool
     }
 
+    /// Begin a per-test rollback guard on this fixture's pool.
+    ///
+    /// Thin delegate to [`crate::RefreshDatabase::begin`], so a test can go
+    /// straight from the container-backed fixture to a pristine per-test
+    /// transaction without naming the pool. Pair with [`crate::migration::migrate_once`]
+    /// (or [`crate::RefreshDatabase::begin_migrated`]) so the schema is created
+    /// once per fixture while each test only pays for a begin/rollback.
+    pub async fn begin_refresh(&self) -> rustasea_orm::Result<crate::RefreshGuard> {
+        crate::RefreshDatabase::begin(&self.pool).await
+    }
+
     /// The connection URL of the isolated database.
     pub fn url(&self) -> &str {
         &self.handle.url
