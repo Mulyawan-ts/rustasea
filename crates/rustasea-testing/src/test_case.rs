@@ -101,6 +101,10 @@ mod tests {
     /// Verifies sequence reset runs before each setup.
     #[test]
     fn setup_resets_factory_sequences() {
+        // Shares the process-global sequence registry with the factory tests;
+        // serialize so a concurrent `reset_factory_sequences` cannot zero the
+        // counter this test just bumped.
+        let _guard = crate::factory::test_lock();
         crate::factory::bump_sequence_for_test();
         assert!(crate::factory::current_sequence_for_test() > 0);
 

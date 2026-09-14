@@ -31,6 +31,11 @@ rustasea-foundation = { path = "../rustasea-foundation" }
 rustasea-config = { path = "../rustasea-config" }
 rustasea-orm = { path = "../rustasea-orm" }
 rustasea-cache = { path = "../rustasea-cache" }
+# Testing fakes (LARAVEL-015) intercept the real Mail/Queue/Events seams, so the
+# fake types in `src/fakes.rs` depend on the contracts they substitute.
+rustasea-events = { path = "../rustasea-events" }
+rustasea-queue = { path = "../rustasea-queue" }
+rustasea-mail = { path = "../rustasea-mail" }
 dotenvy = { workspace = true, optional = true }
 testcontainers = { version = "0.23", optional = true }
 rustasea-auth = { path = "../rustasea-auth", optional = true }

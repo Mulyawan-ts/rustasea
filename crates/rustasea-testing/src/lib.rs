@@ -19,6 +19,7 @@ pub mod auth;
 pub mod containers;
 pub mod error;
 pub mod factory;
+pub mod fakes;
 #[cfg(feature = "postgres")]
 pub mod fixtures;
 #[cfg(feature = "http")]
@@ -40,6 +41,7 @@ pub use error::{Result, TestError};
 pub use factory::{
     factory_registry, register_sequence, reset_factory_sequences, str_factory, StrFactory,
 };
+pub use fakes::{FakeDispatcher, FakeMailer, FakeQueue};
 #[cfg(feature = "postgres")]
 pub use fixtures::{FixtureError, PostgresTestDb};
 #[cfg(feature = "http")]

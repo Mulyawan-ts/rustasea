@@ -108,6 +108,18 @@ pub fn str_factory() -> StrFactory {
     StrFactory::default()
 }
 
+/// Serialize tests that touch the process-wide sequence registry.
+///
+/// The registry (and [`reset_factory_sequences`], which zeroes *every* key) is
+/// process-global, so tests that mutate it must not run concurrently or one
+/// test's reset can zero another test's counter mid-assertion. Every test that
+/// reads or writes the registry takes this lock for its whole body.
+#[cfg(test)]
+pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    LOCK.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 /// Test-only helpers used by the test_case module tests.
 #[cfg(test)]
 pub(crate) fn bump_sequence_for_test() {
@@ -129,6 +141,7 @@ mod tests {
     /// Verifies next/count advance and reset returns to zero.
     #[test]
     fn str_factory_sequences_and_resets() {
+        let _guard = test_lock();
         let factory = StrFactory::new("user");
         assert_eq!(factory.next(), "user1@example.com");
         assert_eq!(factory.next(), "user2@example.com");
@@ -142,6 +155,7 @@ mod tests {
     /// Verifies shared keys advance together and the registry reflects them.
     #[test]
     fn shared_sequence_advances_together() {
+        let _guard = test_lock();
         let a = StrFactory::new("shared");
         let b = StrFactory::new("shared");
         let _ = a.next();
@@ -154,6 +168,7 @@ mod tests {
     /// Verifies reset_factory_sequences zeroes every counter.
     #[test]
     fn reset_clears_all_keys() {
+        let _guard = test_lock();
         let a = StrFactory::new("alpha");
         let b = StrFactory::new("beta");
         let _ = a.next();
