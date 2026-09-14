@@ -101,6 +101,13 @@ pub struct JobPayload {
     /// deserializer registered for that type; `None` on hand-built payloads.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub job: Option<String>,
+    /// Owning batch id when the job was dispatched as part of a batch.
+    ///
+    /// A worker that finishes this job decrements the batch's `pending_jobs`
+    /// (see [`crate::batch_db::record_batch_outcome`]); `None` for a standalone
+    /// job, which leaves the batch machinery untouched.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_id: Option<String>,
     /// JSON body of the typed job.
     pub payload: serde_json::Value,
 }
@@ -123,6 +130,7 @@ impl JobPayload {
             attempts: 1,
             id: None,
             job,
+            batch_id: None,
             payload,
         }
     }

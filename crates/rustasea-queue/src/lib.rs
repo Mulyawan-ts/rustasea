@@ -8,6 +8,7 @@
 //! dead-letter surface and the Cloud queue metric shapes.
 
 pub mod batch;
+pub mod batch_db;
 pub mod config;
 pub mod dispatch;
 pub mod driver;
@@ -24,6 +25,11 @@ pub mod wiring;
 
 pub use async_trait::async_trait;
 pub use batch::{dispatch_batch, BatchHandle, BatchId};
+pub use batch_db::{
+    batch_repository, clear_batch_repository, forget_batch_callbacks, on_catch, on_finally,
+    on_then, record_batch_outcome, set_batch_repository, BatchCallback, BatchRecord,
+    DatabaseBatchRepository, JOB_BATCHES_TABLE,
+};
 pub use config::{
     BatchingConfig, ConnectionConfig, FailedConfig, QueueConfig, DEFAULT_CONNECTION,
     DEFAULT_FAILED_TABLE, DEFAULT_JOBS_TABLE,
@@ -41,7 +47,10 @@ pub use job::{
     JobPayload,
 };
 pub use metrics::{JobQueueMetrics, QueueMetrics, Queues};
-pub use migrations::{migrator as queue_migrator, register as register_queue_migrations};
+pub use migrations::{
+    migrator as queue_migrator, migrator_with_batches_table, register as register_queue_migrations,
+    register_with_tables_and_batches,
+};
 pub use notification::{
     should_suppress, skipped_notifications, NotificationGuard, NotificationSkipReason,
     NotificationSkipped,

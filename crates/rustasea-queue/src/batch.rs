@@ -20,6 +20,14 @@ impl BatchId {
     pub fn as_job_id(&self) -> &JobId {
         &self.0
     }
+
+    /// Rebuild a batch id from an existing job id.
+    ///
+    /// Used to tag a dispatch group with a batch id that was already created in
+    /// the persistent `job_batches` store (see [`crate::batch_db`]).
+    pub fn from_job_id(job_id: JobId) -> Self {
+        Self(job_id)
+    }
 }
 
 impl Default for BatchId {
@@ -87,4 +95,30 @@ where
 /// Dispatch a pre-erased batch (each element already wrapped in an `Arc`).
 pub async fn dispatch_batch_erased(jobs: Vec<Arc<dyn ErasedJob>>) -> Result<BatchId> {
     crate::registry::Queue::batch(jobs).await
+}
+
+/// Dispatch erased jobs, tagging each with an optional persistent `batch_id`.
+///
+/// Backs [`crate::registry::Queue::batch`] / [`crate::registry::Queue::batch_in`].
+/// When `batch_id` parses as a UUID it is reused as the returned [`BatchId`];
+/// otherwise a fresh id is minted. Every job payload carries the tag so a worker
+/// decrements the batch's `pending_jobs` on each terminal outcome (see
+/// [`crate::batch_db::record_batch_outcome`]).
+pub(crate) async fn dispatch_erased_in(
+    batch_id: Option<&str>,
+    jobs: Vec<Arc<dyn ErasedJob>>,
+) -> Result<BatchId> {
+    let id = match batch_id.and_then(|id| uuid::Uuid::parse_str(id).ok()) {
+        Some(uuid) => BatchId::from_job_id(JobId::from_uuid(uuid)),
+        None => BatchId::new(),
+    };
+    let tag = batch_id.map(str::to_string);
+    for exec in jobs {
+        let mut handle = crate::dispatch::DispatchHandle::new(exec);
+        if let Some(tag) = &tag {
+            handle = handle.on_batch(tag.clone());
+        }
+        handle.dispatch().await?;
+    }
+    Ok(id)
 }

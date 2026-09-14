@@ -188,6 +188,7 @@ where
             ))
             .await?;
         driver.ack(payload).await?;
+        record_batch(payload, true).await;
         return Ok(());
     };
 
@@ -196,6 +197,7 @@ where
         JobOutcome::Succeeded | JobOutcome::Skipped => {
             driver.ack(payload).await?;
             release_lease(payload).await;
+            record_batch(payload, false).await;
         }
         JobOutcome::Retrying { .. } if policy.allows_retry(payload.attempts) => {
             // The worker owns the global attempt count, so the backoff delay is
@@ -203,6 +205,7 @@ where
             // outcome — this keeps exponential growth correct across runs. The
             // unique lease is intentionally kept: the job is still in flight and
             // must not be re-dispatched until it reaches a terminal outcome.
+            // No batch update: a retry is not a terminal outcome.
             let delay = policy.delay_for_attempt(payload.attempts);
             driver.release(payload, delay).await?;
         }
@@ -217,9 +220,43 @@ where
                 .await?;
             driver.ack(payload).await?;
             release_lease(payload).await;
+            record_batch(payload, true).await;
         }
     }
     Ok(())
+}
+
+/// Record a terminal outcome against the payload's batch, when it belongs to one.
+///
+/// Best-effort: a persistence hiccup must not mask the job's already-recorded
+/// outcome (ack/dead-letter). Standalone payloads (no `batch_id`) and
+/// applications without an installed [`crate::batch_db::DatabaseBatchRepository`]
+/// are no-ops. `failed` selects the failure path (decrement + record the id).
+async fn record_batch(payload: &JobPayload, failed: bool) {
+    let Some(batch_id) = payload.batch_id.as_deref() else {
+        return;
+    };
+    let failed_job_id = if failed {
+        let id = payload.id.clone().unwrap_or_else(|| {
+            // A payload that reached the batch hook without a driver-assigned
+            // reservation id still needs a stable failure id for the
+            // `failed_job_ids` array; mint a synthetic one and log it so the
+            // origin is diagnosable.
+            let synthetic = crate::job::JobId::new().to_string();
+            tracing::debug!(
+                batch_id = %batch_id,
+                queue = %payload.queue,
+                connection = %payload.connection,
+                synthetic_job_id = %synthetic,
+                "minting synthetic job id for batch failure with no payload id"
+            );
+            synthetic
+        });
+        Some(id)
+    } else {
+        None
+    };
+    let _ = crate::batch_db::record_batch_outcome(batch_id, failed_job_id).await;
 }
 
 /// Release the unique lease for a payload that reached a terminal outcome.

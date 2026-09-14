@@ -1,101 +1,26 @@
 /// Central queue routing registry — `Queue::route` + dispatch resolution.
-use std::collections::HashMap;
-use std::sync::{Arc, OnceLock, RwLock};
-use std::time::Duration;
+///
+/// The lock-free registry state, route insertion, payload envelope builder, and
+/// driver resolution live in the [`helpers`] submodule (re-exported here) so
+/// this module stays within the file-size standard; the [`Queue`] and
+/// [`QueueRegistry`] facades remain in this file.
+mod helpers;
+
+use std::sync::Arc;
 
 use crate::batch::BatchId;
 use crate::driver::{
-    record_failed, DatabaseDriver, QueueDriver, SyncDriver, DATABASE_CONNECTION, SYNC_CONNECTION,
+    record_failed, DatabaseDriver, QueueDriver, DATABASE_CONNECTION, SYNC_CONNECTION,
 };
 use crate::error::{QueueError, Result};
-use crate::job::{
-    run_erased, DispatchHandle, ErasedJob, FailedJob, Job, JobId, JobOutcome, JobPayload,
-};
+use crate::job::{run_erased, DispatchHandle, ErasedJob, FailedJob, Job, JobId, JobOutcome};
 use crate::metrics::{QueueMetrics, Queues};
 use crate::unique::DispatchOutcome;
 
-/// Lock-free post-boot state shared by every `Queue` facade.
-static REGISTRY: OnceLock<RwLock<RegistryInner>> = OnceLock::new();
-
-/// Interior of the central routing registry.
-pub(crate) struct RegistryInner {
-    /// Type-name -> resolved route for typed dispatch.
-    routes: HashMap<&'static str, Route>,
-    /// Named drivers available for dispatch.
-    drivers: HashMap<String, Arc<dyn QueueDriver>>,
-}
-
-/// A resolved route: connection + queue for one job type.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Route {
-    /// Connection (driver) name.
-    pub connection: &'static str,
-    /// Target queue name.
-    pub queue: &'static str,
-}
-
-impl Route {
-    /// Queue this route targets.
-    pub fn queue_name(&self) -> &'static str {
-        self.queue
-    }
-
-    /// Connection this route targets.
-    pub fn connection_name(&self) -> &'static str {
-        self.connection
-    }
-}
-
-/// Returns the registry inner, initializing it with a sync driver on first use.
-pub(crate) fn registry() -> &'static RwLock<RegistryInner> {
-    REGISTRY.get_or_init(|| {
-        let mut inner = RegistryInner {
-            routes: HashMap::new(),
-            drivers: HashMap::new(),
-        };
-        inner
-            .drivers
-            .insert(SYNC_CONNECTION.to_string(), Arc::new(SyncDriver::new()));
-        RwLock::new(inner)
-    })
-}
-
-/// Registers a route for `type_key` under `connection`/`queue`.
-fn insert_route(type_key: &'static str, route: Route) -> Result<()> {
-    let reg = registry();
-    let mut guard = reg.write().map_err(QueueError::from)?;
-    if guard.routes.contains_key(type_key) {
-        return Err(QueueError::DuplicateRoute {
-            type_name: type_key,
-        });
-    }
-    guard.routes.insert(type_key, route);
-    Ok(())
-}
-
-/// Build the serialized payload envelope for a dispatch.
-pub(crate) fn to_payload(
-    job: &str,
-    payload: serde_json::Value,
-    queue: String,
-    connection: String,
-    delay: Duration,
-) -> Result<JobPayload> {
-    let available_at = if delay.is_zero() {
-        None
-    } else {
-        Some(chrono::Utc::now() + chrono::Duration::from_std(delay).unwrap_or_default())
-    };
-    Ok(JobPayload {
-        queue,
-        connection,
-        available_at,
-        attempts: 1,
-        id: None,
-        job: Some(job.to_string()),
-        payload,
-    })
-}
+pub use helpers::Route;
+pub(crate) use helpers::{
+    driver, insert_route, metric_targets, registry, to_payload, RegistryInner,
+};
 
 /// The `Queue` facade — typed dispatch, chain, batch, and metrics.
 ///
@@ -266,12 +191,20 @@ impl Queue {
         Ok(outcomes)
     }
 
-    /// Dispatch a batch of erased jobs and return its `BatchId`.
+    /// Dispatch a batch of erased jobs and return a fresh `BatchId`.
     pub async fn batch(jobs: Vec<Arc<dyn ErasedJob>>) -> Result<BatchId> {
-        for exec in jobs {
-            DispatchHandle::new(exec).dispatch().await?;
-        }
-        Ok(BatchId::new())
+        crate::batch::dispatch_erased_in(None, jobs).await
+    }
+
+    /// Dispatch erased jobs tagged with `batch_id`; `None` mints a fresh id.
+    ///
+    /// Every tagged payload carries the id so a worker decrements the batch's
+    /// `pending_jobs` on each terminal outcome.
+    pub async fn batch_in(
+        batch_id: Option<&str>,
+        jobs: Vec<Arc<dyn ErasedJob>>,
+    ) -> Result<BatchId> {
+        crate::batch::dispatch_erased_in(batch_id, jobs).await
     }
 
     /// Number of available jobs for a connection/queue pair.
@@ -325,39 +258,6 @@ impl Queue {
         }
         Ok(snapshot)
     }
-}
-
-/// Unique `(connection, queue)` pairs registered through `Queue::route`.
-///
-/// Many job types may route to the same queue; deduplicating yields one metric
-/// row per configured queue. The routes are snapshotted under the lock and
-/// returned owned so `Queue::metrics` never holds the registry lock across an
-/// `await`.
-fn metric_targets() -> Vec<(String, String)> {
-    let reg = registry();
-    let Ok(guard) = reg.read() else {
-        return Vec::new();
-    };
-    let mut seen = std::collections::HashSet::new();
-    let mut targets = Vec::new();
-    for route in guard.routes.values() {
-        let key = (route.connection.to_string(), route.queue.to_string());
-        if seen.insert(key.clone()) {
-            targets.push(key);
-        }
-    }
-    targets
-}
-
-/// Resolve a driver by connection name.
-pub(crate) fn driver(connection: &str) -> Result<Arc<dyn QueueDriver>> {
-    let reg = registry();
-    let guard = reg.read().map_err(QueueError::from)?;
-    guard
-        .drivers
-        .get(connection)
-        .cloned()
-        .ok_or_else(|| QueueError::UnknownConnection(connection.to_string()))
 }
 
 /// Register a [`DatabaseDriver`] under the canonical `database` connection.
