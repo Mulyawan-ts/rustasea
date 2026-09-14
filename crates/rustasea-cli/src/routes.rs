@@ -80,6 +80,7 @@ mod tests {
             path: path.into(),
             name: None,
             middleware: Vec::new(),
+            authorizations: Vec::new(),
             domain: None,
             binding_fields: Vec::new(),
             controller: None,

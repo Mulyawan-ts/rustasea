@@ -230,13 +230,15 @@ pub(crate) fn parse_string_list(
     Ok(values)
 }
 
-/// Parse `#[authorize]` metadata: ability string plus optional target type.
+/// Parse `#[authorize]` metadata: ability string plus optional target.
 ///
-/// Grammar: `#[authorize("update")]` or `#[authorize("update", User)]` —
-/// the ability must be a string literal; the optional second argument is a
-/// type path rendered as its source text (FS-M3-06). A trailing comma is
-/// tolerated. Returns `(ability, target_type_source)` where the target is an
-/// empty string when omitted.
+/// Grammar: `#[authorize("update")]`, `#[authorize("update", User)]`, or
+/// `#[authorize("update", &post)]` — the ability must be a string literal; the
+/// optional second argument names the target. A type path (`User`) is recorded
+/// verbatim; a reference to the request-bound resource (`&post`) is unwrapped
+/// and only its final path segment (`post`) is recorded as the resource id. A
+/// trailing comma is tolerated. Returns `(ability, resource_id)` where the
+/// resource id is an empty string when the target is omitted (FS-M3-06).
 pub(crate) fn parse_authorize(
     tokens: proc_macro2::TokenStream,
 ) -> Result<(String, String), syn::Error> {
@@ -246,7 +248,7 @@ pub(crate) fn parse_authorize(
                 syn::Error::new(
                     e.span(),
                     format!(
-                        "#[authorize] expects an ability string plus an optional type, e.g. #[authorize(\"update\", User)]; {e}"
+                        "#[authorize] expects an ability string plus an optional target, e.g. #[authorize(\"update\", &post)]; {e}"
                     ),
                 )
             })?;
@@ -267,20 +269,13 @@ pub(crate) fn parse_authorize(
                 }
             }
         } else {
-            // Optional target type: rendered from the type expression tokens.
-            let mut rendered = String::new();
-            for token in quote::ToTokens::to_token_stream(arg) {
-                rendered.push_str(&token.to_string());
-            }
-            // Trailing comma token was already consumed by Punctuated.
-            if target.is_empty() {
-                target = rendered;
-            } else {
+            if !target.is_empty() {
                 return Err(syn::Error::new_spanned(
                     arg,
-                    "#[authorize] accepts at most one ability string and one target type",
+                    "#[authorize] accepts at most one ability string and one target",
                 ));
             }
+            target = resource_id_from_target(arg);
         }
     }
     let ability = ability.ok_or_else(|| {
@@ -290,6 +285,28 @@ pub(crate) fn parse_authorize(
         )
     })?;
     Ok((ability, target))
+}
+
+/// Derive the recorded resource id from an `#[authorize]` target expression.
+///
+/// `&post` (and `&&post`) unwrap to `post`; a bare path `User` yields `User`;
+/// any other expression falls back to its source tokens so the id stays stable
+/// and inspectable.
+fn resource_id_from_target(expr: &syn::Expr) -> String {
+    let inner = match expr {
+        syn::Expr::Reference(reference) => &reference.expr,
+        other => other,
+    };
+    if let syn::Expr::Path(path) = inner {
+        if let Some(segment) = path.path.segments.last() {
+            return segment.ident.to_string();
+        }
+    }
+    let mut rendered = String::new();
+    for token in quote::ToTokens::to_token_stream(inner) {
+        rendered.push_str(&token.to_string());
+    }
+    rendered
 }
 
 /// Emit a usize-typed helper const for the annotated item.

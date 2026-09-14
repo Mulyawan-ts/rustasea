@@ -12,6 +12,7 @@
 //! per-group middleware declared through [`Router::middleware`] and registered
 //! with [`Router::register_middleware`].
 
+mod authorize;
 mod dispatch;
 mod handler;
 mod metadata;
@@ -23,8 +24,9 @@ mod router;
 mod tests;
 mod url;
 
+pub use authorize::{AuthorizeRegistry, AuthorizeResource};
 pub use handler::Handler;
 pub use metadata::{MiddlewareApply, MiddlewareRegistry, RouteError};
-pub use route::{ControllerRef, RouteEntry};
+pub use route::{AuthorizeSpec, ControllerRef, RouteEntry};
 pub use router::Router;
 pub use url::NamedRoutes;

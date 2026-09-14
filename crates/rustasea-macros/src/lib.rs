@@ -101,20 +101,30 @@ pub fn middleware(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
-/// Attribute macro for authorization gates.
+/// Attribute macro for record-level authorization gates.
 ///
-/// Grammar: `#[authorize("update", User)]` — an ability string plus an
-/// optional target type, comma-separated. The function is re-emitted
-/// unchanged and a doc-hidden const `__RUSTASEA_AUTHORIZE_<Fn>` records the
-/// `(ability, target)` pair; the runtime resolves the enforcing guard from
-/// the handler's `#[middleware("auth:<guard>")]` spec and rejects with
-/// `GuardMismatch` before the body when the guard is unknown (FS-M3-06,
-/// TC-M3-02):
+/// Grammar: `#[authorize("update", &post)]` — an ability string plus an
+/// optional target, comma-separated. The target may be a type path
+/// (`#[authorize("update", User)]`) or a reference to the request-bound
+/// resource (`#[authorize("update", &post)]`); its leading `&` is stripped and
+/// the remaining name is recorded as the resource id. The function is
+/// re-emitted unchanged and a doc-hidden `pub const __RUSTASEA_AUTHORIZE_<Fn>`
+/// records the `(ability, resource_id)` pair the router consumes at build time
+/// (FS-M3-06, TC-M3-02):
 ///
 /// ```rust,ignore
-/// #[authorize("update", User)]
-/// async fn update_user() -> &'static str { "updated" }
+/// #[authorize("update", &post)]
+/// async fn update_post() -> &'static str { "updated" }
+///
+/// router.authorize_meta(__RUSTASEA_AUTHORIZE_update_post)
+///       .route_meta(__RUSTASEA_ROUTE_update_post, update_post);
 /// ```
+///
+/// The const is `pub` (matching `#[middleware]`) so the controller module that
+/// owns the handler can hand its metadata to `Router::authorize_meta` at
+/// registration time; the runtime resolves the resource id through the router's
+/// authorization registry and denies with the Gate's `403` envelope before the
+/// body when the check fails.
 #[proc_macro_attribute]
 pub fn authorize(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
@@ -135,7 +145,7 @@ pub fn authorize(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                 #[doc(hidden)]
                 #[allow(non_upper_case_globals)]
-                const #const_name: (&str, &str) = #tuple;
+                pub const #const_name: (&str, &str) = #tuple;
             };
             expanded.into()
         }

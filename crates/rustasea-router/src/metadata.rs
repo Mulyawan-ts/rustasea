@@ -151,6 +151,11 @@ pub enum RouteError {
         /// The unregistered middleware identifier.
         name: String,
     },
+    /// A route declared an `#[authorize]` resource that was never registered.
+    UnknownAuthorization {
+        /// The unregistered authorization resource id.
+        name: String,
+    },
 }
 
 impl std::fmt::Display for RouteError {
@@ -158,6 +163,9 @@ impl std::fmt::Display for RouteError {
         match self {
             Self::UnknownMiddleware { name } => {
                 write!(formatter, "unknown middleware `{name}`")
+            }
+            Self::UnknownAuthorization { name } => {
+                write!(formatter, "unknown authorization resource `{name}`")
             }
         }
     }

@@ -141,6 +141,7 @@ mod tests {
             path: path.to_string(),
             name: name.map(str::to_string),
             middleware: vec!["auth".to_string()],
+            authorizations: Vec::new(),
             domain: None,
             binding_fields: Vec::new(),
             controller: None,

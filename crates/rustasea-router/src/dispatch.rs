@@ -7,10 +7,15 @@
 //! middleware yields a `500` fallback router rather than a silently
 //! under-protected route table.
 
+use std::sync::Arc;
+
+use axum::extract::Request;
 use axum::http::StatusCode;
+use axum::middleware::Next;
 use axum::routing::MethodRouter;
 use axum::Router as AxumRouter;
 
+use crate::authorize::{AuthorizeRegistry, AuthorizeResource};
 use crate::handler::{stub_handler, ActionFactory, BoundAction, Handler};
 use crate::metadata::{MiddlewareApply, RouteError};
 use crate::route::RouteEntry;
@@ -42,6 +47,7 @@ impl Router {
         let controller_actions = self.controller_actions;
         let layers = self.layers;
         let registry = self.middleware_registry;
+        let authorize_registry = self.authorize_registry;
 
         let mut router = AxumRouter::new();
         let mut registered: Vec<(String, String)> = Vec::new();
@@ -54,6 +60,10 @@ impl Router {
             }
             registered.push((entry.method.clone(), entry.path.clone()));
             let mut method_router = resolve(&entry, &mut actions, &controller_actions);
+            // Authorization runs *innermost* — after the route's middleware
+            // (which populates the principal and the resolved resource) and
+            // before the handler, so a denial short-circuits the body.
+            method_router = apply_authorize(method_router, &entry, &authorize_registry)?;
             method_router = apply_middleware(method_router, &entry, &registry)?;
             let axum_path = to_axum_path(&entry.path);
             router = router.merge(AxumRouter::new().route(&axum_path, method_router));
@@ -99,6 +109,56 @@ fn apply_middleware(
         router = apply(router);
     }
     Ok(router)
+}
+
+/// Apply a route's declared `#[authorize]` checks as the innermost layer.
+///
+/// Each [`AuthorizeSpec`] resolves to an [`AuthorizeResource`] through
+/// `registry`; an unregistered resource id is a fail-closed build error
+/// ([`RouteError::UnknownAuthorization`]). The checks run inside a single
+/// `from_fn` layer placed *after* the route's middleware (so the principal and
+/// resolved resource are already in the request extensions) and *before* the
+/// handler — the first denial returns its `403` response without executing the
+/// body. A route with no `#[authorize]` declarations is returned untouched.
+fn apply_authorize(
+    method_router: MethodRouter<()>,
+    entry: &RouteEntry,
+    registry: &AuthorizeRegistry,
+) -> Result<MethodRouter<()>, RouteError> {
+    if entry.authorizations.is_empty() {
+        return Ok(method_router);
+    }
+    let mut checks: Vec<(Arc<dyn AuthorizeResource>, String)> =
+        Vec::with_capacity(entry.authorizations.len());
+    for spec in &entry.authorizations {
+        // An omitted resource id resolves to the sole registered authorizer;
+        // with zero or several registrations the declaration is ambiguous and
+        // fails the build closed.
+        let resource = if spec.resource.is_empty() {
+            registry
+                .sole()
+                .ok_or_else(|| RouteError::UnknownAuthorization {
+                    name: spec.resource.clone(),
+                })?
+        } else {
+            registry.resolve(&spec.resource)?
+        };
+        checks.push((resource, spec.ability.clone()));
+    }
+    let checks = Arc::new(checks);
+    Ok(method_router.layer(axum::middleware::from_fn(
+        move |request: Request, next: Next| {
+            let checks = Arc::clone(&checks);
+            async move {
+                for (resource, ability) in checks.iter() {
+                    if let Err(response) = resource.authorize(&request, ability) {
+                        return response;
+                    }
+                }
+                next.run(request).await
+            }
+        },
+    )))
 }
 
 /// Resolve the executable method router for a route entry.

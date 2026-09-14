@@ -8,10 +8,12 @@
 
 use axum::Router as AxumRouter;
 
+use crate::authorize::AuthorizeRegistry;
 use crate::handler::{action_factory, ActionFactory, BoundAction, Handler};
 use crate::metadata::MiddlewareRegistry;
 use crate::route::{
-    join_prefix, normalize_prefix, parse_binding_fields, prefixed_name, ControllerRef, RouteEntry,
+    join_prefix, normalize_prefix, parse_binding_fields, prefixed_name, AuthorizeSpec,
+    ControllerRef, RouteEntry,
 };
 /// Expressive router builder with Laravel-inspired API.
 pub struct Router {
@@ -19,6 +21,7 @@ pub struct Router {
     pub(crate) prefix: String,
     pub(crate) name_prefix: String,
     pub(crate) pending_middleware: Vec<String>,
+    pub(crate) pending_authorizations: Vec<AuthorizeSpec>,
     pub(crate) pending_domain: Option<String>,
     pub(crate) pending_controller: Option<String>,
     pub(crate) layers: Vec<Box<dyn FnOnce(AxumRouter) -> AxumRouter + Send>>,
@@ -28,6 +31,8 @@ pub struct Router {
     pub(crate) controller_actions: Vec<(String, String, ActionFactory)>,
     /// Named-middleware registry consulted at build time.
     pub(crate) middleware_registry: MiddlewareRegistry,
+    /// `#[authorize]` resource registry consulted at build time.
+    pub(crate) authorize_registry: AuthorizeRegistry,
     /// Index into [`Router::routes`] where the most recent registration batch
     /// started, so [`Router::named`] can name every route the last helper
     /// produced (e.g. all six methods of an `any` route).
@@ -42,12 +47,14 @@ impl Router {
             prefix: String::new(),
             name_prefix: String::new(),
             pending_middleware: Vec::new(),
+            pending_authorizations: Vec::new(),
             pending_domain: None,
             pending_controller: None,
             layers: Vec::new(),
             actions: Vec::new(),
             controller_actions: Vec::new(),
             middleware_registry: MiddlewareRegistry::new(),
+            authorize_registry: AuthorizeRegistry::new(),
             batch_start: 0,
         }
     }
@@ -344,12 +351,14 @@ impl Router {
             prefix: self.prefix.clone(),
             name_prefix: self.name_prefix.clone(),
             pending_middleware: self.pending_middleware.clone(),
+            pending_authorizations: self.pending_authorizations.clone(),
             pending_domain: self.pending_domain.clone(),
             pending_controller: self.pending_controller.clone(),
             layers: Vec::new(),
             actions: Vec::new(),
             controller_actions: Vec::new(),
             middleware_registry: MiddlewareRegistry::new(),
+            authorize_registry: AuthorizeRegistry::new(),
             batch_start: 0,
         };
         f(&mut sub);
@@ -357,6 +366,7 @@ impl Router {
         self.actions.extend(sub.actions);
         self.controller_actions.extend(sub.controller_actions);
         self.middleware_registry.merge(sub.middleware_registry);
+        self.authorize_registry.merge(sub.authorize_registry);
         // Routes added by the group are not part of any open batch, so a
         // trailing `named` call cannot accidentally rename them.
         self.batch_start = self.routes.len();
@@ -450,6 +460,7 @@ impl Router {
             path: full.clone(),
             name: prefixed_name(&self.name_prefix, name),
             middleware: self.pending_middleware.clone(),
+            authorizations: self.pending_authorizations.clone(),
             domain: self.pending_domain.clone(),
             binding_fields: parse_binding_fields(&full),
             controller: self.pending_controller.as_ref().map(|c| ControllerRef {

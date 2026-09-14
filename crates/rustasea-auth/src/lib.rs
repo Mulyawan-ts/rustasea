@@ -15,6 +15,7 @@
 #![deny(clippy::expect_used)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod authorize;
 pub mod config;
 pub mod csrf;
 pub mod error;
@@ -33,6 +34,7 @@ pub mod users;
 pub mod verification;
 pub mod verify;
 
+pub use authorize::{authorizer_for, GateResource};
 pub use config::{
     password_timeout_secs, AuthConfig, AuthDefaults, ConfigResult, FortifyConfig,
     FortifyFeaturesConfig, FortifyLimiterConfig, FortifyPasskeyFeatureConfig,

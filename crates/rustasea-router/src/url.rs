@@ -167,6 +167,7 @@ mod tests {
             path: path.to_string(),
             name: Some(name.to_string()),
             middleware: Vec::new(),
+            authorizations: Vec::new(),
             domain: None,
             binding_fields: Vec::new(),
             controller: None,

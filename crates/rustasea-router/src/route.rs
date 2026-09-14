@@ -17,6 +17,16 @@ pub struct RouteEntry {
     pub name: Option<String>,
     /// Middleware identifiers applied to this route.
     pub middleware: Vec<String>,
+    /// Record-level ability checks declared through `#[authorize]`.
+    ///
+    /// Consumed by [`Router::authorize_meta`] (LARAVEL-010); each spec is an
+    /// ability name plus the id of the request extension carrying the resolved
+    /// resource instance. Applied innermost (after every middleware) so the
+    /// Gate sees the resource a binding middleware populated.
+    ///
+    /// [`Router::authorize_meta`]: crate::Router::authorize_meta
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub authorizations: Vec<AuthorizeSpec>,
     /// Optional domain/host constraint.
     pub domain: Option<String>,
     /// Path parameters parsed from `{var}` / `{var:field}` segments.
@@ -42,6 +52,24 @@ pub struct ControllerRef {
     pub name: String,
     /// Controller action this route dispatches to.
     pub action: String,
+}
+
+/// A record-level `#[authorize]` declaration attached to a route.
+///
+/// Emitted as `__RUSTASEA_AUTHORIZE_<Fn>: (&str, &str)` by the `#[authorize]`
+/// attribute and consumed by [`crate::Router::authorize_meta`] at registration
+/// time. `ability` is the Gate ability name (e.g. `"update"`); `resource` is a
+/// caller-chosen id naming the request extension that carries the resolved
+/// resource instance (see [`crate::AuthorizeResource`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthorizeSpec {
+    /// Gate ability name, e.g. `"update"` or `"delete"`.
+    pub ability: String,
+    /// Extension id of the resolved resource, e.g. `"post"`.
+    ///
+    /// May be empty when the attribute omitted the resource id; the
+    /// authorization layer then falls back to the single registered resource.
+    pub resource: String,
 }
 
 /// Normalize a prefix to start with / and not end with /.

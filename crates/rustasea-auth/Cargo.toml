@@ -31,8 +31,11 @@ axum = { workspace = true }
 tower-sessions = { workspace = true }
 async-trait = { workspace = true }
 rustasea-orm = { path = "../rustasea-orm" }
+rustasea-router = { path = "../rustasea-router" }
 time = "0.3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time"] }
 subtle = { workspace = true }
+tower = { workspace = true, features = ["util"] }
+rustasea-macros = { path = "../rustasea-macros" }
