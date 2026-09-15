@@ -52,6 +52,9 @@ rustasea-mail = { path = "../rustasea-mail", features = ["templates"] }
 rustasea-authlog = { path = "../rustasea-authlog" }
 # `chrono` stamps the `email_verified_at` timestamp (RFC 3339).
 chrono = { workspace = true }
+# `uuid::Uuid::now_v7` generates a request id for the error middleware
+# (ADOPT-010) when a request carries no `x-request-id` header.
+uuid = { workspace = true }
 # `sha2` + `hex` derive the `{hash}` segment of a signed verification URL
 # (SHA-256 of the user's email, lowercase hex).
 sha2 = { workspace = true }

@@ -56,6 +56,10 @@ mod auth_log;
 /// sibling module so `tests.rs` stays under the cap.
 mod docs;
 
+/// Error-middleware tests — dev page, prod envelope, no-secret-leak
+/// (ADOPT-010), split into a sibling module so `tests.rs` stays under the cap.
+mod errors;
+
 /// Dev-only profiler surface (`/_debugbar`, `/_debugbar/json`) tests (ADOPT-009),
 /// split into a sibling module so `tests.rs` stays under the cap. Gated on the
 /// `debugbar` feature because the routes/module only exist with it.

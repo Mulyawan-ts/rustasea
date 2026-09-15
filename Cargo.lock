@@ -5714,6 +5714,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tower-sessions",
+ "uuid",
 ]
 
 [[package]]

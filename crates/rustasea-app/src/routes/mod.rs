@@ -14,6 +14,8 @@ pub mod console;
 #[cfg(feature = "debugbar")]
 pub mod debugbar;
 pub mod docs;
+/// Request-error middleware — dev page + prod JSON envelope (ADOPT-010).
+pub mod errors;
 mod helpers;
 pub mod settings;
 pub mod web;
@@ -91,13 +93,19 @@ pub fn table() -> RouteTable {
 pub fn compile(mut table: RouteTable, state: Arc<AppState>) -> axum::Router {
     table.layer(axum::Extension(Arc::clone(&state)));
     match table.try_into_axum_router() {
-        Ok(router) => with_debugbar(
-            with_sentry(with_csrf(
-                with_session(mount_assets(router), &state),
-                &state,
-            )),
-            &state,
-        ),
+        Ok(router) => {
+            // Layer order, innermost → outermost:
+            //   mount_assets → with_panic_catch → with_errors → with_session
+            //   → with_csrf → with_sentry → with_debugbar
+            // `with_panic_catch` is innermost so a handler panic becomes a 500
+            // the error middleware can render; `with_errors` sits inside
+            // `with_session` so the `Extension<AuthUser>` projection is already
+            // present when it builds the dev-page context (ADOPT-010).
+            let core = errors::with_errors(errors::with_panic_catch(mount_assets(router)), &state);
+            let session = with_session(core, &state);
+            let csrf = with_csrf(session, &state);
+            with_debugbar(with_sentry(csrf), &state)
+        }
         Err(error) => {
             eprintln!("route table build failed: {error}");
             axum::Router::new().fallback(|| async { StatusCode::INTERNAL_SERVER_ERROR })

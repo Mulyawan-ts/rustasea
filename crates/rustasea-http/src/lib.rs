@@ -1,5 +1,11 @@
 //! RustaSea HTTP layer — AppState, JSON helpers, middleware stubs, and HTTP client.
 
+/// Application error type + dev/prod error renderers (ADOPT-010).
+pub mod error;
+
+/// Panic catching + dev panic-location capture (ADOPT-010).
+pub mod panic;
+
 /// Sentry request-context middleware (ADOPT-004) — opt-in via the `sentry`
 /// feature; a no-op while no Sentry client is bound.
 #[cfg(feature = "sentry")]

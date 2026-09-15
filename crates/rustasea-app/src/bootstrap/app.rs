@@ -63,6 +63,7 @@ pub fn configure() -> Result<Application, BootError> {
     publish_tinker_source(&app);
     install_observability(&app);
     install_debugbar();
+    install_error_pages(&app);
     Ok(app)
 }
 
@@ -130,6 +131,35 @@ fn install_debugbar() {
 /// No-op stand-in for [`install_debugbar`] when the `debugbar` feature is off.
 #[cfg(not(feature = "debugbar"))]
 fn install_debugbar() {}
+
+/// Install the dev panic-location hook (ADOPT-010) when the app is in debug.
+///
+/// The hook records `(message, file, line)` for the most recent panic so the dev
+/// error page can render a source snippet. It is installed **only** in debug
+/// mode — a production process keeps the default panic hook untouched. The
+/// install is idempotent (a process-wide [`OnceLock`] guard inside
+/// [`rustasea_http::panic::install_panic_location_hook`]), so a second
+/// `configure()` cannot double-chain the hook.
+///
+/// The debug flag is read from the boot-time [`ConfigLoader`](rustasea::ConfigLoader)
+/// (`app_debug`), falling back to the config-file default. This is the same
+/// source the served [`AppState`](rustasea::http::AppState) is seeded from.
+fn install_error_pages(app: &Application) {
+    if app_debug(app) {
+        rustasea_http::panic::install_panic_location_hook();
+    }
+}
+
+/// Whether the app runs in debug mode, per the boot-time config loader.
+///
+/// Reads `app_debug` (overlaid by `APP_DEBUG`) from the mounted loader; when no
+/// loader is bound the conservative default is `false`, so the hook is not
+/// installed on an unbooted app.
+fn app_debug(app: &Application) -> bool {
+    app.config()
+        .and_then(|loader| loader.get_key::<bool>("app_debug").ok())
+        .unwrap_or(false)
+}
 
 /// Park `guard` in `slot` for the process lifetime, never dropping it.
 ///

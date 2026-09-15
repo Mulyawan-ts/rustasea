@@ -187,7 +187,19 @@ async fn unknown_email_is_indistinguishable() {
 
     assert_eq!(known.0, StatusCode::SEE_OTHER);
     assert_eq!(unknown.0, StatusCode::SEE_OTHER);
-    assert_eq!(known.1, unknown.1, "the response headers must be identical");
+    // The `x-request-id` header is a per-request correlation id (ADOPT-010) and
+    // is random for every request, so it is excluded from the indistinguishability
+    // check — it carries no signal about whether the email exists.
+    let without_request_id = |headers: &axum::http::HeaderMap| {
+        let mut filtered = headers.clone();
+        filtered.remove("x-request-id");
+        filtered
+    };
+    assert_eq!(
+        without_request_id(&known.1),
+        without_request_id(&unknown.1),
+        "the response headers must be identical"
+    );
     assert_eq!(known.2, unknown.2, "the response bodies must be identical");
 }
 
