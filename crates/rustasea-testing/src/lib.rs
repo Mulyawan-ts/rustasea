@@ -41,7 +41,7 @@ pub use error::{Result, TestError};
 pub use factory::{
     factory_registry, register_sequence, reset_factory_sequences, str_factory, StrFactory,
 };
-pub use fakes::{FakeDispatcher, FakeMailer, FakeQueue};
+pub use fakes::{FakeCache, FakeDispatcher, FakeMailer, FakeQueue, Op, RecordedOp};
 #[cfg(feature = "postgres")]
 pub use fixtures::{FixtureError, PostgresTestDb};
 #[cfg(feature = "http")]

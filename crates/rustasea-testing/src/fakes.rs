@@ -2,9 +2,10 @@
 //!
 //! Laravel's `Illuminate\Support\Testing\Fakes` lets a test swap the real
 //! infrastructure for a recording double (`Event::fake()`, `Queue::fake()`,
-//! `Mail::fake()`) and then assert on what the application *would* have done,
-//! without touching a network, database, or worker. This module provides the
-//! rustasea equivalents: [`FakeDispatcher`], [`FakeQueue`], and [`FakeMailer`].
+//! `Mail::fake()`, `Cache::fake()`) and then assert on what the application
+//! *would* have done, without touching a network, database, or worker. This
+//! module provides the rustasea equivalents: [`FakeDispatcher`], [`FakeQueue`],
+//! [`FakeMailer`], and [`FakeCache`].
 //!
 //! Every fake records the intercepted items in order and exposes `assert_*`
 //! helpers whose failure messages list what *was* recorded, so a broken
@@ -44,10 +45,12 @@
 //! # }
 //! ```
 
+mod cache;
 mod dispatcher;
 mod mailer;
 mod queue;
 
+pub use cache::{FakeCache, Op, RecordedOp};
 pub use dispatcher::FakeDispatcher;
 pub use mailer::FakeMailer;
 pub use queue::FakeQueue;
