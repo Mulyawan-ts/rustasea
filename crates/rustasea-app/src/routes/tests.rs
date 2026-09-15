@@ -48,6 +48,10 @@ mod two_factor;
 /// `tests.rs` stays under the cap.
 mod passkeys;
 
+/// Authentication-log emission (ADOPT-003) tests, split into a sibling module
+/// so `tests.rs` stays under the cap.
+mod auth_log;
+
 /// Dev-only API docs surface (`/openapi.json`, `/docs`) tests, split into a
 /// sibling module so `tests.rs` stays under the cap.
 mod docs;

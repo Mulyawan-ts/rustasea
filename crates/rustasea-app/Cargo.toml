@@ -35,6 +35,9 @@ tower-sessions = { workspace = true }
 # feature (AUTH-018) adds the `rustasea-view`-backed rendering hook so auth
 # emails render branded HTML from `resources/views/mail/`.
 rustasea-mail = { path = "../rustasea-mail", features = ["templates"] }
+# Authentication-log recorder (ADOPT-003): the login/logout handlers emit
+# sign-in events through the process-wide logger installed by this crate.
+rustasea-authlog = { path = "../rustasea-authlog" }
 # `chrono` stamps the `email_verified_at` timestamp (RFC 3339).
 chrono = { workspace = true }
 # `sha2` + `hex` derive the `{hash}` segment of a signed verification URL

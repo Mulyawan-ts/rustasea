@@ -15,6 +15,8 @@
 //!
 //! [`UserProvider`]: rustasea::auth::UserProvider
 
+/// Authentication-log emission helpers (ADOPT-003).
+pub(crate) mod audit;
 /// Password-confirmation flow (AUTH-011).
 pub(crate) mod confirmation;
 /// Static login/register page markup.
@@ -179,6 +181,8 @@ async fn login_submit(
     match login_registry().check(LOGIN, &input) {
         Ok(ThrottleDecision::Allowed { .. }) => {}
         Ok(ThrottleDecision::Denied { retry_after_secs }) => {
+            // Every blocked attempt records a lockout row (ADOPT-003).
+            audit::lockout(&username, guard.name(), &ip, &headers).await;
             return throttle_response(retry_after_secs);
         }
         // A missing `login` limiter is a wiring bug: fail closed (500), never
@@ -199,7 +203,7 @@ async fn login_submit(
     }
 
     let credentials = Credentials {
-        email: username,
+        email: username.clone(),
         password: password.to_string(),
     };
     match guard
@@ -207,6 +211,8 @@ async fn login_submit(
         .await
     {
         Ok(token) => {
+            // Record the successful login (ADOPT-003) before responding.
+            audit::login_succeeded(&guard, &token.access_token, &username, &ip, &headers).await;
             let cookie = guard.cookie().build_cookie(token.access_token);
             let mut response = see_other(&config.home);
             if let Ok(value) = HeaderValue::try_from(cookie.to_string()) {
@@ -215,11 +221,14 @@ async fn login_submit(
             response
         }
         // Unknown email and wrong password return this exact body.
-        Err(AuthError::BadCredentials) => json_error(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "AuthError::BadCredentials",
-            INVALID_CREDENTIALS,
-        ),
+        Err(AuthError::BadCredentials) => {
+            audit::login_failed(&username, guard.name(), &ip, &headers).await;
+            json_error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "AuthError::BadCredentials",
+                INVALID_CREDENTIALS,
+            )
+        }
         Err(_) => json_error(
             StatusCode::INTERNAL_SERVER_ERROR,
             "AuthError::Unavailable",
@@ -239,12 +248,18 @@ async fn login_submit(
 /// a per-session CSRF token, so there is nothing to rotate.
 async fn logout(
     axum::extract::Extension(state): axum::extract::Extension<Arc<AppState>>,
+    connect: Option<ConnectInfo<SocketAddr>>,
     headers: HeaderMap,
 ) -> Response {
     let guard = state.auth::<SessionGuard>();
-    if let (Some(guard), Some(session_id)) = (guard.as_ref(), session_id_from_headers(&headers)) {
+    let session_id = session_id_from_headers(&headers);
+    let ip = peer_ip(&headers, connect, &state.security.trusted_proxies);
+    // Record the logout (ADOPT-003) BEFORE the session is destroyed, so the
+    // user id can still be resolved from the live session.
+    audit::logout(guard.as_deref(), session_id.as_deref(), &ip, &headers).await;
+    if let (Some(guard), Some(session_id)) = (guard.as_ref(), session_id.as_deref()) {
         // Ignore the result: teardown is best-effort and must never panic.
-        let _ = guard.logout(&session_id).await;
+        let _ = guard.logout(session_id).await;
     }
 
     // Clear the cookie with the same name/path/domain/flags the guard issues it

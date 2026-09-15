@@ -1,6 +1,7 @@
 //! RustaSea umbrella crate — re-exports foundation, config, and M0–M4 crates.
 
 pub use rustasea_activitylog as activitylog;
+pub use rustasea_authlog as authlog;
 pub use rustasea_cache as cache;
 pub use rustasea_config as config;
 pub use rustasea_events as events;
@@ -67,6 +68,19 @@ pub use activitylog::{
     register as register_activity_log_migration, Activity, ActivityColumnMode, ActivityColumns,
     ActivityError, ActivityEvent, ActivityLogger, ActivityOperation, ActivityQuery,
     ActivityRecorder, CreateAuditLogTable,
+};
+
+/// Authentication-log re-exports for sign-in-history ergonomics (ADOPT-003).
+///
+/// The recorder is installed process-wide with [`install`](authlog::install) and
+/// the HTTP layer records through the best-effort [`record_event`](authlog::record_event)
+/// helper; [`logger`](authlog::logger) resolves the installed instance.
+pub use authlog::{
+    clear as clear_authentication_log, install as install_authentication_log,
+    logger as authentication_logger, record_event as record_auth_event,
+    register as register_authentication_log_migration, AuthLogError, AuthLogEvent,
+    AuthLogEventKind, AuthenticationLog, AuthenticationLogLogger, CreateAuthenticationLogTable,
+    NewDeviceNotification, NewDeviceNotifier, QueuedMailNotifier,
 };
 
 /// Auth re-exports for handler ergonomics (`Auth::guard`, guards, CSRF).

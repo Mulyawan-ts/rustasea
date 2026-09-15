@@ -15,6 +15,9 @@ rustasea-orm = { path = "../rustasea-orm" }
 rustasea-openapi = { path = "../rustasea-openapi" }
 # Activity log / audit trail (M2): model-change history with causer + diffs.
 rustasea-activitylog = { path = "../rustasea-activitylog" }
+# Authentication log (ADOPT-003): login/logout/failed/lockout history with an
+# optional queued new-device notification.
+rustasea-authlog = { path = "../rustasea-authlog" }
 rustasea-auth = { path = "../rustasea-auth" }
 rustasea-validation = { path = "../rustasea-validation" }
 rustasea-queue = { path = "../rustasea-queue" }

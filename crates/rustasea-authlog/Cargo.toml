@@ -1,0 +1,30 @@
+[package]
+name = "rustasea-authlog"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "RustaSea authentication log — login/logout/failed/lockout history with optional new-device notification (rappasoft/laravel-authentication-log parity)"
+
+[features]
+# `sqlite` is the default so `cargo test -p rustasea-authlog` runs against an
+# in-memory database with no server; Postgres/MySQL are forwarded to the ORM's
+# own driver features.
+default = ["sqlite"]
+sqlite = ["rustasea-orm/sqlite"]
+postgres = ["rustasea-orm/postgres"]
+mysql = ["rustasea-orm/mysql"]
+
+[dependencies]
+rustasea-orm = { path = "../rustasea-orm", default-features = false }
+# Queued new-device notifications are delivered through the mail crate's
+# `MailNotification`/`Mail::queue` contracts.
+rustasea-mail = { path = "../rustasea-mail", default-features = false }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true, features = ["v4", "v7"] }
+chrono = { workspace = true, features = ["serde"] }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync"] }

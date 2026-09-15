@@ -5328,6 +5328,7 @@ dependencies = [
  "rustasea-activitylog",
  "rustasea-ai",
  "rustasea-auth",
+ "rustasea-authlog",
  "rustasea-broadcast",
  "rustasea-cache",
  "rustasea-cli",
@@ -5401,6 +5402,7 @@ dependencies = [
  "chrono",
  "hex",
  "rustasea",
+ "rustasea-authlog",
  "rustasea-mail",
  "rustasea-openapi",
  "serde",
@@ -5444,6 +5446,21 @@ dependencies = [
  "tokio",
  "tower",
  "tower-sessions",
+ "uuid",
+]
+
+[[package]]
+name = "rustasea-authlog"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "rustasea-mail",
+ "rustasea-orm",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
  "uuid",
 ]
 
