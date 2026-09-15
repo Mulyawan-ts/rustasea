@@ -16,6 +16,11 @@ description = "RustaSea runnable app scaffold — `cargo dev` serves the example
 # Off by default so the standard `cargo run -p rustasea-app` links no Sentry SDK.
 default = []
 sentry = ["rustasea-http/sentry", "rustasea-logging/sentry"]
+# Dev request profiler / debug toolbar (ADOPT-009). Off by default so the
+# standard `cargo run -p rustasea-app` links neither the profiler nor its
+# `/_debugbar` surface; the app installs the hooks at boot and mounts the
+# middleware + routes only when this feature is on.
+debugbar = ["dep:rustasea-debugbar"]
 
 [dependencies]
 # `view` exposes the view layer (`ViewResponse`, `ViewEngine`); the forwarded
@@ -59,6 +64,10 @@ rustasea-http = { path = "../rustasea-http" }
 # `tracing` subscriber at boot (`init_from_config`), fixing the gap where the
 # re-export was never called at runtime (CFG-005 / ADOPT-004).
 rustasea-logging = { path = "../rustasea-logging" }
+# Dev request profiler / debug toolbar (ADOPT-009). A direct, optional dependency
+# so the app can install the profiler hooks at boot and mount the `/_debugbar`
+# routes + middleware when the `debugbar` feature is on.
+rustasea-debugbar = { path = "../rustasea-debugbar", optional = true }
 
 [dev-dependencies]
 # `ServiceExt::oneshot` drives the compiled router in route tests.

@@ -1,0 +1,34 @@
+[package]
+name = "rustasea-debugbar"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Dev-only request profiler / debug toolbar (ADOPT-009) — SQL, cache, and event capture per request with an in-memory ring buffer and JSON/HTML surface."
+
+[dependencies]
+# The ORM exposes the `profile::QueryRecorder` seam; the SQL hook lives there.
+# `default-features = false` keeps the profiler free of any SQL driver: it only
+# consumes the recorded events, never opens a connection.
+rustasea-orm = { path = "../rustasea-orm", default-features = false }
+# The cache store wrapper implements `rustasea_cache::Store` and forwards to the
+# real store; the manager registry is wrapped per store name.
+rustasea-cache = { path = "../rustasea-cache" }
+# The dispatcher exposes the `DispatchObserver` seam the profiler installs.
+rustasea-events = { path = "../rustasea-events" }
+# The `from_fn` middleware lives here (mirrors `rustasea-http::sentry`), so the
+# app only has to install a thin closure.
+axum = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["sync"] }
+async-trait = { workspace = true }
+# `started_at` is an RFC 3339 UTC instant for the toolbar's timeline column.
+chrono = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+# `ServiceExt::oneshot` drives the profiler middleware in the crate tests.
+tower = { workspace = true, features = ["util"] }
+# Used by the tests to assert the `/_debugbar/json` payload shape.
+serde_json = { workspace = true }
+# `#[tokio::test]` needs the macros/rt features (the crate itself only needs
+# `sync` for the test serialization mutex).
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }

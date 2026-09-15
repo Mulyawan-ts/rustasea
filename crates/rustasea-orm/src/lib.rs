@@ -21,6 +21,7 @@ pub mod migration_guard;
 pub mod model;
 pub mod model_ops;
 pub mod naming;
+pub mod profile;
 pub mod relations;
 pub mod schema;
 pub mod scopes;
@@ -64,6 +65,9 @@ pub use migration_guard::{
 pub use model::{Model, Relation, RelationKind, Relations, SoftDeletes, Timestamps};
 pub use model_ops::ModelOps;
 pub use naming::snake_plural;
+pub use profile::{
+    clear_query_recorder, query_recorder, register_query_recorder, QueryRecorder, SqlQueryEvent,
+};
 pub use schema::{Column, ColumnKind, DefaultValue, Schema, SchemaBlueprint};
 pub use scopes::{
     register_global_scope, registered_global_scopes, reset_global_scopes,

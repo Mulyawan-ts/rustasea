@@ -7,6 +7,7 @@ use crate::connections::{ConnectionConfig, EndpointConfig};
 use crate::error::{ConnectionError, OrmError, Result};
 use std::time::Duration;
 
+mod adapt;
 mod exec;
 mod raw;
 

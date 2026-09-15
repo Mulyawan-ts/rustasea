@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RustaSea Debugbar</title>
+    <style>
+      body { font: 13px/1.4 system-ui, sans-serif; margin: 1.5rem; color: #1a1a1a; }
+      h1 { font-size: 1.1rem; }
+      table { border-collapse: collapse; width: 100%; margin-top: 0.75rem; }
+      th, td { border: 1px solid #ddd; padding: 0.35rem 0.5rem; text-align: left; }
+      th { background: #f4f4f4; }
+      details { margin: 0.25rem 0; }
+      pre { background: #f8f8f8; padding: 0.4rem; overflow-x: auto; }
+      .muted { color: #777; }
+    </style>
+  </head>
+  <body>
+    <h1>RustaSea Debugbar</h1>
+    <p class="muted">
+      Dev-only request profiler. Data is served by
+      <code>/_debugbar/json</code>; expand a row for its SQL, cache, and event
+      entries.
+    </p>
+    <div id="app">Loading…</div>
+    <script>
+      // Fetch the captured profiles and render a compact table. Vanilla JS, no
+      // CDN: this page is dev-only and must work offline.
+      async function load() {
+        const root = document.getElementById("app");
+        let profiles;
+        try {
+          const response = await fetch("/_debugbar/json");
+          profiles = await response.json();
+        } catch (error) {
+          root.textContent = "Failed to load profiles: " + error;
+          return;
+        }
+        if (!Array.isArray(profiles) || profiles.length === 0) {
+          root.textContent = "No requests profiled yet.";
+          return;
+        }
+        const table = document.createElement("table");
+        table.innerHTML =
+          "<thead><tr><th>Method</th><th>Path</th><th>Status</th>" +
+          "<th>Duration (ms)</th><th>SQL</th><th>Cache</th><th>Events</th></tr></thead>";
+        const tbody = document.createElement("tbody");
+        // Newest last: render newest first.
+        for (const profile of profiles.slice().reverse()) {
+          const row = document.createElement("tr");
+          const cells = [
+            profile.method,
+            profile.path,
+            String(profile.status),
+            Number(profile.duration_ms).toFixed(2),
+            String(profile.queries.length),
+            String(profile.cache_ops.length),
+            String(profile.events.length),
+          ];
+          for (const value of cells) {
+            const td = document.createElement("td");
+            td.textContent = value;
+            row.appendChild(td);
+          }
+          const detailRow = document.createElement("tr");
+          const detailCell = document.createElement("td");
+          detailCell.colSpan = cells.length;
+          detailCell.appendChild(renderDetails(profile));
+          detailRow.appendChild(detailCell);
+          tbody.appendChild(row);
+          tbody.appendChild(detailRow);
+        }
+        table.appendChild(tbody);
+        root.replaceChildren(table);
+      }
+
+      // Build the expandable detail block for one profile.
+      function renderDetails(profile) {
+        const wrap = document.createElement("div");
+        wrap.appendChild(list("SQL", profile.queries, (q) =>
+          q.sql + "  (" + Number(q.duration_ms).toFixed(2) + " ms" +
+          (q.error ? ", error: " + q.error : "") + ")"));
+        wrap.appendChild(list("Cache", profile.cache_ops, (c) =>
+          c.op + " " + c.key + (c.hit === null ? "" : " hit=" + c.hit) +
+          "  (" + Number(c.duration_ms).toFixed(2) + " ms)"));
+        wrap.appendChild(list("Events", profile.events, (e) =>
+          e.name + " ok=" + e.ok));
+        return wrap;
+      }
+
+      // Render a labelled <details> list with a formatter per entry.
+      function list(title, entries, format) {
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = title + " (" + entries.length + ")";
+        details.appendChild(summary);
+        const pre = document.createElement("pre");
+        pre.textContent = entries.length
+          ? entries.map(format).join("\n")
+          : "(none)";
+        details.appendChild(pre);
+        return details;
+      }
+
+      load();
+    </script>
+  </body>
+</html>

@@ -21,6 +21,63 @@ static LISTENERS: OnceLock<Mutex<ListenerMap>> = OnceLock::new();
 /// Global after-response buffer shared by `EventSink`.
 static SINK: OnceLock<Mutex<Vec<Box<dyn Any + Send>>>> = OnceLock::new();
 
+/// Process-wide dispatch observer slot, initialised on first use.
+///
+/// A dev profiler (debug toolbar) installs an observer here to record every
+/// dispatched event's name and success flag; with no observer installed the
+/// dispatch path pays only a single slot read (ADOPT-009).
+static OBSERVER: OnceLock<std::sync::RwLock<Option<Arc<dyn DispatchObserver>>>> = OnceLock::new();
+
+/// Synchronous observer notified after every [`Dispatcher::dispatch`].
+///
+/// Implementations must be `Send + Sync` and cheap: the profiler pushes into an
+/// in-memory buffer. A panic inside `observe` is not caught, so implementations
+/// must not panic.
+pub trait DispatchObserver: Send + Sync {
+    /// Observe one completed dispatch: the event's stable name and whether it
+    /// was handled without error.
+    fn observe(&self, event_name: &'static str, ok: bool);
+}
+
+/// The observer slot, initialised to empty on first use.
+fn observer_slot() -> &'static std::sync::RwLock<Option<Arc<dyn DispatchObserver>>> {
+    OBSERVER.get_or_init(|| std::sync::RwLock::new(None))
+}
+
+/// Install `observer` as the process-wide dispatch observer.
+///
+/// Call once from application boot; a later call replaces the previous
+/// observer. A poisoned lock is recovered rather than surfaced, so a panic in
+/// another thread cannot permanently disable observation.
+pub fn register_dispatch_observer(observer: Arc<dyn DispatchObserver>) {
+    let slot = observer_slot();
+    let mut guard = slot
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *guard = Some(observer);
+}
+
+/// Remove the process-wide dispatch observer (bootstrap/test reset hook).
+pub fn clear_dispatch_observer() {
+    let slot = observer_slot();
+    let mut guard = slot
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *guard = None;
+}
+
+/// The installed dispatch observer, or `None` when none is registered.
+///
+/// The dispatch path checks this after each call and returns immediately when it
+/// is `None`, so an uninstrumented build pays no bookkeeping cost.
+pub fn dispatch_observer() -> Option<Arc<dyn DispatchObserver>> {
+    let slot = observer_slot();
+    let guard = slot
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    guard.clone()
+}
+
 /// Access the global listener map.
 fn listeners() -> &'static Mutex<ListenerMap> {
     LISTENERS.get_or_init(|| Mutex::new(HashMap::new()))
@@ -163,7 +220,22 @@ impl Dispatcher {
     }
 
     /// Dispatch `event` to all registered listeners now.
+    ///
+    /// When a [`DispatchObserver`] is installed it is notified once with the
+    /// event's stable name and whether dispatch succeeded; with none installed
+    /// the call is unchanged. The observer is looked up **after** the inner
+    /// dispatch so it cannot observe an event that never ran.
     pub async fn dispatch<E: Event>(event: E) -> Result<()> {
+        let name = event.event_name();
+        let result = Self::dispatch_inner(event).await;
+        if let Some(observer) = dispatch_observer() {
+            observer.observe(name, result.is_ok());
+        }
+        result
+    }
+
+    /// The unobserved dispatch body (listeners run inline or enqueued).
+    async fn dispatch_inner<E: Event>(event: E) -> Result<()> {
         let type_id = TypeId::of::<E>();
         let snapshot = {
             let map = listeners().lock().unwrap_or_else(|p| p.into_inner());
@@ -229,5 +301,85 @@ impl EventSink {
     /// Global buffer accessor.
     fn global() -> &'static Mutex<Vec<Box<dyn Any + Send>>> {
         SINK.get_or_init(|| Mutex::new(Vec::new()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::*;
+
+    /// Serializes tests that install the process-wide observer slot.
+    ///
+    /// An async-aware mutex is used because the dispatch test holds the guard
+    /// across the router's `.await` (a std guard would trip `await_holding_lock`).
+    static OBSERVER_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    /// An event unique to this test module so the shared listener registry does
+    /// not collide with other tests' event types.
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    struct ObservedEvent;
+
+    impl Event for ObservedEvent {
+        fn event_name(&self) -> &'static str {
+            "ObservedEvent"
+        }
+    }
+
+    /// A listener that records how many times it handled the event.
+    struct CountingListener(Arc<std::sync::atomic::AtomicUsize>);
+
+    #[async_trait]
+    impl Listener<ObservedEvent> for CountingListener {
+        async fn handle(&self, _event: ObservedEvent) -> Result<()> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    /// Captures observed `(name, ok)` pairs.
+    #[derive(Default)]
+    struct CapturingObserver {
+        seen: Mutex<Vec<(&'static str, bool)>>,
+    }
+
+    impl DispatchObserver for CapturingObserver {
+        fn observe(&self, event_name: &'static str, ok: bool) {
+            self.seen.lock().unwrap().push((event_name, ok));
+        }
+    }
+
+    /// Verifies the observer registry round-trips an installed observer.
+    #[tokio::test]
+    async fn observer_registry_round_trips() {
+        let _guard = OBSERVER_LOCK.lock().await;
+        struct Noop;
+        impl DispatchObserver for Noop {
+            fn observe(&self, _event_name: &'static str, _ok: bool) {}
+        }
+        clear_dispatch_observer();
+        assert!(dispatch_observer().is_none());
+        register_dispatch_observer(Arc::new(Noop));
+        assert!(dispatch_observer().is_some());
+        clear_dispatch_observer();
+        assert!(dispatch_observer().is_none());
+    }
+
+    /// Verifies an installed observer sees the dispatched name and success flag.
+    #[tokio::test]
+    async fn observer_sees_name_and_ok_flag() {
+        let _guard = OBSERVER_LOCK.lock().await;
+        let runs = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        Dispatcher::listen::<ObservedEvent, _>(CountingListener(Arc::clone(&runs)));
+        let observer = Arc::new(CapturingObserver::default());
+        register_dispatch_observer(observer.clone());
+
+        Dispatcher::dispatch(ObservedEvent).await.unwrap();
+        clear_dispatch_observer();
+
+        assert_eq!(runs.load(std::sync::atomic::Ordering::SeqCst), 1);
+        let seen = observer.seen.lock().unwrap();
+        assert_eq!(seen.as_slice(), &[("ObservedEvent", true)]);
     }
 }

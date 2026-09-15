@@ -5630,6 +5630,7 @@ dependencies = [
  "rustasea-cache",
  "rustasea-cli",
  "rustasea-config",
+ "rustasea-debugbar",
  "rustasea-events",
  "rustasea-foundation",
  "rustasea-http",
@@ -5701,6 +5702,7 @@ dependencies = [
  "hex",
  "rustasea",
  "rustasea-authlog",
+ "rustasea-debugbar",
  "rustasea-http",
  "rustasea-logging",
  "rustasea-mail",
@@ -5830,6 +5832,22 @@ dependencies = [
  "config 0.14.1",
  "dotenvy",
  "serde",
+]
+
+[[package]]
+name = "rustasea-debugbar"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum 0.7.9",
+ "chrono",
+ "rustasea-cache",
+ "rustasea-events",
+ "rustasea-orm",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower",
 ]
 
 [[package]]

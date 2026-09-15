@@ -273,3 +273,20 @@ pub use rustasea_logging::{
 /// returned guard must be kept alive for the process lifetime.
 #[cfg(feature = "sentry")]
 pub use rustasea_logging::{init_sentry, scrub_event as scrub_sentry_event, SentryConfig};
+
+/// Dev request-profiler / debug-toolbar re-export (ADOPT-009) — only with the
+/// `debugbar` feature.
+///
+/// [`install`](rustasea_debugbar::install) registers the process-wide SQL and
+/// event hooks; [`snapshot`](rustasea_debugbar::snapshot) returns the newest-last
+/// ring of captured request profiles. Opt-in so the core build never links the
+/// profiler (NFR-Sca-02).
+#[cfg(feature = "debugbar")]
+pub use rustasea_debugbar as debugbar;
+
+/// Debug-toolbar re-exports for hook install and profile inspection (ADOPT-009).
+#[cfg(feature = "debugbar")]
+pub use rustasea_debugbar::{
+    install as debugbar_install, profiler_middleware as debugbar_middleware, snapshot,
+    uninstall as debugbar_uninstall, CacheEntry, EventEntry, RequestProfile, SqlEntry,
+};

@@ -62,6 +62,7 @@ pub fn configure() -> Result<Application, BootError> {
     // container bindings + config loader are populated).
     publish_tinker_source(&app);
     install_observability(&app);
+    install_debugbar();
     Ok(app)
 }
 
@@ -111,6 +112,24 @@ fn install_observability(app: &Application) {
         }
     }
 }
+
+/// Install the dev request profiler hooks (ADOPT-009) when the `debugbar`
+/// feature is compiled in.
+///
+/// Registers the process-wide SQL recorder and event observer so any request
+/// served by the profiler middleware accumulates SQL/cache/event entries.
+/// Best-effort and idempotent: [`rustasea_debugbar::install`] replaces the hooks
+/// on every call, so a second `configure()` is harmless and boot can never fail
+/// because of profiling. The cache hook needs a live `CacheManager` and is not
+/// installed here (no manager is bound in this scaffold).
+#[cfg(feature = "debugbar")]
+fn install_debugbar() {
+    rustasea_debugbar::install(rustasea_debugbar::DEFAULT_CAPACITY);
+}
+
+/// No-op stand-in for [`install_debugbar`] when the `debugbar` feature is off.
+#[cfg(not(feature = "debugbar"))]
+fn install_debugbar() {}
 
 /// Park `guard` in `slot` for the process lifetime, never dropping it.
 ///

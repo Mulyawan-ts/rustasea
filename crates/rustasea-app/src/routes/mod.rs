@@ -11,6 +11,8 @@
 
 pub mod auth;
 pub mod console;
+#[cfg(feature = "debugbar")]
+pub mod debugbar;
 pub mod docs;
 mod helpers;
 pub mod settings;
@@ -67,6 +69,11 @@ pub fn table() -> RouteTable {
     settings::register(&mut table);
     console::register(&mut table);
     docs::register(&mut table);
+    // Dev-only profiler surface (`/_debugbar`, `/_debugbar/json`). Registered
+    // only when the feature is compiled in; the handlers answer `404` unless
+    // `AppState::debug` is set (the same runtime gate `docs` uses).
+    #[cfg(feature = "debugbar")]
+    debugbar::register(&mut table);
     table
 }
 
@@ -84,10 +91,13 @@ pub fn table() -> RouteTable {
 pub fn compile(mut table: RouteTable, state: Arc<AppState>) -> axum::Router {
     table.layer(axum::Extension(Arc::clone(&state)));
     match table.try_into_axum_router() {
-        Ok(router) => with_sentry(with_csrf(
-            with_session(mount_assets(router), &state),
+        Ok(router) => with_debugbar(
+            with_sentry(with_csrf(
+                with_session(mount_assets(router), &state),
+                &state,
+            )),
             &state,
-        )),
+        ),
         Err(error) => {
             eprintln!("route table build failed: {error}");
             axum::Router::new().fallback(|| async { StatusCode::INTERNAL_SERVER_ERROR })
@@ -111,6 +121,27 @@ fn with_sentry(router: axum::Router) -> axum::Router {
 /// No-op stand-in for [`with_sentry`] when the `sentry` feature is off.
 #[cfg(not(feature = "sentry"))]
 fn with_sentry(router: axum::Router) -> axum::Router {
+    router
+}
+
+/// Apply the dev request-profiler layer to a compiled router (ADOPT-009).
+///
+/// The middleware builds a per-request profile context (SQL/cache/events),
+/// records the finalized profile in the process-wide ring, and is a no-op when
+/// `AppState::debug` is `false`. It is the outermost layer so it wraps every
+/// other layer and the route handlers, giving an accurate end-to-end duration.
+/// The layer only exists when the `debugbar` feature is compiled in.
+#[cfg(feature = "debugbar")]
+fn with_debugbar(router: axum::Router, state: &AppState) -> axum::Router {
+    let debug = state.debug;
+    router.layer(axum::middleware::from_fn(move |request, next| {
+        rustasea_debugbar::middleware::profiler_middleware(debug, request, next)
+    }))
+}
+
+/// No-op stand-in for [`with_debugbar`] when the `debugbar` feature is off.
+#[cfg(not(feature = "debugbar"))]
+fn with_debugbar(router: axum::Router, _state: &AppState) -> axum::Router {
     router
 }
 

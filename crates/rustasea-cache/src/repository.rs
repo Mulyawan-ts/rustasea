@@ -130,6 +130,23 @@ impl CacheManager {
         }
     }
 
+    /// Names of every registered store, sorted for deterministic iteration.
+    ///
+    /// Read-only accessor added for the debug toolbar (ADOPT-009), which wraps
+    /// each registered store in a recording decorator: without a way to
+    /// enumerate the registry the profiler could only wrap the default store.
+    /// The sort keeps re-registration order stable across runs.
+    pub fn store_names(&self) -> Vec<String> {
+        match self.stores.read() {
+            Ok(map) => {
+                let mut names: Vec<String> = map.keys().cloned().collect();
+                names.sort();
+                names
+            }
+            Err(_) => Vec::new(),
+        }
+    }
+
     /// Name of the default store used by [`CacheManager::repository`].
     pub fn default_store(&self) -> &str {
         &self.default_store

@@ -7,6 +7,7 @@
 //! [`ConnectionPair`] adds the read/write routing layer over these methods.
 
 use crate::connections::ConnectionPair;
+use crate::db::adapt::adapt_placeholders;
 use crate::db::DbPool;
 #[cfg(not(any(feature = "sqlite", feature = "postgres", feature = "mysql")))]
 use crate::error::OrmError;
@@ -18,98 +19,59 @@ use crate::value::row_to_json_postgres;
 #[cfg(any(feature = "sqlite", feature = "postgres", feature = "mysql"))]
 use crate::value::{bind_all, row_to_json};
 
-/// Translate `$n` placeholders in `sql` to the given driver's native shape.
-///
-/// All emitters (`QueryBuilder`, `model_ops`, `m2`) produce `$n` positional
-/// placeholders; SQLite and Postgres accept them natively, while MySQL requires
-/// `?`. Rewriting here keeps the emitters dialect-agnostic and makes this the
-/// single choke point for placeholder adaptation. Only SQL text is rewritten —
-/// bind values are never inspected, so a literal `$` inside a bound string is
-/// unaffected.
-fn adapt_placeholders<'a>(sql: &'a str, dialect: &str) -> std::borrow::Cow<'a, str> {
-    #[cfg(feature = "mysql")]
-    {
-        if dialect == "mysql" {
-            return rewrite_dollar_placeholders(sql);
-        }
-    }
-    let _ = dialect;
-    std::borrow::Cow::Borrowed(sql)
-}
-
-/// Rewrite `$n` references to `?`, renumbering sequentially.
-///
-/// MySQL's `?` placeholders are positional, not indexed, so non-contiguous `$n`
-/// indices (e.g. `$1 … $3`) collapse to a sequential run of `?` in textual
-/// order. `$` not followed by one or more digits is left untouched, which
-/// preserves dollar signs appearing as literals in the SQL text.
-#[cfg(feature = "mysql")]
-fn rewrite_dollar_placeholders(sql: &str) -> std::borrow::Cow<'_, str> {
-    let bytes = sql.as_bytes();
-    let mut out = String::with_capacity(sql.len());
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'$' && index + 1 < bytes.len() && bytes[index + 1].is_ascii_digit() {
-            out.push('?');
-            index += 1;
-            while index < bytes.len() && bytes[index].is_ascii_digit() {
-                index += 1;
-            }
-        } else {
-            // Copy one full UTF-8 scalar; multi-byte bytes are never `$`/digits.
-            let ch = sql[index..].chars().next().unwrap_or_default();
-            out.push(ch);
-            index += ch.len_utf8();
-        }
-    }
-    std::borrow::Cow::Owned(out)
-}
-
 impl DbPool {
     /// Run `sql` with `bindings` and decode every row into a JSON object.
     ///
     /// The statement must use `$n` positional placeholders matching `bindings`;
     /// [`adapt_placeholders`] rewrites them to the active driver's native shape
-    /// before dispatch.
+    /// before dispatch. The call is wrapped in [`crate::profile::track`] so an
+    /// installed profiler sees its duration and outcome.
     pub async fn fetch_json(
         &self,
         _sql: &str,
         _bindings: &[Value],
     ) -> Result<Vec<serde_json::Value>> {
-        let sql = adapt_placeholders(_sql, self.dialect());
-        match self {
-            #[cfg(feature = "sqlite")]
-            DbPool::Sqlite(pool) => fetch_json_sqlite(pool, &sql, _bindings).await,
-            #[cfg(feature = "postgres")]
-            DbPool::Postgres(pool) => fetch_json_postgres(pool, &sql, _bindings).await,
-            #[cfg(feature = "mysql")]
-            DbPool::MySql(pool) => fetch_json_mysql(pool, &sql, _bindings).await,
-            #[cfg(not(any(feature = "sqlite", feature = "postgres", feature = "mysql")))]
-            _ => Err(OrmError::UnsupportedDriver(
-                "no sqlx driver compiled in".into(),
-            )),
-        }
+        crate::profile::track("fetch_json", _sql, async {
+            let sql = adapt_placeholders(_sql, self.dialect());
+            match self {
+                #[cfg(feature = "sqlite")]
+                DbPool::Sqlite(pool) => fetch_json_sqlite(pool, &sql, _bindings).await,
+                #[cfg(feature = "postgres")]
+                DbPool::Postgres(pool) => fetch_json_postgres(pool, &sql, _bindings).await,
+                #[cfg(feature = "mysql")]
+                DbPool::MySql(pool) => fetch_json_mysql(pool, &sql, _bindings).await,
+                #[cfg(not(any(feature = "sqlite", feature = "postgres", feature = "mysql")))]
+                _ => Err(OrmError::UnsupportedDriver(
+                    "no sqlx driver compiled in".into(),
+                )),
+            }
+        })
+        .await
     }
 
     /// Run `sql` with `bindings` and return the number of affected rows.
     ///
     /// The statement must use `$n` positional placeholders matching `bindings`;
     /// [`adapt_placeholders`] rewrites them to the active driver's native shape
-    /// before dispatch.
+    /// before dispatch. The call is wrapped in [`crate::profile::track`] so an
+    /// installed profiler sees its duration and outcome.
     pub async fn execute_bind(&self, _sql: &str, _bindings: &[Value]) -> Result<u64> {
-        let sql = adapt_placeholders(_sql, self.dialect());
-        match self {
-            #[cfg(feature = "sqlite")]
-            DbPool::Sqlite(pool) => execute_sqlite(pool, &sql, _bindings).await,
-            #[cfg(feature = "postgres")]
-            DbPool::Postgres(pool) => execute_postgres(pool, &sql, _bindings).await,
-            #[cfg(feature = "mysql")]
-            DbPool::MySql(pool) => execute_mysql(pool, &sql, _bindings).await,
-            #[cfg(not(any(feature = "sqlite", feature = "postgres", feature = "mysql")))]
-            _ => Err(OrmError::UnsupportedDriver(
-                "no sqlx driver compiled in".into(),
-            )),
-        }
+        crate::profile::track("execute_bind", _sql, async {
+            let sql = adapt_placeholders(_sql, self.dialect());
+            match self {
+                #[cfg(feature = "sqlite")]
+                DbPool::Sqlite(pool) => execute_sqlite(pool, &sql, _bindings).await,
+                #[cfg(feature = "postgres")]
+                DbPool::Postgres(pool) => execute_postgres(pool, &sql, _bindings).await,
+                #[cfg(feature = "mysql")]
+                DbPool::MySql(pool) => execute_mysql(pool, &sql, _bindings).await,
+                #[cfg(not(any(feature = "sqlite", feature = "postgres", feature = "mysql")))]
+                _ => Err(OrmError::UnsupportedDriver(
+                    "no sqlx driver compiled in".into(),
+                )),
+            }
+        })
+        .await
     }
 
     /// Execute a `;`-separated SQL script with no bind values.
@@ -158,41 +120,53 @@ impl DbTransaction {
     }
 
     /// Run `sql` with `bindings` on the transaction, decoding every row to JSON.
+    ///
+    /// Wrapped in [`crate::profile::track`] so an installed profiler sees the
+    /// call's duration and outcome.
     pub(crate) async fn fetch_json(
         &mut self,
         sql: &str,
         bindings: &[Value],
     ) -> Result<Vec<serde_json::Value>> {
-        let sql = adapt_placeholders(sql, self.dialect());
-        match self {
-            #[cfg(feature = "sqlite")]
-            DbTransaction::Sqlite(tx) => fetch_json_sqlite_tx(tx, &sql, bindings).await,
-            #[cfg(feature = "postgres")]
-            DbTransaction::Postgres(tx) => fetch_json_postgres_tx(tx, &sql, bindings).await,
-            #[cfg(feature = "mysql")]
-            DbTransaction::MySql(tx) => fetch_json_mysql_tx(tx, &sql, bindings).await,
-            #[cfg(not(any(feature = "sqlite", feature = "postgres", feature = "mysql")))]
-            _ => Err(OrmError::UnsupportedDriver(
-                "no sqlx driver compiled in".into(),
-            )),
-        }
+        crate::profile::track("fetch_json", sql, async {
+            let sql = adapt_placeholders(sql, self.dialect());
+            match self {
+                #[cfg(feature = "sqlite")]
+                DbTransaction::Sqlite(tx) => fetch_json_sqlite_tx(tx, &sql, bindings).await,
+                #[cfg(feature = "postgres")]
+                DbTransaction::Postgres(tx) => fetch_json_postgres_tx(tx, &sql, bindings).await,
+                #[cfg(feature = "mysql")]
+                DbTransaction::MySql(tx) => fetch_json_mysql_tx(tx, &sql, bindings).await,
+                #[cfg(not(any(feature = "sqlite", feature = "postgres", feature = "mysql")))]
+                _ => Err(OrmError::UnsupportedDriver(
+                    "no sqlx driver compiled in".into(),
+                )),
+            }
+        })
+        .await
     }
 
     /// Run `sql` with `bindings` on the transaction, returning affected rows.
+    ///
+    /// Wrapped in [`crate::profile::track`] so an installed profiler sees the
+    /// call's duration and outcome.
     pub(crate) async fn execute_bind(&mut self, sql: &str, bindings: &[Value]) -> Result<u64> {
-        let sql = adapt_placeholders(sql, self.dialect());
-        match self {
-            #[cfg(feature = "sqlite")]
-            DbTransaction::Sqlite(tx) => execute_sqlite_tx(tx, &sql, bindings).await,
-            #[cfg(feature = "postgres")]
-            DbTransaction::Postgres(tx) => execute_postgres_tx(tx, &sql, bindings).await,
-            #[cfg(feature = "mysql")]
-            DbTransaction::MySql(tx) => execute_mysql_tx(tx, &sql, bindings).await,
-            #[cfg(not(any(feature = "sqlite", feature = "postgres", feature = "mysql")))]
-            _ => Err(OrmError::UnsupportedDriver(
-                "no sqlx driver compiled in".into(),
-            )),
-        }
+        crate::profile::track("execute_bind", sql, async {
+            let sql = adapt_placeholders(sql, self.dialect());
+            match self {
+                #[cfg(feature = "sqlite")]
+                DbTransaction::Sqlite(tx) => execute_sqlite_tx(tx, &sql, bindings).await,
+                #[cfg(feature = "postgres")]
+                DbTransaction::Postgres(tx) => execute_postgres_tx(tx, &sql, bindings).await,
+                #[cfg(feature = "mysql")]
+                DbTransaction::MySql(tx) => execute_mysql_tx(tx, &sql, bindings).await,
+                #[cfg(not(any(feature = "sqlite", feature = "postgres", feature = "mysql")))]
+                _ => Err(OrmError::UnsupportedDriver(
+                    "no sqlx driver compiled in".into(),
+                )),
+            }
+        })
+        .await
     }
 
     /// Execute a `;`-separated SQL script on the transaction, with no bind values.
