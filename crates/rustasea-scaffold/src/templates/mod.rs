@@ -13,6 +13,7 @@ mod blade;
 mod config;
 mod core;
 mod database;
+mod docker;
 mod inertia;
 mod inertia_react;
 mod inertia_vue;
@@ -74,6 +75,7 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
     files.extend(routes::entries());
     files.extend(config::entries(variant));
     files.extend(database::entries());
+    files.extend(docker::entries());
     files.extend(tests::entries());
     match variant {
         StarterKitVariant::Blade => files.extend(blade::entries()),

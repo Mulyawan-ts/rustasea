@@ -1,0 +1,45 @@
+# Docker build context exclusions for the RustaSea workspace.
+# Keep the context small and never ship secrets or local build artefacts.
+
+# Build output (rebuilt inside the image).
+target/
+
+# Version control.
+.git/
+.gitignore
+
+# Local environment and secrets — never baked into an image.
+.env
+*.env.local
+
+# Local SQLite runtime databases.
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+database.sqlite
+
+# Runtime storage junk (logs, caches, uploaded files).
+storage/logs/*
+storage/framework/*
+storage/app/*
+!storage/**/.gitignore
+
+# Node / JS tooling for Inertia variants.
+node_modules/
+dist/
+.pnpm-store/
+
+# Editor / OS noise.
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Docs and CI are not needed to build the image.
+docs/
+.agents/
+.github/
+
+# Compose files describe the surrounding stack, not the app image.
+docker-compose*.yml

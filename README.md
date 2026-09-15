@@ -312,6 +312,51 @@ generated app (`crates/rustasea-scaffold/src/templates/config.rs`).
 
 ---
 
+## Docker development
+
+The workspace ships a container stack with laravel/sail parity. `docker-compose.yml`
+boots the app (`crates/rustasea-app`) beside the infrastructure it talks to;
+`docker-compose.dev.yml` adds bind mounts and `cargo-watch` hot reload.
+
+```bash
+# Build + boot the stack in the background.
+docker-compose up -d
+
+# Live-reload dev loop (bind-mounted sources, cargo-watch rebuilds on change).
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+# Tear down.
+docker-compose down
+```
+
+The same flow is available through `cargo xtask`:
+
+```bash
+cargo xtask docker:up     # up -d, then prints the service URLs
+cargo xtask docker:logs   # follow the logs
+cargo xtask docker:down   # stop and remove
+```
+
+`xtask` prefers the `docker compose` plugin and transparently falls back to the
+legacy `docker-compose` binary when the plugin is unavailable.
+
+| Service | Image | Ports | Purpose |
+|---|---|---|---|
+| `app` | built from `Dockerfile` | `8000` | The RustaSea HTTP app (`/health` liveness probe) |
+| `postgres` | `pgvector/pgvector:pg16` | `5432` | Primary SQL store + pgvector |
+| `redis` | `redis:7-alpine` | `6379` | Cache + queue backend |
+| `minio` | `minio/minio` | `9000`, `9001` | S3-compatible object storage (`9001` = console) |
+| `mailpit` | `axllent/mailpit` | `1025`, `8025` | SMTP capture (`1025`) + web UI (`8025`) |
+
+- App: <http://localhost:8000>
+- Mailpit UI: <http://localhost:8025>
+- MinIO console: <http://localhost:9001> (`rustasea` / `rustasea-secret` by default)
+
+Copy `.env.example` to `.env` to override any value; every variable in the
+compose files carries a sensible local default.
+
+---
+
 ## Proposed Directory Structure
 
 Workspace with one crate per milestone domain. Application code lives in `app/` (mirrors Laravel/Goravel conventions).

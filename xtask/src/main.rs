@@ -3,10 +3,13 @@
 //! Provides the CI-facing task surface documented for M5: `cargo xtask ci`
 //! gates the workspace on rustfmt + clippy (C-04), `cargo xtask check-cycles`
 //! validates the crate DAG stays acyclic (architecture §3), and `cargo xtask
-//! migrate` runs the framework's registered migrations. Toolchain tasks shell
-//! out to `cargo`; graph analysis and migration execution live in submodules.
+//! migrate` runs the framework's registered migrations. The `docker:up` /
+//! `docker:down` / `docker:logs` tasks drive the dev compose stack (ADOPT-007).
+//! Toolchain tasks shell out to `cargo`; graph analysis and migration execution
+//! live in submodules.
 
 mod cycles;
+mod docker;
 mod migrate;
 
 use std::process::Command;
@@ -35,9 +38,12 @@ fn main() {
         ),
         "check-cycles" => cycles::run(),
         "migrate" => migrate::run(&rest),
+        "docker:up" => docker::up(),
+        "docker:down" => docker::down(),
+        "docker:logs" => docker::logs(&rest),
         other => {
             eprintln!(
-                "xtask: unknown task `{other}` (expected ci|fmt|clippy|check-cycles|migrate)"
+                "xtask: unknown task `{other}` (expected ci|fmt|clippy|check-cycles|migrate|docker:up|docker:down|docker:logs)"
             );
             FAILURE
         }

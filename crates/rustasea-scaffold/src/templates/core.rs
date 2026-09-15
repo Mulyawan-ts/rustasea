@@ -138,6 +138,20 @@ AWS_DEFAULT_REGION=us-east-1
 AWS_BUCKET=
 SLACK_BOT_USER_OAUTH_TOKEN=
 SLACK_BOT_USER_DEFAULT_CHANNEL=
+
+# --- Docker dev stack (docker-compose.yml + docker-compose.dev.yml) ---
+# Only read by the compose files, not the framework runtime. Defaults are inline
+# in docker-compose.yml, so this section is optional — uncomment to override.
+# DB_HOST=postgres
+# DB_PORT=5432
+# REDIS_URL=redis://redis:6379/0
+# MAIL_MAILER=smtp
+# MAIL_HOST=mailpit
+# MAIL_PORT=1025
+# MINIO_ROOT_USER=rustasea
+# MINIO_ROOT_PASSWORD=rustasea-secret
+# AWS_ENDPOINT=http://minio:9000
+# RUST_LOG=debug
 "##;
 
 const GITIGNORE: &str = r##"/target
@@ -199,6 +213,27 @@ cargo run
 ```
 
 The server binds `0.0.0.0:3000` by default (`APP_URL` overrides it).
+
+## Docker
+
+A container stack with laravel/sail parity is generated alongside the app:
+
+```bash
+docker-compose up -d                                          # app + infra
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up  # hot reload
+docker-compose down                                           # tear down
+```
+
+| Service | Ports | Purpose |
+|---|---|---|
+| `app` | `3000` | The @@app_pascal@@ HTTP app |
+| `postgres` | `5432` | Primary SQL store + pgvector |
+| `redis` | `6379` | Cache + queue backend |
+| `minio` | `9000`, `9001` | S3-compatible storage (`9001` = console) |
+| `mailpit` | `1025`, `8025` | SMTP capture (`1025`) + web UI (`8025`) |
+
+App: <http://localhost:3000> · Mailpit UI: <http://localhost:8025> ·
+MinIO console: <http://localhost:9001>.
 "##;
 
 const LIB_RS: &str = r##"//! @@app_pascal@@ — RustaSea application library.

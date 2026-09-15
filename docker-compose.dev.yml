@@ -1,0 +1,35 @@
+# RustaSea development override — hot-reload the workspace app.
+#
+# Layer on top of the base stack for a live-reload loop:
+#
+#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# The workspace is bind-mounted into the container and `cargo-watch` rebuilds
+# and restarts the app on every source change. Named volumes keep the build
+# cache and the cargo registry out of the bind mount so they survive restarts.
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    image: rustasea-app:dev-watch
+    # `cargo-watch` needs the sources, so no prebuilt binary is used here.
+    command: cargo watch -x "run -p rustasea-app"
+    environment:
+      RUST_LOG: ${RUST_LOG:-debug}
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-true}
+    volumes:
+      - .:/app
+      # Keep build output and the cargo caches off the bind mount.
+      - cargo-target:/app/target
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+
+volumes:
+  cargo-target:
+  cargo-registry:
+  cargo-git:
