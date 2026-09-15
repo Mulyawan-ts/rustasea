@@ -79,6 +79,13 @@ rustyline = { version = "18", default-features = false }
 testcontainers = "0.23"
 dotenvy = "0.15"
 rand = "0.8"
+# Fake data generation (ADOPT-012) — locale-aware faker facade over `fake`.
+# `derive` keeps upstream `#[derive(Dummy)]` ergonomics available; `chrono` and
+# `uuid` enable the `DateTimeBetween` / `UUIDv4` fakers the `Faker` facade
+# delegates to (they reuse the `chrono` / `uuid` versions already in the lock).
+# `fake` re-exports its `rand` 0.10 dependency as `fake::rand`, so no separate
+# rand entry is needed for the deterministic ChaCha12Rng.
+fake = { version = "5.1", features = ["derive", "chrono", "uuid"] }
 # Async streams (M6)
 futures-core = "0.3"
 futures-util = { version = "0.3", default-features = false }

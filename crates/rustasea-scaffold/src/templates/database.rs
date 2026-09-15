@@ -371,6 +371,21 @@ pub use user_factory::UserFactory;
 "##;
 
 const USER_FACTORY: &str = r##"//! `UserFactory` — deterministic user fixtures.
+//!
+//! The default definition uses a monotonic sequence so fixtures are stable
+//! across runs (`user1@example.test`, `user2@example.test`, …). For richer,
+//! locale-aware data enable the umbrella crate's `faker` feature
+//! (`rustasea = { version = "0.1", features = ["faker"] }`) and seed a
+//! [`Faker`](rustasea::testing::faker::Faker) for reproducible randomness:
+//!
+//! ```ignore
+//! use rustasea::testing::faker::Faker;
+//!
+//! // Deterministic: the same seed replays the same sequence every run.
+//! let mut faker = Faker::from_config(42, "en_US");
+//! let name = faker.name();
+//! let email = faker.unique_email().expect("unique email");
+//! ```
 
 use rustasea::orm::Factory;
 use uuid::Uuid;

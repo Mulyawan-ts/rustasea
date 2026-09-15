@@ -206,7 +206,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Contracts\Broadcasting\Factory` | `rustasea-broadcast::BroadcastHub` | **Partial** | Hub selection real; connection factory thinner. |
 | `Illuminate\Foundation\Testing\TestCase` (class) | `rustasea-testing::TestCase` | **Partial** | Base test case real; refresh/DB traits absent. |
 | `Illuminate\Foundation\Testing\RefreshDatabase` (trait) | — | **Planned** | No DB refresh/transaction test trait. |
-| `Illuminate\Foundation\Testing\WithFaker` (trait) | `rustasea-testing::StrFactory` | **Partial** | Deterministic string factory real; faker surface smaller. |
+| `Illuminate\Foundation\Testing\WithFaker` (trait) | `rustasea-testing::faker::Faker` | **Partial** | Locale-aware `Faker` facade (`fake` 5.1) behind the `faker` feature: seeded deterministic generation, 14 locales, `unique_*` helpers; the trait-style mixin is not reproduced. |
 
 ## 7. Verification
 

@@ -120,6 +120,17 @@ pub use testing::{
     TestConfig, TestError,
 };
 
+/// Locale-aware fake-data generation (ADOPT-012) — only with the `faker`
+/// feature.
+///
+/// Re-exports the [`Faker`](rustasea_testing::faker::Faker) facade, its
+/// [`FakerError`](rustasea_testing::faker::FakerError), the
+/// [`Locale`](rustasea_testing::faker::Locale) enum, and the fail-open
+/// [`resolve_faker_locale`](rustasea_testing::faker::resolve_faker_locale)
+/// resolver. Opt-in so the core build never links the `fake` tree.
+#[cfg(feature = "faker")]
+pub use rustasea_testing::faker::{resolve_faker_locale, Faker, FakerError, Locale};
+
 /// M6 broadcast/storage/search/jsonapi re-exports (Sprint 07).
 pub use rustasea_broadcast as broadcast;
 pub use rustasea_jsonapi as jsonapi;

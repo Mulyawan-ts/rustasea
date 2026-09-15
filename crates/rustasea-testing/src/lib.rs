@@ -19,6 +19,8 @@ pub mod auth;
 pub mod containers;
 pub mod error;
 pub mod factory;
+#[cfg(feature = "faker")]
+pub mod faker;
 pub mod fakes;
 #[cfg(feature = "postgres")]
 pub mod fixtures;

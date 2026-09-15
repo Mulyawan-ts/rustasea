@@ -18,6 +18,11 @@ auth = ["dep:rustasea-auth"]
 # Reusable HTTP test client: drive an `axum::Router` through a single
 # `tower::ServiceExt::oneshot` and decode the JSON response.
 http = ["dep:axum", "dep:tower", "dep:http-body-util", "dep:serde_json"]
+# Locale-aware fake-data generation (ADOPT-012). Opt-in so the default test
+# build never links the `fake` tree (pay-for-what-you-use, NFR-Sca-02). The
+# optional `tracing` dep backs the explicit unsupported-locale fallback warning
+# and is only pulled in by this feature.
+faker = ["dep:fake", "dep:tracing"]
 
 [dependencies]
 tokio = { workspace = true }
@@ -38,6 +43,8 @@ rustasea-queue = { path = "../rustasea-queue" }
 rustasea-mail = { path = "../rustasea-mail" }
 dotenvy = { workspace = true, optional = true }
 testcontainers = { version = "0.23", optional = true }
+fake = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
 rustasea-auth = { path = "../rustasea-auth", optional = true }
 axum = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }

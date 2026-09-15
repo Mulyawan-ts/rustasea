@@ -16,6 +16,19 @@ pub fn scaffold(root: &Path, opts: &MakeOptions) -> CliResult<Generated> {
 //! `run` (the trait default) executes `sql` against the live pool; keep the
 //! statements idempotent so re-running never duplicates rows
 //! (`INSERT … ON CONFLICT DO NOTHING`).
+//!
+//! For realistic fake data, enable the umbrella crate's `faker` feature
+//! (`rustasea = {{ version = "0.1", features = ["faker"] }}`) and drive a
+//! seeded [`Faker`](rustasea::testing::faker::Faker) so a seed reproduces the
+//! same rows every run:
+//!
+//! ```ignore
+//! use rustasea::testing::faker::Faker;
+//!
+//! let mut faker = Faker::from_config(42, "en_US");
+//! let email = faker.unique_email().expect("unique email");
+//! let name = faker.name();
+//! ```
 
 use rustasea::orm::migration::Seeder;
 use rustasea::orm::Result;
