@@ -21,9 +21,19 @@
 //! Without a published source the REPL still works for the framework-generic
 //! surfaces (`routes`, `commands`, `help`); config/container inspection then
 //! prints a friendly hint instead of failing.
+//!
+//! # Database verbs
+//!
+//! The `db.query` and `model` verbs live in [`verbs`]; they open a short-lived
+//! pool from the resolved database URL rather than reading the application
+//! source, so a read-only query and a table count work without a booted
+//! application. They are the only asynchronous commands: [`TinkerSession::eval`]
+//! is `async` and awaits them while the introspection verbs stay synchronous.
 
 use std::fmt::Write as _;
 use std::sync::{Arc, OnceLock, RwLock};
+
+mod verbs;
 
 /// Application introspection surface the REPL reads.
 ///
@@ -125,9 +135,11 @@ impl TinkerSession {
     /// Evaluate one input line, returning the outcome to render.
     ///
     /// Recognised commands: `help`, `exit`/`quit`, `routes`, `commands`/`list`,
-    /// `config <key>`, `container [key]`, and `app`/`env`. Blank lines yield
-    /// [`TinkerOutcome::Noop`]; an unrecognised command yields a friendly hint.
-    pub fn eval(&self, line: &str) -> TinkerOutcome {
+    /// `config <key>`, `container [key]`, `app`/`env`, `db.query <sql>`, and
+    /// `model <table> [limit]`. Blank lines yield [`TinkerOutcome::Noop`]; an
+    /// unrecognised command yields a friendly hint. The database verbs are the
+    /// only asynchronous ones; every other command renders synchronously.
+    pub async fn eval(&self, line: &str) -> TinkerOutcome {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             return TinkerOutcome::Noop;
@@ -145,6 +157,8 @@ impl TinkerSession {
             "config" => TinkerOutcome::Print(self.config(&rest)),
             "container" => TinkerOutcome::Print(self.container(&rest)),
             "app" | "env" => TinkerOutcome::Print(self.app()),
+            "db.query" => TinkerOutcome::Print(verbs::db_query(&rest).await),
+            "model" => TinkerOutcome::Print(verbs::model(&rest).await),
             other => TinkerOutcome::Print(format!(
                 "unknown command `{other}`. Type `help` for available commands."
             )),
@@ -233,6 +247,8 @@ fn help_text() -> String {
         "  routes                list registered HTTP routes",
         "  commands              list registered console commands",
         "  app                   show the active environment",
+        "  db.query <sql>        run a read-only query, print rows as JSON",
+        "  model <table> [limit] count rows, or list up to `limit` rows as JSON",
         "  exit | quit           leave the session (Ctrl+D also exits)",
     ]
     .join("\n")
@@ -240,13 +256,11 @@ fn help_text() -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use super::*;
     use rustasea_router::RouteEntry;
 
     /// Serializes tests that share the process-wide registries.
-    static LOCK: Mutex<()> = Mutex::new(());
+    static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     /// A deterministic in-memory [`TinkerSource`] for tests.
     struct FakeSource;
@@ -285,22 +299,22 @@ mod tests {
     }
 
     /// A session evaluates `config` and renders the resolved value.
-    #[test]
-    fn session_evaluates_config_command() {
-        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    #[tokio::test]
+    async fn session_evaluates_config_command() {
+        let _guard = LOCK.lock().await;
         let session = TinkerSession::new(Some(Arc::new(FakeSource)));
         assert_eq!(
-            session.eval("config app_name"),
+            session.eval("config app_name").await,
             TinkerOutcome::Print("app_name = \"RustaSea\"".to_string())
         );
     }
 
     /// A session lists container keys and summarises a bound entry.
-    #[test]
-    fn session_inspects_container() {
-        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    #[tokio::test]
+    async fn session_inspects_container() {
+        let _guard = LOCK.lock().await;
         let session = TinkerSession::new(Some(Arc::new(FakeSource)));
-        match session.eval("container") {
+        match session.eval("container").await {
             TinkerOutcome::Print(text) => {
                 assert!(text.contains("config.loader"), "output: {text}");
                 assert!(text.contains("app.environment"), "output: {text}");
@@ -308,19 +322,19 @@ mod tests {
             other => panic!("expected Print, got {other:?}"),
         }
         assert_eq!(
-            session.eval("container app.environment"),
+            session.eval("container app.environment").await,
             TinkerOutcome::Print("app.environment = local".to_string())
         );
     }
 
     /// A session renders the registered route table.
-    #[test]
-    fn session_lists_routes() {
-        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    #[tokio::test]
+    async fn session_lists_routes() {
+        let _guard = LOCK.lock().await;
         crate::routes::set_routes(vec![route("/dashboard")]);
         let session = TinkerSession::from_registry();
 
-        let outcome = session.eval("routes");
+        let outcome = session.eval("routes").await;
         crate::routes::clear_route_source();
 
         match outcome {
@@ -330,12 +344,12 @@ mod tests {
     }
 
     /// An unrecognised command prints a friendly hint and the session continues.
-    #[test]
-    fn syntax_error_is_friendly_and_non_fatal() {
-        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    #[tokio::test]
+    async fn syntax_error_is_friendly_and_non_fatal() {
+        let _guard = LOCK.lock().await;
         let session = TinkerSession::new(Some(Arc::new(FakeSource)));
 
-        match session.eval("frobnicate") {
+        match session.eval("frobnicate").await {
             TinkerOutcome::Print(text) => {
                 assert!(text.contains("unknown command"), "output: {text}");
                 assert!(text.contains("help"), "output: {text}");
@@ -344,21 +358,21 @@ mod tests {
         }
         // The session keeps working after the error (REPL continues).
         assert_eq!(
-            session.eval("config app_name"),
+            session.eval("config app_name").await,
             TinkerOutcome::Print("app_name = \"RustaSea\"".to_string())
         );
     }
 
     /// `config` without a key and an unknown key both yield friendly messages.
-    #[test]
-    fn config_edge_cases_are_friendly() {
-        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    #[tokio::test]
+    async fn config_edge_cases_are_friendly() {
+        let _guard = LOCK.lock().await;
         let session = TinkerSession::new(Some(Arc::new(FakeSource)));
-        match session.eval("config") {
+        match session.eval("config").await {
             TinkerOutcome::Print(text) => assert!(text.contains("usage"), "output: {text}"),
             other => panic!("expected Print, got {other:?}"),
         }
-        match session.eval("config missing_key") {
+        match session.eval("config missing_key").await {
             TinkerOutcome::Print(text) => {
                 assert!(text.contains("no configuration value"), "output: {text}")
             }
@@ -367,38 +381,38 @@ mod tests {
     }
 
     /// Exit, blank lines, and help map onto their outcomes.
-    #[test]
-    fn control_commands_map_to_outcomes() {
-        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    #[tokio::test]
+    async fn control_commands_map_to_outcomes() {
+        let _guard = LOCK.lock().await;
         let session = TinkerSession::new(None);
-        assert_eq!(session.eval("exit"), TinkerOutcome::Exit);
-        assert_eq!(session.eval("quit"), TinkerOutcome::Exit);
-        assert_eq!(session.eval("   "), TinkerOutcome::Noop);
-        match session.eval("help") {
+        assert_eq!(session.eval("exit").await, TinkerOutcome::Exit);
+        assert_eq!(session.eval("quit").await, TinkerOutcome::Exit);
+        assert_eq!(session.eval("   ").await, TinkerOutcome::Noop);
+        match session.eval("help").await {
             TinkerOutcome::Print(text) => assert!(text.contains("config <key>"), "output: {text}"),
             other => panic!("expected Print, got {other:?}"),
         }
     }
 
     /// Without a published source, config/container report the friendly hint.
-    #[test]
-    fn missing_source_is_friendly() {
-        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    #[tokio::test]
+    async fn missing_source_is_friendly() {
+        let _guard = LOCK.lock().await;
         let session = TinkerSession::new(None);
-        match session.eval("config app_name") {
+        match session.eval("config app_name").await {
             TinkerOutcome::Print(text) => assert!(text.contains("no application source")),
             other => panic!("expected Print, got {other:?}"),
         }
-        match session.eval("app") {
+        match session.eval("app").await {
             TinkerOutcome::Print(text) => assert!(text.contains("unknown")),
             other => panic!("expected Print, got {other:?}"),
         }
     }
 
     /// The registry publishes and clears the application source.
-    #[test]
-    fn registry_publishes_and_clears_source() {
-        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    #[tokio::test]
+    async fn registry_publishes_and_clears_source() {
+        let _guard = LOCK.lock().await;
         clear_tinker_source();
         assert!(tinker_source().is_none());
 

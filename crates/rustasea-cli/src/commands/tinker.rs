@@ -63,9 +63,9 @@ impl Command for Tinker {
     async fn run(&self, _args: Vec<String>, _io: &mut Io) -> CliResult<()> {
         let session = TinkerSession::from_registry();
         if std::io::stdin().is_terminal() {
-            run_interactive(&session);
+            run_interactive(&session).await;
         } else {
-            run_piped(&session);
+            run_piped(&session).await;
         }
         Ok(())
     }
@@ -77,12 +77,12 @@ impl Command for Tinker {
 /// happen, so the operator sees responses immediately rather than only after
 /// exiting. Falls back to the piped reader when the editor cannot initialize
 /// (for example an unsupported terminal), so `tinker` never fails to start.
-fn run_interactive(session: &TinkerSession) {
+async fn run_interactive(session: &TinkerSession) {
     let mut editor = match rustyline::DefaultEditor::new() {
         Ok(editor) => editor,
         Err(err) => {
             eprintln!("tinker: line editor unavailable ({err}); reading stdin");
-            run_piped(session);
+            run_piped(session).await;
             return;
         }
     };
@@ -97,7 +97,7 @@ fn run_interactive(session: &TinkerSession) {
                 if !line.trim().is_empty() {
                     let _ = editor.add_history_entry(line.as_str());
                 }
-                match session.eval(&line) {
+                match session.eval(&line).await {
                     TinkerOutcome::Print(text) => println!("{text}"),
                     TinkerOutcome::Exit => break,
                     TinkerOutcome::Noop => {}
@@ -120,14 +120,26 @@ fn run_interactive(session: &TinkerSession) {
 /// Streams the banner and each result to stdout (errors to stderr) so a piped
 /// session behaves like the interactive one: output appears as each line is
 /// evaluated and is not replayed after the process exits.
-fn run_piped(session: &TinkerSession) {
+async fn run_piped(session: &TinkerSession) {
     use std::io::BufRead as _;
 
     print_banner();
     let stdin = std::io::stdin();
-    for line in stdin.lock().lines() {
+    loop {
+        // Read one line while holding the stdin lock only briefly: the guard is
+        // released before the line is evaluated so the returned future stays
+        // `Send` (the lock guard is not `Send`).
+        let line = {
+            let mut guard = stdin.lock();
+            let mut buffer = String::new();
+            match guard.read_line(&mut buffer) {
+                Ok(0) => break,
+                Ok(_) => Ok(buffer),
+                Err(err) => Err(err),
+            }
+        };
         match line {
-            Ok(line) => match session.eval(&line) {
+            Ok(line) => match session.eval(&line).await {
                 TinkerOutcome::Print(text) => println!("{text}"),
                 TinkerOutcome::Exit => break,
                 TinkerOutcome::Noop => {}
@@ -157,15 +169,13 @@ mod tests {
     }
 
     /// Piped mode evaluates each line and continues past a friendly error.
-    #[test]
-    fn piped_mode_evaluates_and_survives_errors() {
-        use std::sync::Mutex;
-
+    #[tokio::test]
+    async fn piped_mode_evaluates_and_survives_errors() {
         use crate::tinker::{clear_tinker_source, set_tinker_source, TinkerSource};
 
         /// Serializes tests sharing the process-wide source registry.
-        static LOCK: Mutex<()> = Mutex::new(());
-        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+        let _guard = LOCK.lock().await;
 
         /// Minimal source exposing one config key.
         struct Source;
@@ -188,14 +198,13 @@ mod tests {
         let session = TinkerSession::from_registry();
 
         let mut io = Io::default();
-        let feed = |line: &str, io: &mut Io| match session.eval(line) {
-            TinkerOutcome::Print(text) => io.line(text),
-            TinkerOutcome::Exit => {}
-            TinkerOutcome::Noop => {}
-        };
-        feed("config app_name", &mut io);
-        feed("bogus command", &mut io);
-        feed("config app_name", &mut io);
+        for line in ["config app_name", "bogus command", "config app_name"] {
+            match session.eval(line).await {
+                TinkerOutcome::Print(text) => io.line(text),
+                TinkerOutcome::Exit => {}
+                TinkerOutcome::Noop => {}
+            }
+        }
         clear_tinker_source();
 
         assert!(
