@@ -66,6 +66,13 @@ mod errors;
 #[cfg(feature = "debugbar")]
 mod debugbar;
 
+/// Queue dashboard surface (`/queue`, `/queue/*.json`, retry/forget) tests
+/// (ADOPT-021), split into a sibling module so `tests.rs` stays under the cap.
+/// Gated on the `queue-dashboard` feature because the routes/module only exist
+/// with it.
+#[cfg(feature = "queue-dashboard")]
+mod queue_dashboard;
+
 /// Build the served router with a throwaway state.
 fn app() -> Router {
     compile(table(), Arc::new(AppState::new("testing", true)))

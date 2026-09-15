@@ -17,6 +17,10 @@ pub mod docs;
 /// Request-error middleware — dev page + prod JSON envelope (ADOPT-010).
 pub mod errors;
 mod helpers;
+/// Queue dashboard surface — metrics history + failed-job management
+/// (ADOPT-021), compiled only with the `queue-dashboard` feature.
+#[cfg(feature = "queue-dashboard")]
+pub mod queue_dashboard;
 pub mod settings;
 pub mod web;
 
@@ -76,6 +80,11 @@ pub fn table() -> RouteTable {
     // `AppState::debug` is set (the same runtime gate `docs` uses).
     #[cfg(feature = "debugbar")]
     debugbar::register(&mut table);
+    // Queue dashboard surface (`/queue`, `/queue/*.json`, retry/forget). Like
+    // the debugbar surface it is compiled only with its feature; the handlers
+    // additionally require `[queue.dashboard].enabled` and `AppState::debug`.
+    #[cfg(feature = "queue-dashboard")]
+    queue_dashboard::register(&mut table);
     table
 }
 

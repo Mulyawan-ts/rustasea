@@ -129,6 +129,44 @@ CREATE INDEX IF NOT EXISTS idx_job_batches_pending ON job_batches (pending_jobs)
     }
 }
 
+/// `queue_metrics` table — periodic queue-depth snapshots for the dashboard.
+///
+/// Backs [`crate::history::QueueMetricsHistory`]: one row per
+/// `(sampled_at, connection, queue)` observation, so the dashboard can chart
+/// pending/delayed/reserved depth and queue age over time. The composite primary
+/// key makes a re-recorded identical sample idempotent, and the `sampled_at`
+/// index keeps the retention prune and the `since` window scan cheap.
+pub struct CreateQueueMetricsTable;
+
+impl Migration for CreateQueueMetricsTable {
+    /// Unique migration name.
+    fn name(&self) -> &str {
+        "2027_01_01_000004_create_queue_metrics_table"
+    }
+
+    /// Create the `queue_metrics` table plus its time index.
+    fn up(&self) -> Result<String> {
+        Ok("\
+CREATE TABLE IF NOT EXISTS queue_metrics (\
+sampled_at TEXT NOT NULL, \
+connection TEXT NOT NULL, \
+queue TEXT NOT NULL, \
+pending INTEGER NOT NULL, \
+delayed INTEGER NOT NULL, \
+reserved INTEGER NOT NULL, \
+oldest_pending TEXT, \
+PRIMARY KEY (sampled_at, connection, queue)\
+); \
+CREATE INDEX IF NOT EXISTS idx_queue_metrics_sampled_at ON queue_metrics (sampled_at)"
+            .to_string())
+    }
+
+    /// Drop the `queue_metrics` table.
+    fn down(&self) -> Result<String> {
+        Ok("DROP TABLE IF EXISTS queue_metrics".to_string())
+    }
+}
+
 /// `job_batches` table migration with a configurable table name.
 ///
 /// Mirrors [`CreateJobBatchesTable`] but emits DDL for `table` (from
@@ -258,6 +296,7 @@ pub fn register() {
         rustasea_orm::register_migration(CreateJobsTable);
         rustasea_orm::register_migration(CreateFailedJobsTable);
         rustasea_orm::register_migration(CreateJobBatchesTable);
+        rustasea_orm::register_migration(CreateQueueMetricsTable);
     });
 }
 
@@ -287,6 +326,9 @@ pub fn register_with_tables_and_batches(jobs_table: &str, failed_table: &str, ba
         rustasea_orm::register_migration(CreateJobBatchesTableNamed {
             table: batches_table.to_string(),
         });
+        // The metrics table name is fixed (not configurable), so the default DDL
+        // is registered alongside the named jobs/failed/batches variants.
+        rustasea_orm::register_migration(CreateQueueMetricsTable);
     });
 }
 
@@ -299,6 +341,7 @@ pub fn migrator() -> rustasea_orm::Migrator {
     migrator.add(CreateJobsTable);
     migrator.add(CreateFailedJobsTable);
     migrator.add(CreateJobBatchesTable);
+    migrator.add(CreateQueueMetricsTable);
     migrator
 }
 
@@ -333,5 +376,6 @@ pub fn migrator_with_batches_table(
     migrator.add(CreateJobBatchesTableNamed {
         table: batches_table.to_string(),
     });
+    migrator.add(CreateQueueMetricsTable);
     migrator
 }

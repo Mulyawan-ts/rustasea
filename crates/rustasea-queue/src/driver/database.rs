@@ -128,6 +128,21 @@ impl DatabaseDriver {
         Ok(())
     }
 
+    /// Permanently forget a dead-lettered job, deleting its `failed_jobs` row.
+    ///
+    /// Returns `true` when a row was deleted and `false` when no row matched the
+    /// id (already retried, already forgotten, or never present). Unlike
+    /// [`DatabaseDriver::retry_failed`], the job is **not** re-enqueued — the
+    /// dead letter is discarded outright.
+    pub async fn forget_failed(&self, id: JobId) -> Result<bool> {
+        let sql = format!("DELETE FROM {} WHERE id = $1", self.failed_table);
+        let affected = self
+            .pool
+            .execute_bind(&sql, &[Value::Text(id.to_string())])
+            .await?;
+        Ok(affected > 0)
+    }
+
     /// Claim the oldest available row, returning its reservation or `None`.
     async fn claim(&self, queue: &str) -> Result<Option<JobPayload>> {
         let now = now_string();

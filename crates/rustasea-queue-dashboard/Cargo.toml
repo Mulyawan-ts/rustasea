@@ -1,0 +1,26 @@
+[package]
+name = "rustasea-queue-dashboard"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Queue dashboard (ADOPT-021) — metrics history, failed-job management, and a background metrics sampler (laravel/horizon parity)."
+
+[dependencies]
+# The queue crate owns the metrics surface (`Queue::metrics`, `QueueMetricsHistory`,
+# `DatabaseDriver::retry_failed`/`forget_failed`) and the worker heartbeat registry.
+rustasea-queue = { path = "../rustasea-queue" }
+# The ORM supplies the `DbPool` the dashboard reads/writes through.
+rustasea-orm = { path = "../rustasea-orm" }
+# The layered `config/*.toml` loader parses the `[queue.dashboard]` table.
+rustasea-config = { path = "../rustasea-config" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+tokio = { workspace = true, features = ["time", "rt"] }
+# `tracing` logs sampler errors without ever aborting the loop.
+tracing = { workspace = true }
+# Typed configuration errors for the `[queue.dashboard]` table.
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "time"] }

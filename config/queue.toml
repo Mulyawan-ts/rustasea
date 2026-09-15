@@ -71,6 +71,23 @@ driver = "database-uuids"
 # database = "default"
 table = "failed_jobs"
 
+# --- Dashboard (ADOPT-021, laravel/horizon parity) ---------------------------
+
+# `dashboard` powers the `/queue` observability surface: it lists live queue
+# depth/age, renders per-queue history from the `queue_metrics` table, and lets
+# an operator retry or forget dead letters. The surface is served only when the
+# app is in debug **and** `enabled` is true; it is always behind the
+# `auth` + `verified` route middleware.
+#
+# `enabled`              — master switch (default false; opt in per environment).
+# `retention_minutes`    — history window pruned by the sampler (default 1440).
+# `sample_interval_secs` — sampler tick that records one snapshot per routed
+#                          (connection, queue) pair (default 60).
+[queue.dashboard]
+enabled = false
+retention_minutes = 1440
+sample_interval_secs = 60
+
 # --- Not yet implemented (Laravel parity, commented examples) ----------------
 #
 # [queue.connections.beanstalkd]

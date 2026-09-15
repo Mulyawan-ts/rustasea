@@ -5693,6 +5693,7 @@ dependencies = [
  "rustasea-openapi",
  "rustasea-orm",
  "rustasea-queue",
+ "rustasea-queue-dashboard",
  "rustasea-router",
  "rustasea-scaffold",
  "rustasea-schedule",
@@ -5754,6 +5755,7 @@ dependencies = [
  "rustasea-logging",
  "rustasea-mail",
  "rustasea-openapi",
+ "rustasea-queue-dashboard",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -5761,6 +5763,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tower-sessions",
+ "tracing",
  "uuid",
 ]
 
@@ -6121,6 +6124,21 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "rustasea-queue-dashboard"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "rustasea-config",
+ "rustasea-orm",
+ "rustasea-queue",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

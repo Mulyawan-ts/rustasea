@@ -21,6 +21,11 @@ sentry = ["rustasea-http/sentry", "rustasea-logging/sentry"]
 # `/_debugbar` surface; the app installs the hooks at boot and mounts the
 # middleware + routes only when this feature is on.
 debugbar = ["dep:rustasea-debugbar"]
+# Queue dashboard (ADOPT-021). Off by default so the standard
+# `cargo run -p rustasea-app` links neither the dashboard crate nor its
+# `/queue` surface; the app installs the pool + sampler at boot and mounts the
+# routes only when this feature is on.
+queue-dashboard = ["dep:rustasea-queue-dashboard"]
 
 [dependencies]
 # `view` exposes the view layer (`ViewResponse`, `ViewEngine`); the forwarded
@@ -67,10 +72,19 @@ rustasea-http = { path = "../rustasea-http" }
 # `tracing` subscriber at boot (`init_from_config`), fixing the gap where the
 # re-export was never called at runtime (CFG-005 / ADOPT-004).
 rustasea-logging = { path = "../rustasea-logging" }
+# `tracing` emits the boot-time best-effort warnings (queue dashboard config,
+# pool, and database-URL failures) through the subscriber installed by
+# `install_observability`, instead of raw `eprintln!` (ADOPT-021 NIT).
+tracing = { workspace = true }
 # Dev request profiler / debug toolbar (ADOPT-009). A direct, optional dependency
 # so the app can install the profiler hooks at boot and mount the `/_debugbar`
 # routes + middleware when the `debugbar` feature is on.
 rustasea-debugbar = { path = "../rustasea-debugbar", optional = true }
+# Queue dashboard (ADOPT-021). A direct, optional dependency so the app can
+# install the shared pool + metrics sampler at boot and mount the `/queue`
+# routes when the `queue-dashboard` feature is on. The dashboard crate re-exports
+# the queue/ORM types the handlers need.
+rustasea-queue-dashboard = { path = "../rustasea-queue-dashboard", optional = true }
 
 [dev-dependencies]
 # `ServiceExt::oneshot` drives the compiled router in route tests.

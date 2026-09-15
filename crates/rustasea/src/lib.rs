@@ -314,3 +314,14 @@ pub use rustasea_debugbar::{
     install as debugbar_install, profiler_middleware as debugbar_middleware, snapshot,
     uninstall as debugbar_uninstall, CacheEntry, EventEntry, RequestProfile, SqlEntry,
 };
+
+/// Queue dashboard re-export (ADOPT-021) — only with the `queue-dashboard`
+/// feature.
+///
+/// [`DashboardConfig`](rustasea_queue_dashboard::DashboardConfig) resolves the
+/// `[queue.dashboard]` config table and
+/// [`spawn_sampler`](rustasea_queue_dashboard::sampler::spawn_sampler) starts the
+/// periodic metrics sampler. Opt-in so the core build never links the dashboard
+/// crate (NFR-Sca-02).
+#[cfg(feature = "queue-dashboard")]
+pub use rustasea_queue_dashboard as queue_dashboard;

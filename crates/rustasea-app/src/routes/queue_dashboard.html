@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RustaSea Queue Dashboard</title>
+    <style>
+      body { font: 13px/1.4 system-ui, sans-serif; margin: 1.5rem; color: #1a1a1a; }
+      h1 { font-size: 1.2rem; }
+      h2 { font-size: 1rem; margin-top: 1.5rem; }
+      table { border-collapse: collapse; width: 100%; margin-top: 0.75rem; }
+      th, td { border: 1px solid #ddd; padding: 0.35rem 0.5rem; text-align: left; }
+      th { background: #f4f4f4; }
+      .muted { color: #777; }
+      .worker-inactive td { color: #999; background: #fafafa; }
+      .spark { display: inline-flex; align-items: flex-end; gap: 1px; height: 20px; max-width: 240px; overflow-x: auto; }
+      .spark span { width: 3px; background: #4a90d9; }
+      button { font: inherit; padding: 0.15rem 0.5rem; cursor: pointer; }
+      .row-actions { display: flex; gap: 0.35rem; }
+      code { background: #f4f4f4; padding: 0 0.2rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Queue Dashboard</h1>
+    <p class="muted">
+      Live queue depths, a rolling metrics history, worker heartbeats, and the
+      failed-job dead-letter list. Data is served by
+      <code>/queue/metrics.json</code> and <code>/queue/failed.json</code>.
+    </p>
+
+    <h2>Queues</h2>
+    <div id="queues">Loading…</div>
+
+    <h2>Workers</h2>
+    <div id="workers">Loading…</div>
+
+    <h2>Failed jobs</h2>
+    <div id="failed">Loading…</div>
+
+    <script>
+      // The CSRF token is injected server-side; every mutating fetch sends it as
+      // the `x-csrf-token` header the global CSRF gate reads.
+      const CSRF_TOKEN = "__CSRF_TOKEN__";
+
+      // Fetch JSON, throwing on a non-OK response so callers can surface it.
+      async function fetchJson(url) {
+        const response = await fetch(url, { headers: { accept: "application/json" } });
+        if (!response.ok) {
+          throw new Error(url + " → " + response.status);
+        }
+        return response.json();
+      }
+
+      // Send a mutating request (POST/DELETE) with the CSRF header.
+      async function mutate(method, url) {
+        const response = await fetch(url, {
+          method,
+          headers: { "x-csrf-token": CSRF_TOKEN, "sec-fetch-site": "same-origin" },
+        });
+        if (!response.ok && response.status !== 303 && response.status !== 302) {
+          const body = await response.text();
+          throw new Error(method + " " + url + " → " + response.status + " " + body);
+        }
+      }
+
+      // At 60s sampling over a 24h window `payload.history` holds up to 1,440
+      // points per queue; keep only the most recent slice so the sparkline never
+      // builds more than a handful of DOM nodes per row.
+      const MAX_SPARK_POINTS = 60;
+
+      // Build a CSS bar sparkline from a numeric series.
+      function sparkline(values) {
+        const wrap = document.createElement("span");
+        wrap.className = "spark";
+        const recent = values.slice(-MAX_SPARK_POINTS);
+        const max = Math.max(1, ...recent);
+        for (const value of recent) {
+          const bar = document.createElement("span");
+          bar.style.height = Math.max(1, Math.round((value / max) * 20)) + "px";
+          bar.title = String(value);
+          wrap.appendChild(bar);
+        }
+        return wrap;
+      }
+
+      // Render the live queue table with per-queue pending history sparklines.
+      function renderQueues(payload) {
+        const root = document.getElementById("queues");
+        const rows = payload.snapshot.queues || [];
+        if (rows.length === 0) {
+          root.textContent = "No queues are routed.";
+          return;
+        }
+        // Group history samples by connection/queue for the sparkline column.
+        const series = new Map();
+        for (const sample of payload.history || []) {
+          const key = sample.connection + "\u0000" + sample.queue;
+          if (!series.has(key)) series.set(key, []);
+          series.get(key).push(Number(sample.pending));
+        }
+
+        const table = document.createElement("table");
+        table.innerHTML =
+          "<thead><tr><th>Connection</th><th>Queue</th><th>Pending</th>" +
+          "<th>Delayed</th><th>Reserved</th><th>Oldest pending</th>" +
+          "<th>Pending history</th></tr></thead>";
+        const tbody = document.createElement("tbody");
+        for (const row of rows) {
+          const tr = document.createElement("tr");
+          const cells = [
+            row.connection,
+            row.queue,
+            String(row.pending),
+            String(row.delayed),
+            String(row.reserved),
+            row.oldest_pending ? new Date(row.oldest_pending).toISOString() : "—",
+          ];
+          for (const value of cells) {
+            const td = document.createElement("td");
+            td.textContent = value;
+            tr.appendChild(td);
+          }
+          const sparkCell = document.createElement("td");
+          const history = series.get(row.connection + "\u0000" + row.queue) || [];
+          sparkCell.appendChild(
+            history.length ? sparkline(history) : document.createTextNode("—")
+          );
+          tr.appendChild(sparkCell);
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        root.replaceChildren(table);
+      }
+
+      // Render the worker-heartbeat table. Inactive (stale) workers are muted.
+      function renderWorkers(workers) {
+        const root = document.getElementById("workers");
+        if (!workers || workers.length === 0) {
+          root.textContent = "No worker heartbeats recorded yet.";
+          return;
+        }
+        const table = document.createElement("table");
+        table.innerHTML =
+          "<thead><tr><th>Queue</th><th>Last seen</th><th>Status</th></tr></thead>";
+        const tbody = document.createElement("tbody");
+        for (const worker of workers) {
+          const tr = document.createElement("tr");
+          if (worker.active === false) {
+            tr.className = "worker-inactive";
+          }
+          const cells = [
+            worker.queue,
+            new Date(worker.last_seen).toISOString(),
+            worker.active === false ? "inactive" : "active",
+          ];
+          for (const value of cells) {
+            const td = document.createElement("td");
+            td.textContent = value;
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        root.replaceChildren(table);
+      }
+
+      // Render the failed-job table with retry/forget buttons.
+      function renderFailed(jobs) {
+        const root = document.getElementById("failed");
+        if (!jobs || jobs.length === 0) {
+          root.textContent = "No failed jobs.";
+          return;
+        }
+        const table = document.createElement("table");
+        table.innerHTML =
+          "<thead><tr><th>Queue</th><th>Connection</th><th>Failed at</th>" +
+          "<th>Exception</th><th>Actions</th></tr></thead>";
+        const tbody = document.createElement("tbody");
+        for (const job of jobs) {
+          const tr = document.createElement("tr");
+          const preview = document.createElement("td");
+          preview.textContent = String(job.exception || "").slice(0, 160);
+          preview.title = String(job.exception || "");
+          for (const value of [job.queue, job.connection, new Date(job.failed_at).toISOString()]) {
+            const td = document.createElement("td");
+            td.textContent = value;
+            tr.appendChild(td);
+          }
+          tr.appendChild(preview);
+
+          const actions = document.createElement("td");
+          const wrap = document.createElement("div");
+          wrap.className = "row-actions";
+          const retry = document.createElement("button");
+          retry.textContent = "Retry";
+          retry.addEventListener("click", () =>
+            act("POST", "/queue/failed/" + job.id + "/retry"));
+          const forget = document.createElement("button");
+          forget.textContent = "Forget";
+          forget.addEventListener("click", () =>
+            act("DELETE", "/queue/failed/" + job.id));
+          wrap.append(retry, forget);
+          actions.appendChild(wrap);
+          tr.appendChild(actions);
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        root.replaceChildren(table);
+      }
+
+      // Run a mutation, then refresh the page data.
+      async function act(method, url) {
+        try {
+          await mutate(method, url);
+        } catch (error) {
+          window.alert(String(error));
+        }
+        await load();
+      }
+
+      // Load every panel.
+      async function load() {
+        try {
+          const metrics = await fetchJson("/queue/metrics.json");
+          renderQueues(metrics);
+          renderWorkers(metrics.workers);
+        } catch (error) {
+          document.getElementById("queues").textContent = "Failed to load metrics: " + error;
+          document.getElementById("workers").textContent = "";
+        }
+        try {
+          renderFailed(await fetchJson("/queue/failed.json"));
+        } catch (error) {
+          document.getElementById("failed").textContent = "Failed to load failed jobs: " + error;
+        }
+      }
+
+      load();
+    </script>
+  </body>
+</html>

@@ -13,6 +13,8 @@ pub mod config;
 pub mod dispatch;
 pub mod driver;
 pub mod error;
+pub mod heartbeat;
+pub mod history;
 pub mod job;
 pub mod metrics;
 pub mod migrations;
@@ -37,11 +39,13 @@ pub use config::{
 #[cfg(feature = "redis")]
 pub use driver::RedisDriver;
 pub use driver::{
-    default_resolver, failed_jobs, register_job, register_job_handler, register_job_with_policy,
-    retry_failed, run_worker, run_worker_with, DatabaseDriver, QueueDriver, SyncDriver,
-    DATABASE_CONNECTION, DATABASE_DRIVER, REDIS_CONNECTION, REDIS_DRIVER, SYNC_CONNECTION,
+    default_resolver, failed_jobs, forget_failed, register_job, register_job_handler,
+    register_job_with_policy, retry_failed, run_worker, run_worker_with, DatabaseDriver,
+    QueueDriver, SyncDriver, DATABASE_CONNECTION, DATABASE_DRIVER, REDIS_CONNECTION, REDIS_DRIVER,
+    SYNC_CONNECTION,
 };
 pub use error::{JobError, QueueConfigError, QueueError, Result};
+pub use history::{QueueMetricsHistory, QueueMetricsSample, QUEUE_METRICS_TABLE};
 pub use job::{
     run_erased, ConcreteJob, DispatchHandle, ErasedJob, FailedJob, Job, JobId, JobOutcome,
     JobPayload,

@@ -137,6 +137,9 @@ where
     while processed < max_jobs {
         let queue = queues[cursor % queues.len()].clone();
         cursor += 1;
+        // Stamp the queue as polled so the dashboard can show live workers
+        // (ADOPT-021). Best-effort: the stamp can never fail the worker.
+        crate::heartbeat::stamp(&queue);
         let Some(payload) = driver.pop(&queue, POP_TIMEOUT).await? else {
             // Stop only after a full cycle with no job (all queues drained).
             misses += 1;

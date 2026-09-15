@@ -190,6 +190,18 @@ pub(crate) fn csrf_protected(method: &axum::http::Method, path: &str) -> bool {
     if method == axum::http::Method::DELETE && path.starts_with("/user/passkeys/") {
         return true;
     }
+    // The queue-dashboard failed-job actions are parameterised
+    // (`/queue/failed/{id}/retry`, `/queue/failed/{id}`), so they are matched by
+    // prefix too (ADOPT-021).
+    if method == axum::http::Method::POST
+        && path.starts_with("/queue/failed/")
+        && path.ends_with("/retry")
+    {
+        return true;
+    }
+    if method == axum::http::Method::DELETE && path.starts_with("/queue/failed/") {
+        return true;
+    }
     matches!(
         (method.as_str(), path),
         ("POST", "/login")

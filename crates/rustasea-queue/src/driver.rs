@@ -205,3 +205,18 @@ pub async fn retry_failed(id: JobId) -> Result<()> {
     guard.remove(idx);
     Ok(())
 }
+
+/// Permanently forget a dead-lettered entry by id (`queue:forget`).
+///
+/// Removes the entry from the in-memory sink and reports whether one was
+/// present. Unlike [`retry_failed`], the job is not re-enqueued. The database
+/// driver's counterpart deletes the `failed_jobs` row instead.
+pub async fn forget_failed(id: JobId) -> Result<bool> {
+    let list = FAILED.get_or_init(|| Mutex::new(Vec::new()));
+    let mut guard = list.lock().map_err(|_| QueueError::RegistryPoisoned)?;
+    let Some(idx) = guard.iter().position(|f| f.id == id) else {
+        return Ok(false);
+    };
+    guard.remove(idx);
+    Ok(true)
+}
