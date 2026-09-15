@@ -355,3 +355,15 @@ pub use rustasea_queue_dashboard as queue_dashboard;
 /// (NFR-Sca-02).
 #[cfg(feature = "excel")]
 pub use rustasea_excel as excel;
+
+/// Image manipulation re-export (ADOPT-024) — only with the `image` feature.
+///
+/// [`Image`](rustasea_image::Image) is the facade for
+/// [`load`](rustasea_image::Image::load) /
+/// [`from_bytes`](rustasea_image::Image::from_bytes), which build an
+/// [`ImageBuilder`](rustasea_image::ImageBuilder) transform pipeline, and
+/// [`ImageTransformJob`](rustasea_image::ImageTransformJob) queues a transform
+/// off the request path. Opt-in so the core build never links the image codec
+/// stack (NFR-Sca-02).
+#[cfg(feature = "image")]
+pub use rustasea_image as image;

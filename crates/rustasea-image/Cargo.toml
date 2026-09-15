@@ -1,0 +1,43 @@
+[package]
+name = "rustasea-image"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Image manipulation (ADOPT-024) — fluent transform pipeline, EXIF auto-orient, storage round-trip and queued transforms (intervention/image parity)."
+
+[dependencies]
+# Raster decode/encode codecs (jpeg/png/webp/gif/bmp/tiff), gated to the
+# formats the crate advertises.
+image = { workspace = true }
+# Op specs serialize for the queued transform job; the report derives
+# (de)serialization for transport.
+serde = { workspace = true, features = ["derive"] }
+# `ImageError::Job` and JSON-shaped failure details.
+serde_json = { workspace = true }
+# Typed crate errors.
+thiserror = { workspace = true }
+# Minimal async runtime used to bridge the async `Storage` trait from the
+# synchronous `store` terminal. `rt-multi-thread` provides
+# `task::block_in_place` and `RuntimeFlavor::MultiThread`, used to detect and
+# cooperate with an ambient multi-threaded runtime instead of panicking.
+tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+# Storage sink (`Storage` trait) — unconditional: the `store` terminal and the
+# queued `ImageTransformJob` both target a storage disk.
+rustasea-storage = { path = "../rustasea-storage" }
+# Queued transform (`Job` trait, `Queue::dispatch`).
+rustasea-queue = { path = "../rustasea-queue", optional = true }
+# The `Job` trait is declared with `#[async_trait]`, so implementing it needs
+# the macro at the call site (only when the `queue` feature is on).
+async-trait = { workspace = true, optional = true }
+
+[features]
+default = ["queue"]
+# Queued transforms (`ImageTransformJob`).
+queue = ["dep:rustasea-queue", "dep:async-trait"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+rustasea-queue = { path = "../rustasea-queue" }
+rustasea-orm = { path = "../rustasea-orm" }
+# Integration tests generate their own image fixtures in memory.
+image = { workspace = true }

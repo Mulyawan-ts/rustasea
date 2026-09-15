@@ -66,6 +66,10 @@ rustasea-queue-dashboard = { path = "../rustasea-queue-dashboard", optional = tr
 # spreadsheet stack (csv/calamine/rust_xlsxwriter); consumers re-export it as
 # `excel` via the matching feature.
 rustasea-excel = { path = "../rustasea-excel", optional = true }
+# Image manipulation (ADOPT-024). Opt-in so the core build never links the
+# image codec stack (image crate); consumers re-export it as `image` via the
+# matching feature.
+rustasea-image = { path = "../rustasea-image", optional = true }
 
 [features]
 default = []
@@ -120,6 +124,9 @@ queue-dashboard = ["dep:rustasea-queue-dashboard"]
 # Excel/CSV import-export (ADOPT-023). Opt-in so the core build never links the
 # spreadsheet stack; consumers re-export the crate as `excel`.
 excel = ["dep:rustasea-excel"]
+# Image manipulation (ADOPT-024). Opt-in so the core build never links the
+# image codec stack; consumers re-export the crate as `image`.
+image = ["dep:rustasea-image"]
 # Broadcast Redis fan-out driver (ADOPT-022). Forwards to `rustasea-broadcast`'s
 # `redis` feature so `rustasea::broadcast` exposes the cross-process Pub/Sub
 # driver; off by default (pay-for-what-you-use, NFR-Sca-02).

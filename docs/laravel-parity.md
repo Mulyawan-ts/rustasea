@@ -88,7 +88,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Concurrency` | `tokio` (workspace dependency) | **N-A** | Concurrency is native `tokio`; no `Concurrency` facade. |
 | `Illuminate\Foundation` | `rustasea-foundation` + `bootstrap/` | **Partial** | App boot + graceful shutdown real; provider/command registries empty. |
 | `Illuminate\Testing` | `rustasea-testing` (`TestCase`, `TestConfig`) | **Partial** | `TestCase` real; `testcontainers` unused; no DB refresh traits. |
-| `Illuminate\Image` | — | **Planned** | No image driver/transformation surface. |
+| `Illuminate\Image` | rustasea-image (Image, ImageBuilder, ImageTransformJob) | Partial | Fluent pipeline (resize/fit/cover/thumbnail/crop/rotate/watermark text+image), EXIF auto-orient, jpeg/png/webp/gif/bmp/tiff encode, storage round-trip + queued transforms (ADOPT-024). No GD/Imagick drivers or animated webp/gif transforms. |
 | `Illuminate\JsonSchema` | — | **Planned** | No JSON-schema contract. |
 | AI SDK (`laravel/ai`, separate package) | `rustasea-ai` (`AiProvider`, `Agent`, `Tool`) | **Partial** | Provider-agnostic traits + agents real; adapters are deterministic stubs (feature `ai`). |
 
