@@ -9,6 +9,9 @@
 //! [`Model::activity_columns`] policy), so the old/new diff and the `changed`
 //! list describe exactly what the database held — a json-cast column cannot
 //! produce a spurious "changed" from a representation mismatch.
+//!
+//! Rows are addressed by a [`KeyFilter`], so a composite primary key records its
+//! event under the joined key values rather than a single UUID.
 
 use std::sync::Arc;
 
@@ -19,7 +22,8 @@ use crate::activity::{
 use crate::db::DbPool;
 use crate::error::{OrmError, Result};
 use crate::model::Model;
-use uuid::Uuid;
+
+use super::key::KeyFilter;
 
 /// The recorder to use for `T`, or `None` when auditing is off for the model.
 ///
@@ -33,38 +37,38 @@ pub(crate) fn recorder<T: Model>() -> Option<Arc<dyn ActivityRecorder>> {
     }
 }
 
-/// Read the current row as a column-filtered JSON snapshot, including trashed rows.
+/// Read the row addressed by `key` as a column-filtered JSON snapshot.
 ///
 /// Returns `None` when the row does not exist. Used for the "before" side of a
 /// change; the "after" side is supplied by the caller from the row it already
 /// re-read after the mutation, so the write path never issues a second SELECT.
 pub(crate) async fn snapshot<T: Model>(
     pool: &DbPool,
-    id: Uuid,
+    key: &KeyFilter,
 ) -> Result<Option<serde_json::Value>> {
-    let row = <T as Model>::query_with_trashed()
-        .where_key(id)
+    let row = key
+        .apply(<T as Model>::query_with_trashed())
         .first(pool)
         .await?;
     Ok(row.map(|row| filter_columns(&row, &T::activity_columns())))
 }
 
-/// Re-read the mutated row once and split it into the hydrated model and the
-/// column-filtered activity snapshot.
+/// Re-read the row addressed by `key` and split it into the hydrated model and
+/// the column-filtered activity snapshot.
 ///
 /// The write path reuses this single SELECT for both the returned model and the
 /// recorded event, so auditing adds no post-mutation round-trip. `fallback` is
 /// returned as the model when the row vanished between the write and the read.
 pub(crate) async fn refresh_with_snapshot<T>(
     pool: &DbPool,
-    id: Uuid,
+    key: &KeyFilter,
     recorder: Option<&Arc<dyn ActivityRecorder>>,
     fallback: T,
 ) -> Result<(T, Option<serde_json::Value>)>
 where
     T: Model + serde::de::DeserializeOwned,
 {
-    let raw = super::refresh_raw::<T>(pool, id).await?;
+    let raw = super::refresh_raw_by_key::<T>(pool, key).await?;
     let snapshot = match (recorder, &raw) {
         (Some(_), Some(row)) => Some(filter_columns(row, &T::activity_columns())),
         _ => None,
@@ -102,7 +106,7 @@ fn is_user_column(name: &str) -> bool {
 /// Assemble an event for `T` with the request-scoped causer and batch id.
 fn event<T: Model>(
     operation: ActivityOperation,
-    id: Uuid,
+    model_id: String,
     old: Option<serde_json::Value>,
     new: Option<serde_json::Value>,
     changed: Vec<String>,
@@ -111,7 +115,7 @@ fn event<T: Model>(
         operation,
         table: T::table_name(),
         model_type: T::type_name().to_string(),
-        model_id: Some(id.to_string()),
+        model_id: Some(model_id),
         old,
         new,
         changed,
@@ -128,7 +132,7 @@ fn event<T: Model>(
 /// [`diff_changed`]).
 pub(crate) async fn record_created<T: Model>(
     recorder: &Arc<dyn ActivityRecorder>,
-    id: Uuid,
+    model_id: &str,
     new: Option<serde_json::Value>,
 ) -> Result<()> {
     let changed = new
@@ -138,7 +142,13 @@ pub(crate) async fn record_created<T: Model>(
         .into_iter()
         .filter(|name| is_user_column(name))
         .collect();
-    let event = event::<T>(ActivityOperation::Created, id, None, new, changed);
+    let event = event::<T>(
+        ActivityOperation::Created,
+        model_id.to_string(),
+        None,
+        new,
+        changed,
+    );
     dispatch(recorder, event).await
 }
 
@@ -149,7 +159,7 @@ pub(crate) async fn record_created<T: Model>(
 /// row was recorded, `Ok(false)` when it was skipped (no-op with `only_dirty`).
 pub(crate) async fn record_updated<T: Model>(
     recorder: &Arc<dyn ActivityRecorder>,
-    id: Uuid,
+    model_id: &str,
     old: Option<serde_json::Value>,
     new: Option<serde_json::Value>,
     operation: ActivityOperation,
@@ -158,7 +168,7 @@ pub(crate) async fn record_updated<T: Model>(
     if changed.is_empty() && T::activity_log_only_dirty() {
         return Ok(false);
     }
-    let event = event::<T>(operation, id, old, new, changed);
+    let event = event::<T>(operation, model_id.to_string(), old, new, changed);
     dispatch(recorder, event).await?;
     Ok(true)
 }
@@ -167,12 +177,18 @@ pub(crate) async fn record_updated<T: Model>(
 /// for a soft delete, where the row still exists with `deleted_at` set).
 pub(crate) async fn record_deleted<T: Model>(
     recorder: &Arc<dyn ActivityRecorder>,
-    id: Uuid,
+    model_id: &str,
     old: Option<serde_json::Value>,
     new: Option<serde_json::Value>,
 ) -> Result<()> {
     let changed = diff_changed(old.as_ref(), new.as_ref());
-    let event = event::<T>(ActivityOperation::Deleted, id, old, new, changed);
+    let event = event::<T>(
+        ActivityOperation::Deleted,
+        model_id.to_string(),
+        old,
+        new,
+        changed,
+    );
     dispatch(recorder, event).await
 }
 

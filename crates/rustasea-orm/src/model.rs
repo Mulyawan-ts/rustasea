@@ -77,60 +77,16 @@ pub struct Relation {
     /// Related-side pivot column for `ManyToMany` relations.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub related_key: Option<String>,
-}
-
-impl Relation {
-    /// Declare a HasMany relation using the `snake_singular` FK convention.
-    pub fn has_many(name: &str, related_table: &str, local_model: &str) -> Self {
-        let fk = format!("{}_id", crate::naming::to_snake_case(local_model));
-        Self {
-            name: name.to_string(),
-            related_table: related_table.to_string(),
-            foreign_key: fk,
-            local_key: "id".to_string(),
-            kind: RelationKind::HasMany,
-            pivot_table: None,
-            related_key: None,
-        }
-    }
-
-    /// Declare a BelongsTo relation using the `snake_singular` FK convention.
-    pub fn belongs_to(name: &str, parent_table: &str) -> Self {
-        let fk = format!("{}_id", crate::naming::singular_from_plural(parent_table));
-        Self {
-            name: name.to_string(),
-            related_table: parent_table.to_string(),
-            foreign_key: fk,
-            local_key: "id".to_string(),
-            kind: RelationKind::BelongsTo,
-            pivot_table: None,
-            related_key: None,
-        }
-    }
-
-    /// Declare a ManyToMany relation through `pivot_table`.
+    /// Composite foreign-key columns (`Some` only for composite relations).
     ///
-    /// The pivot's parent column is `{snake(local_model)}_id` and its related
-    /// column is `{snake(related_model)}_id`, matching the Eloquent convention.
-    pub fn many_to_many(
-        name: &str,
-        related_table: &str,
-        pivot_table: &str,
-        local_model: &str,
-        related_model: &str,
-    ) -> Self {
-        let foreign_key = format!("{}_id", crate::naming::to_snake_case(local_model));
-        let related_key = format!("{}_id", crate::naming::to_snake_case(related_model));
-        Self {
-            name: name.to_string(),
-            related_table: related_table.to_string(),
-            foreign_key,
-            local_key: "id".to_string(),
-            kind: RelationKind::ManyToMany,
-            pivot_table: Some(pivot_table.to_string()),
-            related_key: Some(related_key),
-        }
-    }
+    /// `None` for single-key relations, where [`Relation::foreign_key`] holds
+    /// the sole column. The constructors and key accessors live in
+    /// [`crate::relation`] so this struct stays declarative.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foreign_keys: Option<Vec<String>>,
+    /// Composite local-key columns (`Some` only for composite relations).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_keys: Option<Vec<String>>,
 }
 
 pub use crate::relations::Relations;
@@ -155,6 +111,36 @@ pub trait Model: Send + Sync {
 
     /// Create a new UUID before first persistence.
     fn assign_id(&mut self) -> Uuid;
+
+    /// The primary-key column names.
+    ///
+    /// Defaults to the single `["id"]` column. `#[derive(Model)]` overrides
+    /// this for a `#[model(primary_key = ["tenant_id", "user_id"])]` composite
+    /// key, so persistence and eager loading address the row by its full key.
+    fn primary_key_columns() -> &'static [&'static str]
+    where
+        Self: Sized,
+    {
+        &["id"]
+    }
+
+    /// The primary-key bind values in [`Model::primary_key_columns`] order.
+    ///
+    /// Defaults to `[Value::Uuid(self.primary_key())]` for the single `id`
+    /// column. The derive overrides this for a composite key, collecting each
+    /// declared column's value; it must stay aligned with
+    /// [`Model::primary_key_columns`].
+    fn primary_key_values(&self) -> Vec<Value> {
+        vec![Value::Uuid(self.primary_key())]
+    }
+
+    /// Whether this model keys on more than one column.
+    fn has_composite_primary_key() -> bool
+    where
+        Self: Sized,
+    {
+        Self::primary_key_columns().len() > 1
+    }
 
     /// Declared relations for eager loading.
     fn relations() -> Vec<Relation>

@@ -130,6 +130,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Database\ConnectionResolverInterface` | `rustasea-orm::DbPool` | **Partial** | Single-pool resolution; multi-connection resolver thinner. |
 | `Illuminate\Database\Migrations\MigrationRepositoryInterface` | `rustasea-orm::{Migrator, MigrationRecord}` | **Adopted** | Repository records + migration runner real (`crates/rustasea-orm/src/migration.rs:190`). |
 | `Illuminate\Database\Eloquent\Relations\Concerns\InteractsWithPivotTable` | `rustasea-orm::Relation` | **Planned** | Pivot-table interaction not implemented. |
+| `awobaz/compoships` (composite-key relations) | `rustasea_orm::{Relation, Model}` | **Adopted** | Composite-key `has_many`/`belongs_to`/`many_to_many` builders (`Relation::has_many_composite` etc., arity-validated with a typed error), tuple `IN` eager-loading in one batched query (`crates/rustasea-orm/src/eager.rs`), and composite-primary-key models via `#[model(primary_key = ["a", "b"])]` with a full create/update/delete round-trip (`crates/rustasea-orm/src/relation.rs`, `model_ops/composite.rs`, `rustasea-macros/src/model_primary_key.rs`). |
 
 ### Routing / Http
 

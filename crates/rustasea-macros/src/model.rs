@@ -31,6 +31,7 @@ use syn::{Data, DeriveInput, Fields, Type};
 
 use crate::model_activity::{build_activity_columns, field_skips_activity, parse_logs_activity};
 use crate::model_helpers::{column_name, is_created_at, is_deleted_at, is_updated_at};
+use crate::model_primary_key::{build_composite_primary_key, parse_primary_key};
 use crate::model_sluggable::{build_slug_impl, find_slug_field, parse_sluggable};
 
 /// A resolved cast declaration for one model field.
@@ -187,6 +188,8 @@ fn parse_container(input: &DeriveInput) -> (Option<String>, bool, bool) {
 pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
     let name = &input.ident;
     let (table, soft_deletes, timestamps) = parse_container(input);
+    let primary_key_columns = parse_primary_key(input)?;
+    let composite_primary_key = primary_key_columns.len() > 1;
     let activity = parse_logs_activity(input)?;
     let sluggable = parse_sluggable(input)?;
 
@@ -253,12 +256,30 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
         }
     }
 
-    if !has_id {
+    if !has_id && !composite_primary_key {
         return Err(syn::Error::new_spanned(
             input,
-            "#[derive(Model)] requires an `id: uuid::Uuid` primary key field",
+            "#[derive(Model)] requires an `id: uuid::Uuid` primary key field \
+             (or a composite `#[model(primary_key = [\"...\"])]` declaration)",
         ));
     }
+
+    let primary_key_impl = if composite_primary_key {
+        build_composite_primary_key(fields, &primary_key_columns)?
+    } else {
+        quote! {
+            /// Primary key value.
+            fn primary_key(&self) -> uuid::Uuid {
+                self.#id_field
+            }
+
+            /// Assign a fresh client-generated UUID (v7) before persistence.
+            fn assign_id(&mut self) -> uuid::Uuid {
+                self.#id_field = uuid::Uuid::now_v7();
+                self.#id_field
+            }
+        }
+    };
 
     let soft = soft_deletes && has_deleted;
     let ts = timestamps && has_created && has_updated;
@@ -397,16 +418,7 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
                 #uses_ts
             }
 
-            /// Primary key value.
-            fn primary_key(&self) -> uuid::Uuid {
-                self.#id_field
-            }
-
-            /// Assign a fresh client-generated UUID (v7) before persistence.
-            fn assign_id(&mut self) -> uuid::Uuid {
-                self.#id_field = uuid::Uuid::now_v7();
-                self.#id_field
-            }
+            #primary_key_impl
 
             /// Bump `updated_at` on the instance (in-memory, pre-save).
             fn touch(&mut self) {

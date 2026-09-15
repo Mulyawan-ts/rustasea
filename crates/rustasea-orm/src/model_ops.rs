@@ -7,27 +7,29 @@
 //! A timestamp the caller already supplied is preserved (Laravel's
 //! `updateTimestamps` only fills a stamp that is not already set). Only the
 //! `sqlx` runtime API is used — never the compile-time `query!` macros.
+//!
+//! The single-key path (one `id` column) and the composite-key path (a declared
+//! [`Model::primary_key_columns`]) share this trait: `create`/`save`/`update`
+//! dispatch on the key shape, while `delete`/`refresh` accept either a bare
+//! `Uuid` (single key) or a `&[Value]` tuple (via the `*_by_key` variants).
 
-use crate::activity::ActivityOperation;
 use crate::db::DbPool;
 use crate::error::{OrmError, Result};
-use crate::m2::UpsertBuilder;
 use crate::model::Model;
 use crate::types::Value;
-use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use uuid::Uuid;
 
 mod activity_hooks;
+mod composite;
+mod key;
 mod slug_hooks;
 mod timestamps;
+mod write;
 
+use key::KeyFilter;
 pub use slug_hooks::SluggableFind;
-use timestamps::{provided_timestamp, timestamp_value};
-
-/// Fields that are managed by the ORM and never written as user columns.
-const RESERVED_COLUMNS: &[&str] = &["id", "created_at", "updated_at", "deleted_at", "relations"];
 
 /// Async persistence operations shared by every model.
 #[allow(async_fn_in_trait)]
@@ -39,19 +41,23 @@ pub trait ModelOps: Model + Sized {
     where
         Self: Serialize + DeserializeOwned,
     {
-        if data.primary_key() == Uuid::nil() {
+        if !Self::has_composite_primary_key() && data.primary_key() == Uuid::nil() {
             data.assign_id();
         }
-        let id = data.primary_key();
+        let key = KeyFilter::of(&data);
         slug_hooks::prepare_insert(pool, &mut data).await?;
         let recorder = activity_hooks::recorder::<Self>();
-        let (sql, bindings) = build_insert::<Self>(&data, pool.dialect())?;
+        let (sql, bindings) = if Self::has_composite_primary_key() {
+            composite::build_insert::<Self>(&data, pool.dialect())?
+        } else {
+            write::build_insert::<Self>(&data, pool.dialect())?
+        };
         pool.execute_bind(&sql, &bindings).await?;
         let (persisted, snapshot) =
-            activity_hooks::refresh_with_snapshot::<Self>(pool, id, recorder.as_ref(), data)
+            activity_hooks::refresh_with_snapshot::<Self>(pool, &key, recorder.as_ref(), data)
                 .await?;
         if let Some(recorder) = recorder {
-            activity_hooks::record_created::<Self>(&recorder, id, snapshot).await?;
+            activity_hooks::record_created::<Self>(&recorder, &key.event_id(), snapshot).await?;
         }
         Ok(persisted)
     }
@@ -60,16 +66,16 @@ pub trait ModelOps: Model + Sized {
     ///
     /// Replaces the former exists-then-branch check (a TOCTOU race): the
     /// database resolves insert-vs-update in one statement — Postgres/SQLite
-    /// `INSERT … ON CONFLICT (id) DO UPDATE`, MySQL `INSERT … ON DUPLICATE KEY
+    /// `INSERT … ON CONFLICT (<key>) DO UPDATE`, MySQL `INSERT … ON DUPLICATE KEY
     /// UPDATE`. The row is re-read with [`ModelOps::refresh`] afterwards.
     async fn save(pool: &DbPool, mut data: Self) -> Result<Self>
     where
         Self: Serialize + DeserializeOwned,
     {
-        if data.primary_key() == Uuid::nil() {
+        if !Self::has_composite_primary_key() && data.primary_key() == Uuid::nil() {
             data.assign_id();
         }
-        let id = data.primary_key();
+        let key = KeyFilter::of(&data);
         // The upsert is atomic, so a slug is generated with insert semantics
         // (fresh base + uniqueness). An existing row keeping its slug is
         // preserved only when the caller leaves the slug untouched and
@@ -79,26 +85,31 @@ pub trait ModelOps: Model + Sized {
         // When auditing, read the prior row first so the event can be classified
         // as Created or Updated (the upsert itself is atomic).
         let old = match &recorder {
-            Some(_) => activity_hooks::snapshot::<Self>(pool, id).await?,
+            Some(_) => activity_hooks::snapshot::<Self>(pool, &key).await?,
             None => None,
         };
-        let (sql, bindings) = build_upsert::<Self>(&data, pool.dialect())?;
+        let (sql, bindings) = if Self::has_composite_primary_key() {
+            composite::build_upsert::<Self>(&data, pool.dialect())?
+        } else {
+            write::build_upsert::<Self>(&data, pool.dialect())?
+        };
         pool.execute_bind(&sql, &bindings).await?;
         let (persisted, snapshot) =
-            activity_hooks::refresh_with_snapshot::<Self>(pool, id, recorder.as_ref(), data)
+            activity_hooks::refresh_with_snapshot::<Self>(pool, &key, recorder.as_ref(), data)
                 .await?;
         if let Some(recorder) = recorder {
             if old.is_some() {
                 activity_hooks::record_updated::<Self>(
                     &recorder,
-                    id,
+                    &key.event_id(),
                     old,
                     snapshot,
-                    ActivityOperation::Updated,
+                    crate::activity::ActivityOperation::Updated,
                 )
                 .await?;
             } else {
-                activity_hooks::record_created::<Self>(&recorder, id, snapshot).await?;
+                activity_hooks::record_created::<Self>(&recorder, &key.event_id(), snapshot)
+                    .await?;
             }
         }
         Ok(persisted)
@@ -112,38 +123,42 @@ pub trait ModelOps: Model + Sized {
     where
         Self: Serialize + DeserializeOwned,
     {
-        let id = data.primary_key();
+        let key = KeyFilter::of(&data);
         let recorder = activity_hooks::recorder::<Self>();
         // Only pre-read the prior row when auditing is on, so a non-opted model
         // pays no extra round-trip.
         let old = match &recorder {
-            Some(_) => activity_hooks::snapshot::<Self>(pool, id).await?,
+            Some(_) => activity_hooks::snapshot::<Self>(pool, &key).await?,
             None => None,
         };
         // Regenerate the slug only when the model opts into `on_update`; the
         // pre-read source values let the hook skip an unchanged source.
         let slug_old = match Self::sluggable() && Self::slug_options().on_update {
-            true => Self::refresh(pool, id)
+            true => Self::refresh_by_key(pool, &key.values)
                 .await?
                 .map(|row| row.slug_source_values()),
             false => None,
         };
         slug_hooks::prepare_update(pool, &mut data, slug_old.as_deref()).await?;
-        let (sql, bindings) = build_update::<Self>(&data, pool.dialect())?;
+        let (sql, bindings) = if Self::has_composite_primary_key() {
+            composite::build_update::<Self>(&data, pool.dialect())?
+        } else {
+            write::build_update::<Self>(&data, pool.dialect())?
+        };
         let affected = pool.execute_bind(&sql, &bindings).await?;
         if affected == 0 {
             return Err(OrmError::NotFound);
         }
         let (persisted, snapshot) =
-            activity_hooks::refresh_with_snapshot::<Self>(pool, id, recorder.as_ref(), data)
+            activity_hooks::refresh_with_snapshot::<Self>(pool, &key, recorder.as_ref(), data)
                 .await?;
         if let Some(recorder) = recorder {
             activity_hooks::record_updated::<Self>(
                 &recorder,
-                id,
+                &key.event_id(),
                 old,
                 snapshot,
-                ActivityOperation::Updated,
+                crate::activity::ActivityOperation::Updated,
             )
             .await?;
         }
@@ -152,25 +167,41 @@ pub trait ModelOps: Model + Sized {
 
     /// Delete the row: soft delete when the model soft-deletes, else hard delete.
     async fn delete(pool: &DbPool, id: Uuid) -> Result<bool> {
+        Self::delete_by_key(pool, &[Value::Uuid(id)]).await
+    }
+
+    /// Delete the row addressed by a primary-key value tuple.
+    ///
+    /// Soft delete when the model soft-deletes, else hard delete. The tuple
+    /// length must match [`Model::primary_key_columns`]; a composite model uses
+    /// this instead of the single-`Uuid` [`ModelOps::delete`].
+    async fn delete_by_key(pool: &DbPool, key: &[Value]) -> Result<bool> {
         if Self::uses_soft_deletes() {
-            Self::soft_delete(pool, id).await
+            Self::soft_delete_by_key(pool, key).await
         } else {
-            Self::force_delete(pool, id).await
+            Self::force_delete_by_key(pool, key).await
         }
     }
 
     /// Permanently remove the row, bypassing soft deletes.
     async fn force_delete(pool: &DbPool, id: Uuid) -> Result<bool> {
+        Self::force_delete_by_key(pool, &[Value::Uuid(id)]).await
+    }
+
+    /// Permanently remove the row addressed by a primary-key value tuple.
+    async fn force_delete_by_key(pool: &DbPool, key: &[Value]) -> Result<bool> {
+        let filter = resolve_key_filter::<Self>(key)?;
         let recorder = activity_hooks::recorder::<Self>();
         let old = match &recorder {
-            Some(_) => activity_hooks::snapshot::<Self>(pool, id).await?,
+            Some(_) => activity_hooks::snapshot::<Self>(pool, &filter).await?,
             None => None,
         };
-        let sql = Self::delete_sql(&Self::table_name());
-        let affected = pool.execute_bind(&sql, &[Value::Uuid(id)]).await?;
+        let (sql, bindings) = composite::build_delete::<Self>(&filter);
+        let affected = pool.execute_bind(&sql, &bindings).await?;
         if let Some(recorder) = recorder {
             if affected > 0 {
-                activity_hooks::record_deleted::<Self>(&recorder, id, old, None).await?;
+                activity_hooks::record_deleted::<Self>(&recorder, &filter.event_id(), old, None)
+                    .await?;
             }
         }
         Ok(affected > 0)
@@ -180,34 +211,29 @@ pub trait ModelOps: Model + Sized {
     ///
     /// The timestamp expression follows the runtime pool dialect, not the
     /// compile-time feature set: SQLite binds a fixed-width RFC3339 string
-    /// (`$2`) while Postgres/MySQL use the native `NOW()` function. This keeps
-    /// soft deletes working when `postgres` is enabled but an SQLite pool is in
-    /// use.
+    /// while Postgres/MySQL use the native `NOW()` function. This keeps soft
+    /// deletes working when `postgres` is enabled but an SQLite pool is in use.
     async fn soft_delete(pool: &DbPool, id: Uuid) -> Result<bool> {
+        Self::soft_delete_by_key(pool, &[Value::Uuid(id)]).await
+    }
+
+    /// Soft-delete the row addressed by a primary-key value tuple.
+    async fn soft_delete_by_key(pool: &DbPool, key: &[Value]) -> Result<bool> {
+        let filter = resolve_key_filter::<Self>(key)?;
         let recorder = activity_hooks::recorder::<Self>();
         let old = match &recorder {
-            Some(_) => activity_hooks::snapshot::<Self>(pool, id).await?,
+            Some(_) => activity_hooks::snapshot::<Self>(pool, &filter).await?,
             None => None,
         };
-        let mut bindings = vec![Value::Uuid(id)];
-        let expr = match pool.dialect() {
-            "sqlite" => {
-                bindings.push(timestamp_value(Utc::now(), "sqlite"));
-                "$2"
-            }
-            _ => "NOW()",
-        };
-        let sql = format!(
-            "UPDATE {} SET deleted_at = {expr} WHERE id = $1",
-            Self::table_name(),
-        );
+        let (sql, bindings) = composite::build_soft_delete::<Self>(&filter, pool.dialect());
         let affected = pool.execute_bind(&sql, &bindings).await?;
         if let Some(recorder) = recorder {
             if affected > 0 {
                 // The row still exists with `deleted_at` set, so the event
                 // carries both the pre- and post-delete snapshots.
-                let new = activity_hooks::snapshot::<Self>(pool, id).await?;
-                activity_hooks::record_deleted::<Self>(&recorder, id, old, new).await?;
+                let new = activity_hooks::snapshot::<Self>(pool, &filter).await?;
+                activity_hooks::record_deleted::<Self>(&recorder, &filter.event_id(), old, new)
+                    .await?;
             }
         }
         Ok(affected > 0)
@@ -218,7 +244,17 @@ pub trait ModelOps: Model + Sized {
     where
         Self: DeserializeOwned,
     {
-        match refresh_raw::<Self>(pool, id).await? {
+        Self::refresh_by_key(pool, &[Value::Uuid(id)]).await
+    }
+
+    /// Re-read the row addressed by a primary-key value tuple (trashed rows
+    /// included).
+    async fn refresh_by_key(pool: &DbPool, key: &[Value]) -> Result<Option<Self>>
+    where
+        Self: DeserializeOwned,
+    {
+        let filter = resolve_key_filter::<Self>(key)?;
+        match refresh_raw_by_key::<Self>(pool, &filter).await? {
             Some(value) => Ok(Some(crate::casts::hydrate::<Self>(value)?)),
             None => Ok(None),
         }
@@ -229,8 +265,7 @@ pub trait ModelOps: Model + Sized {
     /// The pessimistic lock follows the runtime pool dialect, not the
     /// compile-time feature set: SQLite has no row locks and surfaces
     /// [`OrmError::UnsupportedDriver`] before any round-trip, even when the
-    /// `postgres`/`mysql` features are compiled in. Postgres/MySQL pools still
-    /// emit `FOR UPDATE`.
+    /// `postgres`/`mysql` features are compiled in.
     async fn first_for_update(pool: &DbPool, id: Uuid) -> Result<Self>
     where
         Self: DeserializeOwned,
@@ -243,244 +278,60 @@ pub trait ModelOps: Model + Sized {
             None => Err(OrmError::NotFound),
         }
     }
+
+    /// Load the row addressed by a primary-key tuple `FOR UPDATE`.
+    async fn first_for_update_by_key(pool: &DbPool, key: &[Value]) -> Result<Self>
+    where
+        Self: DeserializeOwned,
+    {
+        let filter = resolve_key_filter::<Self>(key)?;
+        let builder = filter
+            .apply(
+                crate::builder::QueryBuilder::table(Self::table_name())
+                    .with_global_scopes(Self::global_scopes()),
+            )
+            .for_update_with_dialect(pool.dialect())?;
+        match builder.first(pool).await? {
+            Some(value) => crate::casts::hydrate::<Self>(value),
+            None => Err(OrmError::NotFound),
+        }
+    }
+}
+
+/// Resolve a caller-supplied key tuple into a validated [`KeyFilter`] for `T`.
+///
+/// A tuple whose length disagrees with [`Model::primary_key_columns`] is a
+/// typed [`OrmError::InvalidState`], so a composite row is never addressed by a
+/// partial key.
+fn resolve_key_filter<T: Model>(key: &[Value]) -> Result<KeyFilter> {
+    let columns = T::primary_key_columns();
+    if key.len() != columns.len() {
+        return Err(OrmError::InvalidState(format!(
+            "primary key arity mismatch: {} columns, {} values",
+            columns.len(),
+            key.len()
+        )));
+    }
+    Ok(KeyFilter {
+        columns: columns.to_vec(),
+        values: key.to_vec(),
+    })
 }
 
 impl<T: Model> ModelOps for T {}
 
-/// Re-read a row by primary key as its raw JSON object, including trashed rows.
+/// Re-read a row by primary-key filter as raw JSON, including trashed rows.
 ///
 /// The write path calls this once after a mutation so the same row can serve
 /// both the hydrated return value and the activity snapshot — avoiding a second
 /// SELECT when auditing is on.
-async fn refresh_raw<T: Model>(pool: &DbPool, id: Uuid) -> Result<Option<serde_json::Value>> {
-    <T as Model>::query_with_trashed()
-        .where_key(id)
+async fn refresh_raw_by_key<T: Model>(
+    pool: &DbPool,
+    key: &KeyFilter,
+) -> Result<Option<serde_json::Value>> {
+    key.apply(<T as Model>::query_with_trashed())
         .first(pool)
         .await
-}
-
-/// Collect the insertable `(column, value)` pairs for a model instance.
-///
-/// User columns come from the model's `serde` object (reserved fields skipped);
-/// the primary key is first and each tracked timestamp column is appended. A
-/// timestamp the model already set is preserved; one left unset is filled with
-/// the current UTC time — the Laravel `updateTimestamps` contract, where a
-/// stamp that is already populated is not overwritten. Shared by
-/// [`build_insert`] and [`build_upsert`].
-fn insert_columns_and_bindings<T: Model + Serialize>(
-    data: &T,
-    dialect: &str,
-) -> Result<(Vec<String>, Vec<Value>)> {
-    let object = model_object(data)?;
-    let columns = columns_from_object(&object)?;
-    let timestamps = T::insert_columns();
-
-    let mut names: Vec<String> = Vec::with_capacity(columns.len() + timestamps.len() + 1);
-    let mut bindings: Vec<Value> = Vec::with_capacity(columns.len() + timestamps.len() + 1);
-    names.push("id".to_string());
-    bindings.push(Value::Uuid(data.primary_key()));
-    for (column, value) in &columns {
-        names.push(column.clone());
-        bindings.push(value.clone());
-    }
-    if !timestamps.is_empty() {
-        let now = Utc::now();
-        for ts in &timestamps {
-            let stamp = provided_timestamp(&object, ts).unwrap_or(now);
-            names.push((*ts).to_string());
-            bindings.push(timestamp_value(stamp, dialect));
-        }
-    }
-    Ok((names, bindings))
-}
-
-/// Build the INSERT statement and bindings for a model instance.
-fn build_insert<T: Model + Serialize>(data: &T, dialect: &str) -> Result<(String, Vec<Value>)> {
-    let table = T::table_name();
-    let (names, bindings) = insert_columns_and_bindings(data, dialect)?;
-    let placeholders: Vec<String> = (1..=bindings.len()).map(|i| format!("${i}")).collect();
-    let sql = format!(
-        "INSERT INTO {table} ({}) VALUES ({})",
-        names.join(", "),
-        placeholders.join(", ")
-    );
-    Ok((sql, bindings))
-}
-
-/// Build the atomic dialect-aware upsert statement and bindings for a model.
-///
-/// Postgres/SQLite route through the [`Model::upsert_sql`] path, emitting
-/// `INSERT … ON CONFLICT (id) DO UPDATE SET …`; MySQL emits
-/// `INSERT … ON DUPLICATE KEY UPDATE …`. `created_at` is preserved on conflict
-/// (excluded from the update set) while `updated_at` is refreshed. Resolving
-/// insert-vs-update in one statement removes the previous check-then-act race.
-fn build_upsert<T: Model + Serialize>(data: &T, dialect: &str) -> Result<(String, Vec<Value>)> {
-    let table = T::table_name();
-    let (names, bindings) = insert_columns_and_bindings(data, dialect)?;
-
-    let mut builder = UpsertBuilder::table(table.clone()).unique_by(&["id"])?;
-    for name in &names {
-        builder = builder.column(name);
-    }
-    builder = builder.exclude(&["created_at"]);
-
-    let sql = match dialect {
-        "mysql" => mysql_upsert_sql(&table, &names),
-        _ => T::upsert_sql(&builder)?,
-    };
-    Ok((sql, bindings))
-}
-
-/// Emit the MySQL upsert shape: `INSERT … ON DUPLICATE KEY UPDATE col = VALUES(col)`.
-///
-/// The primary key and `created_at` are preserved on conflict; every other
-/// inserted column is refreshed from the incoming row.
-fn mysql_upsert_sql(table: &str, columns: &[String]) -> String {
-    let placeholders: Vec<String> = (1..=columns.len()).map(|i| format!("${i}")).collect();
-    let updates: Vec<String> = columns
-        .iter()
-        .filter(|column| column.as_str() != "id" && column.as_str() != "created_at")
-        .map(|column| format!("{column} = VALUES({column})"))
-        .collect();
-    format!(
-        "INSERT INTO {table} ({}) VALUES ({}) ON DUPLICATE KEY UPDATE {}",
-        columns.join(", "),
-        placeholders.join(", "),
-        updates.join(", ")
-    )
-}
-
-/// Build the UPDATE statement and bindings for a model instance.
-///
-/// The primary key is `$1`; `updated_at` is appended as a bound timestamp shaped
-/// for `dialect`. `created_at` is reserved and never reassigned, so an update
-/// refreshes `updated_at` without disturbing the creation stamp.
-fn build_update<T: Model + Serialize>(data: &T, dialect: &str) -> Result<(String, Vec<Value>)> {
-    let table = T::table_name();
-    let columns = user_columns(data)?;
-
-    let mut bindings: Vec<Value> = vec![Value::Uuid(data.primary_key())];
-    let mut assignments: Vec<String> = Vec::with_capacity(columns.len() + 1);
-    for (column, value) in &columns {
-        bindings.push(value.clone());
-        assignments.push(format!("{column} = ${}", bindings.len()));
-    }
-    if let Some(updated) = T::updated_column() {
-        bindings.push(timestamp_value(Utc::now(), dialect));
-        assignments.push(format!("{updated} = ${}", bindings.len()));
-    }
-
-    let sql = format!(
-        "UPDATE {table} SET {} WHERE id = $1",
-        assignments.join(", ")
-    );
-    Ok((sql, bindings))
-}
-
-/// Serialize a model to its JSON object with persistence casts applied.
-///
-/// Every declared attribute cast is applied first (in the persistence
-/// direction), so a `#[model(cast = "json")]` field is already JSON rather than
-/// its raw serde shape. The owned object is returned so callers can both read a
-/// caller-supplied timestamp and derive the bind columns from it.
-fn model_object<T: Model + Serialize>(data: &T) -> Result<serde_json::Value> {
-    let mut value = serde_json::to_value(data)
-        .map_err(|error| OrmError::Storage(format!("model serialization failed: {error}")))?;
-    apply_set_casts::<T>(&mut value)?;
-    if !value.is_object() {
-        return Err(OrmError::InvalidValue(
-            "model must serialize to a JSON object".into(),
-        ));
-    }
-    Ok(value)
-}
-
-/// Extract the writable `(column, value)` pairs from a serialized model object.
-///
-/// Reserved columns (`id`, the timestamps, `deleted_at`, `relations`) are
-/// skipped: the primary key and timestamps are managed by the write path.
-fn columns_from_object(object: &serde_json::Value) -> Result<Vec<(String, Value)>> {
-    let object = object
-        .as_object()
-        .ok_or_else(|| OrmError::InvalidValue("model must serialize to a JSON object".into()))?;
-
-    let mut columns = Vec::new();
-    for (column, value) in object {
-        if RESERVED_COLUMNS.contains(&column.as_str()) {
-            continue;
-        }
-        columns.push((column.clone(), json_to_value(column, value)?));
-    }
-    Ok(columns)
-}
-
-/// Extract the writable `(column, value)` pairs from a model's serde object.
-///
-/// Every declared attribute cast is applied first (in the persistence
-/// direction), so a `#[model(cast = "json")]` field binds as JSON rather than
-/// as its raw serde shape.
-fn user_columns<T: Model + Serialize>(data: &T) -> Result<Vec<(String, Value)>> {
-    let object = model_object(data)?;
-    columns_from_object(&object)
-}
-
-/// Apply the persistence direction of every cast declared on `T` in place.
-///
-/// Columns absent from the serialized object are skipped, so an optional cast
-/// field that is `None` (and therefore omitted) does not error.
-fn apply_set_casts<T: Model>(value: &mut serde_json::Value) -> Result<()> {
-    let bindings = T::casts();
-    if bindings.is_empty() {
-        return Ok(());
-    }
-    let object = value
-        .as_object_mut()
-        .ok_or_else(|| OrmError::InvalidValue("model must serialize to a JSON object".into()))?;
-    for binding in &bindings {
-        if let Some(field) = object.get(binding.column).cloned() {
-            let bound = (binding.set)(binding.column, &field)?;
-            object.insert(binding.column.to_string(), bound.to_json());
-        }
-    }
-    Ok(())
-}
-
-/// Whether `column` holds a UUID and therefore must bind natively as one.
-///
-/// The primary key (`id`) and foreign keys/UUID columns (`*_id`, `*_uuid`) are
-/// covered; every other string column stays text.
-fn is_uuid_column(column: &str) -> bool {
-    column == "id" || column.ends_with("_id") || column.ends_with("_uuid")
-}
-
-/// Convert a JSON field value into a bind [`Value`].
-///
-/// The primary key and `*_id`/`*_uuid` columns are decoded to a UUID so they
-/// bind against UUID columns; a string that fails to parse in one of those
-/// columns is a typed [`OrmError::InvalidValue`] rather than a silent text bind.
-fn json_to_value(column: &str, value: &serde_json::Value) -> Result<Value> {
-    Ok(match value {
-        serde_json::Value::Null => Value::Null,
-        serde_json::Value::Bool(b) => Value::Bool(*b),
-        serde_json::Value::Number(number) => match number.as_i64() {
-            Some(int) => Value::Int(int),
-            None => Value::Float(number.as_f64().unwrap_or_default()),
-        },
-        serde_json::Value::String(text) => {
-            if is_uuid_column(column) {
-                match Uuid::parse_str(text) {
-                    Ok(id) => return Ok(Value::Uuid(id)),
-                    Err(_) => {
-                        return Err(OrmError::InvalidValue(format!(
-                            "column `{column}` expects a UUID, got `{text}`"
-                        )))
-                    }
-                }
-            }
-            Value::Text(text.clone())
-        }
-        other => Value::Json(other.clone()),
-    })
 }
 
 #[cfg(test)]

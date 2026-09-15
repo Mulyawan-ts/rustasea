@@ -14,6 +14,7 @@ mod global;
 pub(crate) use exec::json_to_model;
 pub use exec::Executor;
 
+mod composite;
 mod eager;
 
 #[cfg(test)]

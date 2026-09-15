@@ -21,6 +21,7 @@ mod field_rules;
 mod model;
 mod model_activity;
 pub(crate) mod model_helpers;
+mod model_primary_key;
 mod model_sluggable;
 
 use field_rules::field_rule_specs;

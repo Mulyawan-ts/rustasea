@@ -6,7 +6,7 @@
 //! windowing. The sqlx runtime API is used throughout.
 
 use chrono::{DateTime, Utc};
-use rustasea_orm::{DbPool, Model, ModelOps, OrmError, QueryBuilder};
+use rustasea_orm::{DbPool, Model, ModelOps, OrmError, QueryBuilder, Value};
 use uuid::Uuid;
 
 /// Derived model mapped to `users`, with tracked timestamps and soft deletes.
@@ -193,5 +193,104 @@ async fn first_for_update_rejects_sqlite_pool_at_runtime() {
     assert!(
         matches!(error, OrmError::UnsupportedDriver(_)),
         "expected UnsupportedDriver, got {error:?}"
+    );
+}
+
+/// Composite-primary-key model: no `id` field, key declared via `#[model]`.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rustasea_macros::Model)]
+#[model(table = "memberships", primary_key = ["tenant_id", "user_id"])]
+struct Membership {
+    tenant_id: Uuid,
+    user_id: Uuid,
+    role: String,
+}
+
+/// Build a fresh in-memory pool with the composite `memberships` table applied.
+async fn pool_with_memberships() -> DbPool {
+    let pool = DbPool::connect("sqlite::memory:").await.unwrap();
+    pool.execute_bind(
+        "CREATE TABLE memberships (
+            tenant_id BLOB NOT NULL,
+            user_id BLOB NOT NULL,
+            role TEXT NOT NULL,
+            PRIMARY KEY (tenant_id, user_id)
+        )",
+        &[],
+    )
+    .await
+    .unwrap();
+    pool
+}
+
+/// Verifies a composite-PK model round-trips create → refresh → update → delete.
+#[tokio::test]
+async fn composite_primary_key_round_trip() {
+    let pool = pool_with_memberships().await;
+    let tenant = Uuid::now_v7();
+    let user = Uuid::now_v7();
+    let membership = Membership {
+        tenant_id: tenant,
+        user_id: user,
+        role: "admin".into(),
+    };
+
+    let created = Membership::create(&pool, membership).await.unwrap();
+    assert_eq!(created.role, "admin");
+    assert_eq!(created.primary_key_values().len(), 2);
+
+    // Refresh addresses the row by its composite key tuple.
+    let key = [Value::Uuid(tenant), Value::Uuid(user)];
+    let fetched = Membership::refresh_by_key(&pool, &key)
+        .await
+        .unwrap()
+        .expect("row should exist");
+    assert_eq!(fetched.role, "admin");
+
+    // Update the non-key column, keyed by the tuple.
+    let mut updated = fetched;
+    updated.role = "owner".into();
+    let persisted = Membership::update(&pool, updated).await.unwrap();
+    assert_eq!(persisted.role, "owner");
+
+    // A second row for a DIFFERENT user under the same tenant is unaffected.
+    let other = Membership {
+        tenant_id: tenant,
+        user_id: Uuid::now_v7(),
+        role: "member".into(),
+    };
+    Membership::create(&pool, other).await.unwrap();
+    assert_eq!(
+        QueryBuilder::table("memberships")
+            .count(&pool)
+            .await
+            .unwrap(),
+        2
+    );
+
+    // Delete by composite key removes exactly the addressed row.
+    assert!(Membership::delete_by_key(&pool, &key).await.unwrap());
+    assert_eq!(
+        QueryBuilder::table("memberships")
+            .count(&pool)
+            .await
+            .unwrap(),
+        1
+    );
+    assert!(Membership::refresh_by_key(&pool, &key)
+        .await
+        .unwrap()
+        .is_none());
+}
+
+/// Verifies a composite key tuple of the wrong arity is a typed error.
+#[tokio::test]
+async fn composite_key_arity_mismatch_is_typed_error() {
+    let pool = pool_with_memberships().await;
+    let error = Membership::refresh_by_key(&pool, &[Value::Uuid(Uuid::now_v7())])
+        .await
+        .expect_err("partial composite key must fail");
+    assert!(
+        matches!(error, OrmError::InvalidState(_)),
+        "expected InvalidState, got {error:?}"
     );
 }

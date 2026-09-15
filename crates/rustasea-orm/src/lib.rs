@@ -22,6 +22,7 @@ pub mod model;
 pub mod model_ops;
 pub mod naming;
 pub mod profile;
+pub mod relation;
 pub mod relations;
 pub mod schema;
 pub mod scopes;

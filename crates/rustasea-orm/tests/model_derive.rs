@@ -369,3 +369,81 @@ fn derive_defaults_to_non_sluggable() {
     };
     assert!(user.slug_source_values().is_empty());
 }
+
+/// Composite-primary-key model: no `id` field, key declared via `#[model]`.
+#[allow(dead_code)]
+#[derive(rustasea_macros::Model)]
+#[model(table = "memberships", primary_key = ["tenant_id", "user_id"])]
+struct Membership {
+    tenant_id: Uuid,
+    user_id: Uuid,
+    role: String,
+}
+
+/// Verifies a composite `#[model(primary_key = [...])]` compiles without an
+/// `id` field and reports its declared columns.
+#[test]
+fn derive_composite_primary_key_columns() {
+    assert!(<Membership as Model>::has_composite_primary_key());
+    assert_eq!(
+        <Membership as Model>::primary_key_columns(),
+        &["tenant_id", "user_id"]
+    );
+    assert_eq!(<Membership as Model>::table_name(), "memberships");
+}
+
+/// Verifies `primary_key_values` collects the declared key fields in order.
+#[test]
+fn derive_composite_primary_key_values() {
+    let tenant = Uuid::now_v7();
+    let user = Uuid::now_v7();
+    let membership = Membership {
+        tenant_id: tenant,
+        user_id: user,
+        role: "admin".into(),
+    };
+    assert_eq!(
+        membership.primary_key_values(),
+        vec![Value::Uuid(tenant), Value::Uuid(user)]
+    );
+    // `primary_key` returns the first key column (a Uuid here).
+    assert_eq!(membership.primary_key(), tenant);
+}
+
+/// Composite-primary-key model whose first key column is a non-Uuid `String`.
+#[allow(dead_code)]
+#[derive(rustasea_macros::Model)]
+#[model(table = "ledger_entries", primary_key = ["account", "seq"])]
+struct LedgerEntry {
+    account: String,
+    seq: i64,
+    amount: i64,
+}
+
+/// Verifies a non-Uuid first key column falls back to `Uuid::nil()` while the
+/// composite accessors still report the declared columns and typed values.
+#[test]
+fn derive_composite_primary_key_non_uuid_first_column() {
+    let entry = LedgerEntry {
+        account: "acc-1".into(),
+        seq: 7,
+        amount: 100,
+    };
+    assert!(<LedgerEntry as Model>::has_composite_primary_key());
+    assert_eq!(
+        <LedgerEntry as Model>::primary_key_columns(),
+        &["account", "seq"]
+    );
+    assert_eq!(entry.primary_key(), Uuid::nil());
+    assert_eq!(
+        entry.primary_key_values(),
+        vec![Value::Text("acc-1".into()), Value::Int(7)]
+    );
+}
+
+/// Verifies a single-key model reports the default `["id"]` primary key.
+#[test]
+fn derive_single_primary_key_default_columns() {
+    assert!(!<User as Model>::has_composite_primary_key());
+    assert_eq!(<User as Model>::primary_key_columns(), &["id"]);
+}

@@ -6,7 +6,10 @@
 //! bind shape tracks the runtime dialect.
 
 use super::*;
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
+
+use super::timestamps::{provided_timestamp, timestamp_value};
+use super::write::{build_update, insert_columns_and_bindings, json_to_value};
 
 /// A fixed UUID string used across the type-fidelity assertions.
 const UUID_TEXT: &str = "f3c1f3c1-0000-4000-8000-000000000000";

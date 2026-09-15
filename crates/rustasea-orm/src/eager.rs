@@ -13,6 +13,12 @@ use serde_json::{Map, Value as JsonValue};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+/// Separator joining composite key parts into a dedup/grouping key.
+///
+/// The unit-separator control character cannot appear in a UUID or an ordinary
+/// text key, so two distinct tuples never collide on their joined form.
+const COMPOSITE_KEY_SEPARATOR: char = '\u{1f}';
+
 /// Requested relation names and the declared relation metadata to resolve them.
 #[derive(Debug, Clone, Default)]
 pub struct EagerPlan {
@@ -87,6 +93,9 @@ async fn load_has_many<'a>(
     executor: &mut Executor<'a>,
     relation: &Relation,
 ) -> Result<()> {
+    if relation.is_composite() {
+        return load_has_many_composite(rows, executor, relation).await;
+    }
     let keys = parent_keys(rows, &relation.local_key);
     let mut grouped: HashMap<String, Vec<JsonValue>> = HashMap::new();
     if !keys.is_empty() {
@@ -105,12 +114,42 @@ async fn load_has_many<'a>(
     Ok(())
 }
 
+/// Eager-load a composite `HasMany` with one row-value `IN` query.
+async fn load_has_many_composite<'a>(
+    rows: &mut [JsonValue],
+    executor: &mut Executor<'a>,
+    relation: &Relation,
+) -> Result<()> {
+    let local_keys = relation.effective_local_keys();
+    let foreign_keys = relation.effective_foreign_keys();
+    let tuples = parent_rows(rows, local_keys);
+    let mut grouped: HashMap<String, Vec<JsonValue>> = HashMap::new();
+    if !tuples.is_empty() {
+        let columns: Vec<&str> = foreign_keys.iter().map(String::as_str).collect();
+        let builder = crate::builder::QueryBuilder::table(relation.related_table.clone())
+            .where_in_rows(&columns, tuples);
+        let sql = builder.to_sql()?;
+        let bindings = builder.bindings().to_vec();
+        let related = executor.fetch_json(&sql, &bindings).await?;
+        for row in related {
+            if let Some(key) = row_composite_key(&row, foreign_keys) {
+                grouped.entry(key).or_default().push(row);
+            }
+        }
+    }
+    attach_arrays_composite(rows, local_keys, &relation.name, grouped);
+    Ok(())
+}
+
 /// Eager-load a `BelongsTo`: one parent object keyed by its primary key.
 async fn load_belongs_to<'a>(
     rows: &mut [JsonValue],
     executor: &mut Executor<'a>,
     relation: &Relation,
 ) -> Result<()> {
+    if relation.is_composite() {
+        return load_belongs_to_composite(rows, executor, relation).await;
+    }
     let keys = parent_keys(rows, &relation.foreign_key);
     let mut by_id: HashMap<String, JsonValue> = HashMap::new();
     if !keys.is_empty() {
@@ -134,12 +173,49 @@ async fn load_belongs_to<'a>(
     Ok(())
 }
 
+/// Eager-load a composite `BelongsTo`: parents matched on their local-key
+/// columns against the child's foreign-key tuple.
+async fn load_belongs_to_composite<'a>(
+    rows: &mut [JsonValue],
+    executor: &mut Executor<'a>,
+    relation: &Relation,
+) -> Result<()> {
+    // This table holds the foreign-key tuple; the parent holds the local keys.
+    let foreign_keys = relation.effective_foreign_keys();
+    let local_keys = relation.effective_local_keys();
+    let tuples = parent_rows(rows, foreign_keys);
+    let mut by_key: HashMap<String, JsonValue> = HashMap::new();
+    if !tuples.is_empty() {
+        let columns: Vec<&str> = local_keys.iter().map(String::as_str).collect();
+        let builder = crate::builder::QueryBuilder::table(relation.related_table.clone())
+            .where_in_rows(&columns, tuples);
+        let sql = builder.to_sql()?;
+        let bindings = builder.bindings().to_vec();
+        let related = executor.fetch_json(&sql, &bindings).await?;
+        for row in related {
+            if let Some(key) = row_composite_key(&row, local_keys) {
+                by_key.entry(key).or_insert(row);
+            }
+        }
+    }
+    for row in rows.iter_mut() {
+        let payload = row_composite_key(row, foreign_keys)
+            .and_then(|key| by_key.get(&key).cloned())
+            .unwrap_or(JsonValue::Null);
+        insert_relation(row, &relation.name, payload);
+    }
+    Ok(())
+}
+
 /// Eager-load a `ManyToMany` through its pivot table in one join query.
 async fn load_many_to_many<'a>(
     rows: &mut [JsonValue],
     executor: &mut Executor<'a>,
     relation: &Relation,
 ) -> Result<()> {
+    if relation.is_composite() {
+        return load_many_to_many_composite(rows, executor, relation).await;
+    }
     let pivot = relation.pivot_table.as_deref().ok_or_else(|| {
         OrmError::InvalidState(format!(
             "ManyToMany relation `{}` is missing a pivot table",
@@ -181,6 +257,83 @@ async fn load_many_to_many<'a>(
     Ok(())
 }
 
+/// Eager-load a composite-key `ManyToMany` through its pivot table.
+///
+/// The pivot's parent link is a composite tuple matched with a row-value `IN`;
+/// the related side stays a single `related_key = r.id` join.
+async fn load_many_to_many_composite<'a>(
+    rows: &mut [JsonValue],
+    executor: &mut Executor<'a>,
+    relation: &Relation,
+) -> Result<()> {
+    let pivot = relation.pivot_table.as_deref().ok_or_else(|| {
+        OrmError::InvalidState(format!(
+            "ManyToMany relation `{}` is missing a pivot table",
+            relation.name
+        ))
+    })?;
+    let related_key = relation.related_key.as_deref().ok_or_else(|| {
+        OrmError::InvalidState(format!(
+            "ManyToMany relation `{}` is missing a related key",
+            relation.name
+        ))
+    })?;
+    let local_keys = relation.effective_local_keys();
+    let foreign_keys = relation.effective_foreign_keys();
+    let tuples = parent_rows(rows, local_keys);
+    let mut grouped: HashMap<String, Vec<JsonValue>> = HashMap::new();
+    if !tuples.is_empty() {
+        let alias_prefix = "__pivot_parent";
+        let mut bindings: Vec<Value> = Vec::new();
+        let mut tuple_sql: Vec<String> = Vec::with_capacity(tuples.len());
+        for tuple in tuples {
+            let placeholders: Vec<String> = tuple
+                .into_iter()
+                .map(|value| {
+                    bindings.push(value);
+                    format!("${}", bindings.len())
+                })
+                .collect();
+            tuple_sql.push(format!("({})", placeholders.join(", ")));
+        }
+        let pivot_columns: Vec<String> = foreign_keys
+            .iter()
+            .map(|column| format!("p.{column}"))
+            .collect();
+        let alias_columns: Vec<String> = foreign_keys
+            .iter()
+            .enumerate()
+            .map(|(index, column)| format!("p.{column} AS {alias_prefix}_{index}"))
+            .collect();
+        let alias_names: Vec<String> = (0..foreign_keys.len())
+            .map(|index| format!("{alias_prefix}_{index}"))
+            .collect();
+        let sql = format!(
+            "SELECT r.*, {aliases} FROM {related} r JOIN {pivot} p \
+             ON p.{related_key} = r.id WHERE ({columns}) IN ({tuples})",
+            aliases = alias_columns.join(", "),
+            related = relation.related_table,
+            pivot = pivot,
+            columns = pivot_columns.join(", "),
+            tuples = tuple_sql.join(", "),
+        );
+        let related = executor.fetch_json(&sql, &bindings).await?;
+        for mut row in related {
+            let key = row_composite_key(&row, &alias_names);
+            if let Some(object) = row.as_object_mut() {
+                for alias in &alias_names {
+                    object.remove(alias);
+                }
+            }
+            if let Some(key) = key {
+                grouped.entry(key).or_default().push(row);
+            }
+        }
+    }
+    attach_arrays_composite(rows, local_keys, &relation.name, grouped);
+    Ok(())
+}
+
 /// Collect the distinct parent key bind values for `column` across `rows`.
 fn parent_keys(rows: &[JsonValue], column: &str) -> Vec<Value> {
     let mut seen: HashMap<String, Value> = HashMap::new();
@@ -191,6 +344,38 @@ fn parent_keys(rows: &[JsonValue], column: &str) -> Vec<Value> {
         }
     }
     seen.into_values().collect()
+}
+
+/// Collect the distinct parent tuples over `columns` across `rows`.
+///
+/// Rows missing any column (or with a `null` part) are skipped, and duplicate
+/// tuples are deduped on their joined string form, so the resulting predicate
+/// carries each tuple at most once.
+fn parent_rows(rows: &[JsonValue], columns: &[String]) -> Vec<Vec<Value>> {
+    let mut seen: HashMap<String, Vec<Value>> = HashMap::new();
+    for row in rows {
+        let Some(key) = row_composite_key(row, columns) else {
+            continue;
+        };
+        seen.entry(key).or_insert_with(|| {
+            columns
+                .iter()
+                .filter_map(|column| row_key(row, column))
+                .map(|part| key_to_value(&part))
+                .collect()
+        });
+    }
+    seen.into_values().collect()
+}
+
+/// Read a row's composite key as a separator-joined string, when every column
+/// is present and non-null.
+fn row_composite_key(row: &JsonValue, columns: &[String]) -> Option<String> {
+    let mut parts: Vec<String> = Vec::with_capacity(columns.len());
+    for column in columns {
+        parts.push(row_key(row, column)?);
+    }
+    Some(parts.join(&COMPOSITE_KEY_SEPARATOR.to_string()))
 }
 
 /// Read a row's key column as a string, when present and non-null.
@@ -219,6 +404,22 @@ fn attach_arrays(
 ) {
     for row in rows.iter_mut() {
         let payload = row_key(row, local_key)
+            .and_then(|key| grouped.get(&key).cloned())
+            .unwrap_or_default();
+        let payload = JsonValue::Array(payload);
+        insert_relation(row, name, payload);
+    }
+}
+
+/// Attach grouped arrays onto each parent row keyed by a composite tuple.
+fn attach_arrays_composite(
+    rows: &mut [JsonValue],
+    local_keys: &[String],
+    name: &str,
+    grouped: HashMap<String, Vec<JsonValue>>,
+) {
+    for row in rows.iter_mut() {
+        let payload = row_composite_key(row, local_keys)
             .and_then(|key| grouped.get(&key).cloned())
             .unwrap_or_default();
         let payload = JsonValue::Array(payload);
