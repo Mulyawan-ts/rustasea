@@ -62,6 +62,10 @@ rustasea-debugbar = { path = "../rustasea-debugbar", optional = true }
 # Opt-in so the core build never links the dashboard crate; consumers re-export
 # it as `queue_dashboard` via the matching feature.
 rustasea-queue-dashboard = { path = "../rustasea-queue-dashboard", optional = true }
+# Excel/CSV import-export (ADOPT-023). Opt-in so the core build never links the
+# spreadsheet stack (csv/calamine/rust_xlsxwriter); consumers re-export it as
+# `excel` via the matching feature.
+rustasea-excel = { path = "../rustasea-excel", optional = true }
 
 [features]
 default = []
@@ -113,6 +117,9 @@ debugbar = ["dep:rustasea-debugbar"]
 # Queue dashboard (ADOPT-021). Opt-in so the core build never links the
 # dashboard crate; consumers re-export the crate as `queue_dashboard`.
 queue-dashboard = ["dep:rustasea-queue-dashboard"]
+# Excel/CSV import-export (ADOPT-023). Opt-in so the core build never links the
+# spreadsheet stack; consumers re-export the crate as `excel`.
+excel = ["dep:rustasea-excel"]
 # Broadcast Redis fan-out driver (ADOPT-022). Forwards to `rustasea-broadcast`'s
 # `redis` feature so `rustasea::broadcast` exposes the cross-process Pub/Sub
 # driver; off by default (pay-for-what-you-use, NFR-Sca-02).

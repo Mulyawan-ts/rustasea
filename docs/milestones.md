@@ -280,6 +280,7 @@ to a deterministic stub, and the in-process AI provider is kept for tests.
 - Broadcasting: WebSocket (`axum/ws`, feature-gated default) + SSE + `ShouldBroadcast` — `crates/rustasea-broadcast/Cargo.toml:20`, `:22`; `crates/rustasea-broadcast/src/lib.rs:35`.
 - Filesystem on real `object_store` (0.14.1) with cloud features — `crates/rustasea-storage/Cargo.toml:10`, `:20-22`; `crates/rustasea-storage/src/manager.rs:56` (`StorageManager`), `:127` (`get` read-through), `:144` (`put`), `:171` (`ObjectDisk`).
 - Storage config facade (`GAP-020`) — `config/storage.toml` (`[storage] default = "local"`), `crates/rustasea-storage/src/facade.rs:36` (`StorageFacadeConfig::from_toml`), `:168` (`StorageManager::from_toml`).
+- Excel/CSV import-export (ADOPT-023) — `crates/rustasea-excel` (streaming import + validation report, chunked export, queued job, signed links).
 - JSON:API resources with correct content type — `crates/rustasea-jsonapi/src/wire.rs:7`.
 - Mail & notifications (`GAP-020`) — `crates/rustasea-mail/`: `Mailable` (`mailable.rs:11`), `Mailer`/`ArrayMailer`/`LogMailer` (`mailer.rs:12`, `:22`, `:73`), `SmtpMailer` (feature `smtp`, `smtp.rs:14`), `QueuedNotification` dispatched through the queue (`notification.rs:41`).
 - View layer — `rustasea-view` with askama (default) + minijinja (`runtime-templates`) — `crates/rustasea-view/Cargo.toml:14`, `:17`, `:22`; `crates/rustasea-view/src/askama_engine.rs:35`.

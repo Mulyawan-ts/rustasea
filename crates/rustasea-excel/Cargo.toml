@@ -1,0 +1,51 @@
+[package]
+name = "rustasea-excel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Excel/CSV import-export (ADOPT-023) — streaming import with row validation, chunked/queued export to storage, signed download links (maatwebsite/excel parity)."
+
+[dependencies]
+# Payload coercion / report serialization and the JSON value bridge used by the
+# validation and export surfaces.
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+# Typed crate errors.
+thiserror = { workspace = true }
+# Row-level validation (`Rules`, `ErrorBag`) reused verbatim from the framework.
+rustasea-validation = { path = "../rustasea-validation" }
+# Minimal async runtime used to bridge the async `Storage` trait from the
+# synchronous export `store` terminal. `rt-multi-thread` provides
+# `task::block_in_place` and `RuntimeFlavor::MultiThread`, used to detect and
+# cooperate with an ambient multi-threaded runtime instead of panicking.
+tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+# Export sinks (`Storage` trait) — unconditional: the `store` terminal and the
+# queued `ExportJob` both target a storage disk.
+rustasea-storage = { path = "../rustasea-storage" }
+# CSV streaming reader/writer (unconditional — CSV needs no extra feature).
+csv = { workspace = true }
+# XLSX read/write, behind the default `xlsx` feature.
+calamine = { workspace = true, optional = true }
+rust_xlsxwriter = { workspace = true, optional = true }
+# Signed download links for exported objects (`SignedUrlSigner`).
+rustasea-auth = { path = "../rustasea-auth", optional = true }
+# Queued export (`Job` trait, `Queue::dispatch`).
+rustasea-queue = { path = "../rustasea-queue", optional = true }
+# The `Job` trait is declared with `#[async_trait]`, so implementing it needs
+# the macro at the call site (only when the `queue` feature is on).
+async-trait = { workspace = true, optional = true }
+
+[features]
+default = ["xlsx", "signed-url", "queue"]
+# XLSX read (`calamine`) + write (`rust_xlsxwriter`).
+xlsx = ["dep:calamine", "dep:rust_xlsxwriter"]
+# `ExportReport::signed_url` download-link helper.
+signed-url = ["dep:rustasea-auth"]
+# Queued export (`ExportJob`).
+queue = ["dep:rustasea-queue", "dep:async-trait"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+rustasea-queue = { path = "../rustasea-queue" }
+rustasea-orm = { path = "../rustasea-orm" }
+rustasea-auth = { path = "../rustasea-auth" }

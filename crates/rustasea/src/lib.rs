@@ -343,3 +343,15 @@ pub use rustasea_debugbar::{
 /// crate (NFR-Sca-02).
 #[cfg(feature = "queue-dashboard")]
 pub use rustasea_queue_dashboard as queue_dashboard;
+
+/// Excel/CSV import-export re-export (ADOPT-023) — only with the `excel`
+/// feature.
+///
+/// [`Excel`](rustasea_excel::Excel) is the facade for
+/// [`import`](rustasea_excel::Excel::import) /
+/// [`export`](rustasea_excel::Excel::export), and
+/// [`ExportJob`](rustasea_excel::ExportJob) queues an export off the request
+/// path. Opt-in so the core build never links the spreadsheet stack
+/// (NFR-Sca-02).
+#[cfg(feature = "excel")]
+pub use rustasea_excel as excel;

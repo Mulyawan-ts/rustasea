@@ -73,6 +73,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Session` | `rustasea-auth` (`SessionGuard`, `SessionPolicy`) | **Partial** | `tower-sessions` declared but session store not wired (GAP-007). |
 | `Illuminate\Cookie` | `rustasea-http` (CORS + `SecurityConfig`) | **Partial** | No queued-cookie jar / cookie encryption layer yet. |
 | `Illuminate\Filesystem` | `rustasea-storage` (`Storage`, `StorageManager`, `LocalDisk`, `ObjectDisk`, `ReadThrough`) | **Adopted** | `object_store`-backed disks + read-through with path confinement. |
+| `Maatwebsite\Excel` | `rustasea-excel` (`Excel`, `ImportBuilder`, `ExportBuilder`, `ExportJob`) | **Partial** | Streaming CSV/xlsx import with row-level validation reports; chunked export to storage; queued `ExportJob` + signed download URLs (ADOPT-023). Formula/style/format parity absent. |
 | `Illuminate\Broadcasting` | `rustasea-broadcast` (`ShouldBroadcast`, `BroadcastEvent`, `Channel`, `BroadcastHub`, `BroadcastManager`) | **Partial** | WS + SSE real; Pusher HTTP driver + Redis Pub/Sub fan-out real (ADOPT-022); Ably absent. |
 | `Illuminate\Pagination` | `rustasea-orm` (`Paginator`, `PageMeta`) | **Adopted** | Paginator wired into query execution (`crates/rustasea-orm/src/builder/exec.rs:145`). |
 | `Illuminate\Pipeline` | — | **N-A** | Tower middleware chains replace the PHP pipeline; no `Illuminate\Pipeline` analogue required. |
