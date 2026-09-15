@@ -240,12 +240,14 @@ impl Guard for JwtGuard {
             // tracked by the S05 milestone); see `SessionGuard::confirm_password`
             // for the stateful path.
             let email_verified_at = self.lookup.email_verified_at_for_id(&claims.sub);
+            let timezone = self.lookup.timezone_for_id(&claims.sub);
             Ok(AuthUser {
                 email: self.lookup.email_for_id(&claims.sub),
                 id: claims.sub,
                 guard: self.name().to_string(),
                 email_verified_at,
                 password_confirmed_at: None,
+                timezone,
             })
         })
     }
@@ -463,6 +465,7 @@ mod tests {
             email: "ada@example.com".into(),
             password_hash: "phc$hash".into(),
             email_verified_at: Some("2026-01-01T00:00:00Z".into()),
+            timezone: None,
         });
         let guard = test_guard().with_lookup(registry);
 

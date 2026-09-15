@@ -38,6 +38,7 @@ fn guard_with_user(verified: bool) -> Arc<SessionGuard> {
         } else {
             None
         },
+        timezone: None,
     });
     let guard = SessionGuard::new(SessionPolicy::default())
         .with_lookup(lookup)

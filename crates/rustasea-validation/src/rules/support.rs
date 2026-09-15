@@ -90,6 +90,21 @@ pub(crate) fn apply_rule(
                 .into())
             }
         }
+        "timezone" => {
+            let valid = present
+                .as_str()
+                .map(|s| rustasea_timezone::validate(s).is_ok())
+                .unwrap_or(false);
+            if valid {
+                Ok(())
+            } else {
+                Err(ValidationError::new(
+                    "timezone",
+                    format!("The {label} must be a valid timezone."),
+                )
+                .into())
+            }
+        }
         "min" => {
             let n = parse_arg::<u64>(arg).unwrap_or(0);
             let len = value_len(present);

@@ -230,6 +230,7 @@ async fn seeded_record_is_lookup_visible() {
         email: "ada@example.com".into(),
         password_hash: "phc$hash".into(),
         email_verified_at: None,
+        timezone: None,
     });
     assert_eq!(
         provider.by_email("ada@example.com").map(|r| r.id),

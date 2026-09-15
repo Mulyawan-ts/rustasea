@@ -10,6 +10,7 @@ axum = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 validator = { workspace = true }
+rustasea-timezone = { path = "../rustasea-timezone" }
 
 [dev-dependencies]
 tokio = { workspace = true }

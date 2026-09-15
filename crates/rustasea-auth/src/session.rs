@@ -69,6 +69,13 @@ pub struct SessionUser {
     /// `users.email_verified_at` captured at login, or `None` when unverified.
     #[serde(default)]
     pub email_verified_at: Option<String>,
+    /// Preferred IANA timezone (`users.timezone`) captured at login, or `None`.
+    ///
+    /// Carried in the session so the timezone mapper can resolve the user's
+    /// zone on every request without a database hit; `None` falls through to
+    /// the session/header/app default.
+    #[serde(default)]
+    pub timezone: Option<String>,
 }
 
 /// Session guard — resolves identity from a `tower-sessions` store.
@@ -309,10 +316,12 @@ impl<S: SessionStore> Guard for SessionGuard<S> {
                 .email_for_id(&user_id)
                 .or_else(|| Some(creds.email.clone()));
             let email_verified_at = self.lookup.email_verified_at_for_id(&user_id);
+            let timezone = self.lookup.timezone_for_id(&user_id);
             let user = SessionUser {
                 id: user_id,
                 email,
                 email_verified_at,
+                timezone,
             };
             let id = self.persist(&user).await?;
             Ok(self.issue(&id))
@@ -333,6 +342,7 @@ impl<S: SessionStore> Guard for SessionGuard<S> {
                 id: user_id.to_string(),
                 email: self.lookup.email_for_id(user_id),
                 email_verified_at: self.lookup.email_verified_at_for_id(user_id),
+                timezone: self.lookup.timezone_for_id(user_id),
             };
             let id = self.persist(&user).await?;
             Ok(self.issue(&id))
@@ -362,6 +372,7 @@ impl<S: SessionStore> Guard for SessionGuard<S> {
                 guard: self.name.clone(),
                 email_verified_at: user.email_verified_at,
                 password_confirmed_at,
+                timezone: user.timezone,
             })
         })
     }

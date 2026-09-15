@@ -100,6 +100,7 @@ fn install_provider() {
             .hash(PASSWORD)
             .expect("hash the seeded password"),
         email_verified_at: Some("2026-01-01T00:00:00Z".to_string()),
+        timezone: None,
     });
     install_user_provider(Arc::new(provider));
 }

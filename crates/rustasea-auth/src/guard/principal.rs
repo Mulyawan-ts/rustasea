@@ -14,6 +14,11 @@
 /// ([`AuthUser::new`]) keeps compiling; populate them with
 /// [`AuthUser::with_email_verified_at`] /
 /// [`AuthUser::with_password_confirmed_at`].
+///
+/// * `timezone` — the user's preferred IANA timezone (`users.timezone`), or
+///   `None` when the account has no explicit preference. Populate it with
+///   [`AuthUser::with_timezone`]; the timezone mapper falls through to the
+///   session/header/app default when it is `None`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthUser {
     /// Primary key (UUID string) of the authenticated record.
@@ -26,6 +31,8 @@ pub struct AuthUser {
     pub email_verified_at: Option<String>,
     /// Session `auth.password_confirmed_at` timestamp, or `None`.
     pub password_confirmed_at: Option<String>,
+    /// Preferred IANA timezone (`users.timezone`), or `None` for no preference.
+    pub timezone: Option<String>,
 }
 
 impl AuthUser {
@@ -87,6 +94,7 @@ impl AuthUser {
             guard: guard.into(),
             email_verified_at: None,
             password_confirmed_at: None,
+            timezone: None,
         }
     }
 
@@ -99,6 +107,12 @@ impl AuthUser {
     /// Populate the session `password_confirmed_at` timestamp (builder form).
     pub fn with_password_confirmed_at(mut self, at: Option<impl Into<String>>) -> Self {
         self.password_confirmed_at = at.map(Into::into);
+        self
+    }
+
+    /// Populate the preferred IANA timezone (`users.timezone`), builder form.
+    pub fn with_timezone(mut self, timezone: Option<impl Into<String>>) -> Self {
+        self.timezone = timezone.map(Into::into);
         self
     }
 

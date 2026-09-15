@@ -1,7 +1,7 @@
 /// A registered scheduled command with its frequency and modifiers.
 use std::time::Duration;
 
-use chrono::{Datelike, Timelike};
+use chrono::{Datelike, TimeZone, Timelike};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ScheduleError};
@@ -23,6 +23,13 @@ pub struct ScheduleCommand {
     pub every: Duration,
     /// Lock key used by `onOneServer` (derived from the command).
     pub lock_key: String,
+    /// IANA timezone the cron expression is evaluated in, or `None` for UTC.
+    ///
+    /// When set, `next_run` scans the cron fields against the zone's local
+    /// wall clock and maps each match back to UTC; `None` preserves the
+    /// original UTC-only behaviour.
+    #[serde(default)]
+    pub timezone: Option<String>,
 }
 
 impl ScheduleCommand {
@@ -37,10 +44,12 @@ impl ScheduleCommand {
             on_one_server: false,
             every: Duration::ZERO,
             lock_key: format!("schedule:lock:{command}"),
+            timezone: None,
         })
     }
 
-    /// Create a command running daily at `time` (HH:MM, UTC).
+    /// Create a command running daily at `time` (HH:MM, UTC unless
+    /// [`with_timezone`](Self::with_timezone) overrides the zone).
     pub fn daily_at(command: &'static str, time: &str) -> Result<Self> {
         let (hour, minute) = parse_hhmm(time)?;
         let expression = format!("{minute} {hour} * * *");
@@ -68,12 +77,45 @@ impl ScheduleCommand {
         self
     }
 
+    /// Fluent builder: evaluate the cron expression in `name`'s wall clock.
+    ///
+    /// The name is validated up front; an unknown name is rejected with
+    /// [`ScheduleError::Invalid`] so a typo can never silently schedule in UTC.
+    /// The stored name is the canonical IANA zone (short aliases are expanded).
+    ///
+    /// # Errors
+    ///
+    /// [`ScheduleError::Invalid`] when `name` is not a valid timezone.
+    pub fn with_timezone(mut self, name: &str) -> Result<Self> {
+        let tz = rustasea_timezone::validate(name)
+            .map_err(|err| ScheduleError::Invalid(format!("invalid timezone `{name}`: {err}")))?;
+        self.timezone = Some(tz.name().to_string());
+        Ok(self)
+    }
+
     /// Compute the next UTC instant matching the cron expression at/after `from`.
+    ///
+    /// With no [`timezone`](Self::timezone) the expression is evaluated against
+    /// UTC (the original behaviour). With a timezone the cron fields are matched
+    /// against that zone's **local wall clock** and each match is mapped back to
+    /// UTC:
+    ///
+    /// * a local time that does not exist (a spring-forward DST gap) is skipped
+    ///   and the scan continues;
+    /// * a local time that occurs twice (a fall-back overlap) resolves to the
+    ///   **earliest occurrence that is still at/after `from`**, so the returned
+    ///   instant never precedes the reference instant (a naive "always take the
+    ///   first occurrence" rule would return an instant up to an hour in the
+    ///   past when `from` lies inside the second occurrence).
     pub fn next_run(
         &self,
         from: chrono::DateTime<chrono::Utc>,
     ) -> Option<chrono::DateTime<chrono::Utc>> {
-        next_cron_match(&self.cron, from)
+        let tz = self
+            .timezone
+            .as_deref()
+            .and_then(|name| rustasea_timezone::validate(name).ok());
+        next_cron_match_in(&self.cron, from, tz)
     }
 }
 
@@ -126,9 +168,27 @@ fn parse_hhmm(time: &str) -> Result<(u32, u32)> {
 /// Field semantics (all OR-expanded within a field): `*` any, `a-b` range,
 /// `a,b` list, `*/n` step. Only minute/hour/day-of-month/month/day-of-week are
 /// used; seconds are always zero.
-fn next_cron_match(
+///
+/// When `tz` is `None` the expression is evaluated directly against UTC. When
+/// `tz` is `Some`, the fields are matched against the zone's local wall clock
+/// and each match is mapped back to UTC. DST semantics:
+///
+/// * a local time in a gap (spring-forward) does not exist, so it is skipped
+///   and the scan continues;
+/// * an ambiguous local time (fall-back overlap) resolves to the first
+///   occurrence that is **at/after the scan's reference instant** — the earliest
+///   of the two instants when the scan has not yet passed the overlap, and the
+///   later one when the reference instant already lies inside the overlap. This
+///   keeps the returned instant strictly in the future relative to `from`,
+///   matching the UTC path (which also returns an instant `>= from + 1min`).
+///
+/// Both paths compare candidate instants against `start = from + 1 minute`, the
+/// first whole minute strictly after `from`, so a returned instant is always
+/// strictly greater than `from`.
+fn next_cron_match_in(
     expression: &str,
     from: chrono::DateTime<chrono::Utc>,
+    tz: Option<rustasea_timezone::Tz>,
 ) -> Option<chrono::DateTime<chrono::Utc>> {
     let fields: Vec<&str> = expression.split_whitespace().collect();
     if fields.len() != 5 {
@@ -140,28 +200,107 @@ fn next_cron_match(
     let months = parse_field(fields[3], 1, 12)?;
     let weekdays = parse_field(fields[4], 0, 6)?;
 
-    // Scan minute-by-minute for up to 366 days; matches must be unambiguous.
-    let start = from + chrono::Duration::minutes(1);
-    let naive = start.naive_utc();
-    let truncated = chrono::NaiveDate::from_ymd_opt(naive.year(), naive.month(), naive.day())
-        .and_then(|d| d.and_hms_nano_opt(naive.hour(), naive.minute(), 0, 0))
-        .expect("valid date components");
-    let mut cursor =
-        chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(truncated, chrono::Utc);
     let dom_unrestricted = is_dom_unrestricted(&days);
-    for _ in 0..(366 * 24 * 60) {
-        let n = cursor.naive_utc();
-        let weekday = n.weekday().num_days_from_sunday();
-        let dom_ok = days.contains(&n.day()) || (dom_unrestricted && weekdays.contains(&weekday));
-        let month_ok = months.contains(&n.month());
-        let hour_ok = hours.contains(&n.hour());
-        let minute_ok = minutes.contains(&n.minute());
-        if dom_ok && month_ok && hour_ok && minute_ok {
-            return Some(cursor);
+    let start = from + chrono::Duration::minutes(1);
+
+    match tz {
+        None => {
+            // Scan UTC minute-by-minute for up to 366 days.
+            let naive = start.naive_utc();
+            let truncated =
+                chrono::NaiveDate::from_ymd_opt(naive.year(), naive.month(), naive.day())
+                    .and_then(|d| d.and_hms_nano_opt(naive.hour(), naive.minute(), 0, 0))?;
+            let mut cursor =
+                chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(truncated, chrono::Utc);
+            for _ in 0..(366 * 24 * 60) {
+                let n = cursor.naive_utc();
+                if fields_match(
+                    &n,
+                    &days,
+                    &months,
+                    &hours,
+                    &minutes,
+                    &weekdays,
+                    dom_unrestricted,
+                ) {
+                    return Some(cursor);
+                }
+                cursor += chrono::Duration::minutes(1);
+            }
+            None
         }
-        cursor += chrono::Duration::minutes(1);
+        Some(tz) => {
+            // Scan the zone's local wall clock minute-by-minute; map each match
+            // back to UTC, skipping local times that fall in a DST gap.
+            let local = start.with_timezone(&tz);
+            let n = local.naive_local();
+            let mut cursor = chrono::NaiveDate::from_ymd_opt(n.year(), n.month(), n.day())
+                .and_then(|d| d.and_hms_nano_opt(n.hour(), n.minute(), 0, 0))?;
+            for _ in 0..(366 * 24 * 60) {
+                if fields_match(
+                    &cursor,
+                    &days,
+                    &months,
+                    &hours,
+                    &minutes,
+                    &weekdays,
+                    dom_unrestricted,
+                ) {
+                    // Map the local candidate back to UTC. The reference is
+                    // `start` (the first whole minute after `from`), matching
+                    // the UTC path so the returned instant is always > `from`.
+                    match tz.from_local_datetime(&cursor) {
+                        // Spring-forward gap: this wall-clock minute does not
+                        // exist, so keep scanning.
+                        chrono::LocalResult::None => {}
+                        // Unambiguous local time.
+                        chrono::LocalResult::Single(dt) => {
+                            let utc = dt.with_timezone(&chrono::Utc);
+                            if utc >= start {
+                                return Some(utc);
+                            }
+                        }
+                        // Fall-back overlap: the same wall clock occurs twice.
+                        // Take the first occurrence at/after `start`; when
+                        // `start` is already inside the overlap this selects the
+                        // later occurrence instead of returning an instant in
+                        // the past.
+                        chrono::LocalResult::Ambiguous(earliest, latest) => {
+                            let earliest = earliest.with_timezone(&chrono::Utc);
+                            if earliest >= start {
+                                return Some(earliest);
+                            }
+                            let latest = latest.with_timezone(&chrono::Utc);
+                            if latest >= start {
+                                return Some(latest);
+                            }
+                        }
+                    }
+                }
+                cursor += chrono::Duration::minutes(1);
+            }
+            None
+        }
     }
-    None
+}
+
+/// Whether a wall-clock minute matches every cron field.
+#[allow(clippy::too_many_arguments)]
+fn fields_match(
+    n: &chrono::NaiveDateTime,
+    days: &[u32],
+    months: &[u32],
+    hours: &[u32],
+    minutes: &[u32],
+    weekdays: &[u32],
+    dom_unrestricted: bool,
+) -> bool {
+    let weekday = n.weekday().num_days_from_sunday();
+    let dom_ok = days.contains(&n.day()) || (dom_unrestricted && weekdays.contains(&weekday));
+    let month_ok = months.contains(&n.month());
+    let hour_ok = hours.contains(&n.hour());
+    let minute_ok = minutes.contains(&n.minute());
+    dom_ok && month_ok && hour_ok && minute_ok
 }
 
 /// Whether day-of-month is unrestricted (`*`), letting day-of-week drive.
@@ -214,3 +353,6 @@ fn parse_field(field: &str, min: u32, max: u32) -> Option<Vec<u32>> {
     out.dedup();
     Some(out)
 }
+
+#[cfg(test)]
+mod tests;

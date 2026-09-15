@@ -22,6 +22,8 @@ pub struct AuthUserRecord {
     pub password_hash: String,
     /// `email_verified_at` cleared by `markEmailAsUnverified`.
     pub email_verified_at: Option<String>,
+    /// Preferred IANA timezone (`users.timezone`), or `None` for no preference.
+    pub timezone: Option<String>,
 }
 
 /// Credential lookup contract injected into guards.
@@ -44,6 +46,18 @@ pub trait UserLookup: Send + Sync {
     /// implementation returns `None`, so existing lookups keep compiling and
     /// keep failing closed until they opt in.
     fn email_verified_at_for_id(&self, _id: &str) -> Option<String> {
+        None
+    }
+
+    /// Resolve the preferred IANA timezone (`users.timezone`) for a user UUID.
+    ///
+    /// Returns `None` for an account with no explicit preference **and** for a
+    /// lookup that does not track timezones at all — the two are
+    /// indistinguishable on purpose, so an un-wired lookup fails open to the
+    /// mapper's next candidate (session/header/app default) rather than pinning
+    /// a wrong zone. The default implementation returns `None`, so existing
+    /// lookups keep compiling.
+    fn timezone_for_id(&self, _id: &str) -> Option<String> {
         None
     }
 }
@@ -116,5 +130,14 @@ impl UserLookup for MemoryUserRegistry {
             .values()
             .find(|r| r.id == id)
             .and_then(|r| r.email_verified_at.clone())
+    }
+
+    fn timezone_for_id(&self, id: &str) -> Option<String> {
+        self.by_email
+            .read()
+            .ok()?
+            .values()
+            .find(|r| r.id == id)
+            .and_then(|r| r.timezone.clone())
     }
 }

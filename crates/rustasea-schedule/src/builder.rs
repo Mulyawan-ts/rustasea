@@ -21,8 +21,9 @@ impl Schedule {
 /// Chainable frequency + modifier builder.
 ///
 /// Frequencies (one of `cron`/`daily`/`every_minute`) set the schedule
-/// expression; modifiers (`skip_if_running`, `on_one_server`) add guards.
-/// `register` hands the finished command to the shared `Scheduler`.
+/// expression; modifiers (`skip_if_running`, `on_one_server`) add guards;
+/// `timezone` evaluates the expression in a zone's wall clock. `register` hands
+/// the finished command to the shared `Scheduler`.
 #[derive(Debug)]
 pub struct ScheduleBuilder {
     command: &'static str,
@@ -30,6 +31,7 @@ pub struct ScheduleBuilder {
     daily_at: Option<String>,
     skip_if_running: bool,
     on_one_server: bool,
+    timezone: Option<String>,
 }
 
 impl ScheduleBuilder {
@@ -41,6 +43,7 @@ impl ScheduleBuilder {
             daily_at: None,
             skip_if_running: false,
             on_one_server: false,
+            timezone: None,
         }
     }
 
@@ -68,6 +71,23 @@ impl ScheduleBuilder {
         self.cron = Some("* * * * *".to_string());
         self.daily_at = None;
         self
+    }
+
+    /// Evaluate the cron expression in `name`'s wall clock.
+    ///
+    /// The name is validated immediately, so this returns a `Result` rather than
+    /// a bare `Self`: chain it as `.timezone("Asia/Jakarta")?`. An unknown name
+    /// is rejected with [`ScheduleError::Invalid`].
+    ///
+    /// # Errors
+    ///
+    /// [`ScheduleError::Invalid`] when `name` is not a valid timezone.
+    pub fn timezone(mut self, name: &str) -> Result<Self> {
+        let tz = rustasea_timezone::validate(name).map_err(|err| {
+            crate::error::ScheduleError::Invalid(format!("invalid timezone `{name}`: {err}"))
+        })?;
+        self.timezone = Some(tz.name().to_string());
+        Ok(self)
     }
 
     /// Suppress a run whose previous run is still active.
@@ -101,6 +121,9 @@ impl ScheduleBuilder {
         }
         if self.on_one_server {
             cmd = cmd.on_one_server();
+        }
+        if let Some(tz) = self.timezone {
+            cmd = cmd.with_timezone(&tz)?;
         }
         Ok(cmd)
     }

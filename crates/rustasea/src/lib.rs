@@ -9,6 +9,7 @@ pub use rustasea_foundation as foundation;
 pub use rustasea_i18n as i18n;
 pub use rustasea_queue as queue;
 pub use rustasea_schedule as schedule;
+pub use rustasea_timezone as timezone;
 
 pub use config::ConfigLoader;
 pub use foundation::{Application, Container, ServiceProvider};
@@ -55,6 +56,15 @@ pub use i18n::{
     interpolate as i18n_interpolate, set_translator as i18n_set_translator,
     trans_choice as i18n_trans_choice, translator as i18n_translator, I18nError,
     Param as I18nParam, TranslationLoader, Translations, Translator, DEFAULT_LANG_DIR,
+};
+
+/// Timezone re-exports for wall-clock scheduling / display ergonomics
+/// (ADOPT-006). The resolution chain is user → session → header → app default.
+pub use timezone::{
+    clear_default_timezone, default_timezone, format_local as format_local_time, now_local,
+    resolve as resolve_timezone, resolve_tz as resolve_timezone_tz, set_default_timezone,
+    to_local as to_local_time, validate as validate_timezone, TimezoneError, TimezoneMapper, Tz,
+    DEFAULT_TIMEZONE,
 };
 
 pub use orm::{

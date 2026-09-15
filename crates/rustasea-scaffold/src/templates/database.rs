@@ -85,6 +85,8 @@ impl Migration for CreateUsers {
     two_factor_confirmed_at TIMESTAMPTZ NULL,
     -- Remember-me token for persistent logins.
     remember_token VARCHAR(100) NULL,
+    -- IANA timezone name for the user's wall-clock preferences.
+    timezone VARCHAR(64) NULL,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     deleted_at TIMESTAMPTZ NULL
@@ -394,6 +396,7 @@ impl Factory<User> for UserFactory {
             two_factor_recovery_codes: None,
             two_factor_confirmed_at: None,
             remember_token: None,
+            timezone: None,
             deleted_at: None,
             timestamps: Default::default(),
         }

@@ -163,6 +163,7 @@ mod tests {
             email: EMAIL.into(),
             password_hash: hash,
             email_verified_at: None,
+            timezone: None,
         });
         registry
     }

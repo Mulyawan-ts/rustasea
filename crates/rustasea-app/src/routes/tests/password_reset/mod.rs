@@ -48,6 +48,7 @@ pub(super) fn seeded_provider(email: &str) -> Arc<MemoryUserProvider> {
             .hash(OLD_PASSWORD)
             .expect("hash the seeded password"),
         email_verified_at: Some("2026-01-01T00:00:00Z".to_string()),
+        timezone: None,
     });
     let provider = Arc::new(provider);
     install_user_provider(provider.clone());

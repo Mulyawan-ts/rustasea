@@ -6,6 +6,8 @@
 /// * `required` — the field must be present and non-null.
 /// * `string` — the value must be a JSON string.
 /// * `email` — the value must be a valid email address.
+/// * `timezone` — the value must be a valid IANA timezone name (or a
+///   documented short alias such as `PST`/`EST`/`CST`/`MST`/`GMT`).
 /// * `min:N` / `max:N` — length bounds (Unicode scalar count for strings,
 ///   element count for arrays/objects, digit count for numbers).
 /// * `in_array:a,b,c` / `in:a,b,c` / `strict_in_array:a,b,c` — strict

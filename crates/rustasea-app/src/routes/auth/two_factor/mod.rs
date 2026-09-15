@@ -162,6 +162,7 @@ pub(crate) async fn intercept_login(
         id: record.id,
         email: Some(record.email),
         email_verified_at: record.email_verified_at,
+        timezone: record.timezone,
     };
     match start_challenge(guard, &pending).await {
         Ok(response) => Some(response),

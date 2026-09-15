@@ -61,6 +61,7 @@ fn unverified_provider() -> Arc<MemoryUserProvider> {
             .hash(USER_A_PASSWORD)
             .expect("hash the seeded password"),
         email_verified_at: None,
+        timezone: None,
     });
     let provider = Arc::new(provider);
     install_user_provider(provider.clone());
@@ -78,6 +79,7 @@ fn verified_provider() -> Arc<MemoryUserProvider> {
             .hash(USER_A_PASSWORD)
             .expect("hash the seeded password"),
         email_verified_at: Some("2026-01-01T00:00:00Z".to_string()),
+        timezone: None,
     });
     let provider = Arc::new(provider);
     install_user_provider(provider.clone());
@@ -92,6 +94,7 @@ fn guard_with_user_a() -> Arc<SessionGuard> {
         email: USER_A_EMAIL.to_string(),
         password_hash: "unused-for-login-using-id".to_string(),
         email_verified_at: None,
+        timezone: None,
     });
     Arc::new(
         SessionGuard::new(SessionPolicy::default())

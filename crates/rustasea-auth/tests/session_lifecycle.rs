@@ -38,6 +38,7 @@ fn seeded_guard() -> SessionGuard {
         email: EMAIL.into(),
         password_hash: hash,
         email_verified_at: None,
+        timezone: None,
     });
     SessionGuard::new(SessionPolicy::default()).with_lookup(registry)
 }

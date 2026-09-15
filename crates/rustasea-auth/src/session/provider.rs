@@ -67,6 +67,7 @@ impl<S: SessionStore> SessionGuard<S> {
                 id: record.id,
                 email: Some(record.email),
                 email_verified_at: record.email_verified_at,
+                timezone: record.timezone,
             };
             let id = self.persist(&user).await?;
             Ok(self.issue(&id))

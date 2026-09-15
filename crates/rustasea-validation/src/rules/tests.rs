@@ -70,6 +70,25 @@ fn string_rule_checks_json_type() {
     assert!(bag.get("name").iter().any(|e| e.code == "string"));
 }
 
+/// `timezone` accepts valid IANA names and rejects unknown ones.
+#[test]
+fn timezone_rule_checks_iana_name() {
+    let rules = Rules::new().field("timezone", "required|timezone").clone();
+    assert!(rules
+        .validate(&json!({ "timezone": "Asia/Jakarta" }))
+        .is_ok());
+    // A documented short alias is accepted.
+    assert!(rules.validate(&json!({ "timezone": "PST" })).is_ok());
+    // An unknown name fails with the `timezone` code.
+    let bag = rules
+        .validate(&json!({ "timezone": "Not/AZone" }))
+        .unwrap_err();
+    assert!(bag.get("timezone").iter().any(|e| e.code == "timezone"));
+    // A non-string value fails too.
+    let bag = rules.validate(&json!({ "timezone": 42 })).unwrap_err();
+    assert!(bag.get("timezone").iter().any(|e| e.code == "timezone"));
+}
+
 /// `confirmed` passes when the sibling confirmation matches and fails on
 /// mismatch or when the confirmation key is absent.
 #[test]

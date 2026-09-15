@@ -85,6 +85,7 @@ fn app_with_seeded_user() -> Router {
             .hash("s3cr3t-pass")
             .expect("hash the seeded password"),
         email_verified_at: Some("2026-01-01T00:00:00Z".to_string()),
+        timezone: None,
     });
     // Install the provider the handler resolves through `helpers::user_provider`.
     install_user_provider(Arc::new(provider));

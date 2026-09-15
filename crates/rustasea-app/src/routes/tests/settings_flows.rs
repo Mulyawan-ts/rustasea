@@ -95,6 +95,7 @@ pub(super) fn record(id: &str, email: &str) -> AuthUserRecord {
             .hash(&format!("secret-for-{id}"))
             .expect("hash the seeded password"),
         email_verified_at: Some(VERIFIED_AT.to_string()),
+        timezone: None,
     }
 }
 

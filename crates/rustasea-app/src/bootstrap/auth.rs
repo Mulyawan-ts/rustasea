@@ -245,6 +245,7 @@ pub fn build_user_provider() -> Arc<dyn UserProvider> {
         email: email.to_string(),
         password_hash,
         email_verified_at: Some("1970-01-01T00:00:00Z".to_string()),
+        timezone: None,
     });
     Arc::new(provider)
 }

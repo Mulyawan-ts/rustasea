@@ -1,0 +1,11 @@
+[package]
+name = "rustasea-timezone"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "RustaSea timezone — IANA validation, user-timezone resolution chain, and UTC<->local formatting helpers."
+
+[dependencies]
+chrono = { workspace = true }
+chrono-tz = "0.10"
+thiserror = { workspace = true }

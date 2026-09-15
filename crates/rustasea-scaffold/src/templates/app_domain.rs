@@ -89,6 +89,11 @@ pub struct User {
     /// `#[Hidden(['remember_token'])]`.
     #[serde(skip_serializing)]
     pub remember_token: Option<String>,
+    /// IANA timezone name for the user's wall-clock preferences.
+    ///
+    /// `None` means the account has no explicit preference and the resolver
+    /// falls through to the application default.
+    pub timezone: Option<String>,
     /// Soft-delete marker.
     ///
     /// The ORM soft-deletes by default (`uses_soft_deletes`); a hard delete is

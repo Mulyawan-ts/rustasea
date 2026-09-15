@@ -123,6 +123,7 @@ fn guard_with_user(password: &str) -> SessionGuard {
         email: "ada@example.com".to_string(),
         password_hash,
         email_verified_at: None,
+        timezone: None,
     });
     SessionGuard::new(SessionPolicy::default()).with_lookup(registry)
 }

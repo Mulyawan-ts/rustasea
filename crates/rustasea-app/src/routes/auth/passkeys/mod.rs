@@ -341,6 +341,7 @@ async fn complete_login(guard: &SessionGuard, session_id: &str, user_id: &str) -
         id: record.id,
         email: Some(record.email),
         email_verified_at: record.email_verified_at,
+        timezone: record.timezone,
     };
     let user_key = guard.policy().user_key();
     if session.insert(&user_key, &user).await.is_err() {

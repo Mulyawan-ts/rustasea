@@ -33,6 +33,7 @@ fn guard_with_registry() -> (SessionGuard<MemoryStore>, Arc<MemoryUserRegistry>)
         email: "ada@example.com".into(),
         password_hash: "phc$hash".into(),
         email_verified_at: None,
+        timezone: None,
     });
     let guard = SessionGuard::new(SessionPolicy::default())
         .with_verifier(Arc::new(AlwaysVerify))
@@ -231,12 +232,14 @@ fn concurrent_sessions_do_not_share_identity() {
         email: "ada@example.com".into(),
         password_hash: "phc$hash".into(),
         email_verified_at: None,
+        timezone: None,
     });
     registry.seed(AuthUserRecord {
         id: "user-2".into(),
         email: "grace@example.com".into(),
         password_hash: "phc$hash".into(),
         email_verified_at: None,
+        timezone: None,
     });
     // One guard instance, shared exactly as `AuthManager` shares `Arc<dyn Guard>`.
     let guard = Arc::new(
@@ -291,6 +294,7 @@ fn login_threads_email_verified_at_through_the_session() {
         email: "ada@example.com".into(),
         password_hash: "phc$hash".into(),
         email_verified_at: Some("2026-01-01T00:00:00Z".into()),
+        timezone: None,
     });
     let guard = SessionGuard::new(SessionPolicy::default())
         .with_verifier(Arc::new(AlwaysVerify))

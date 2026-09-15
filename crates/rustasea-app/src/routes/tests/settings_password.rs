@@ -295,6 +295,7 @@ fn guard_with_user_a() -> Arc<SessionGuard> {
         // `login_using_id`, so the credential hash is irrelevant here.
         password_hash: "unused-for-login-using-id".to_string(),
         email_verified_at: Some("2026-01-01T00:00:00Z".to_string()),
+        timezone: None,
     });
     Arc::new(
         SessionGuard::new(SessionPolicy::default())

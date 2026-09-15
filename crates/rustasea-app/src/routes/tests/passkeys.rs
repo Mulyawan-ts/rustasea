@@ -45,6 +45,7 @@ fn install_provider() -> Arc<MemoryUserProvider> {
         email: USER_A_EMAIL.to_string(),
         password_hash: "unused-for-passkeys".to_string(),
         email_verified_at: Some("2026-01-01T00:00:00Z".to_string()),
+        timezone: None,
     });
     let provider = Arc::new(provider);
     install_user_provider(provider.clone());
@@ -59,6 +60,7 @@ fn guard_with_user_a() -> Arc<SessionGuard> {
         email: USER_A_EMAIL.to_string(),
         password_hash: "unused".to_string(),
         email_verified_at: None,
+        timezone: None,
     });
     Arc::new(
         SessionGuard::new(SessionPolicy::default())

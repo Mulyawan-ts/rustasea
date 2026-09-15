@@ -13,3 +13,4 @@ chrono = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 rustasea-events = { path = "../rustasea-events" }
+rustasea-timezone = { path = "../rustasea-timezone" }

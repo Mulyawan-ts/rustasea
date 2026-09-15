@@ -175,12 +175,14 @@ fn generated_route_tables_use_the_router_dsl() {
 /// type-check against `rustasea::orm`.
 #[test]
 fn generated_user_schema_carries_the_auth_columns() {
-    // Columns added by AUTH-003 on top of the original six.
+    // Columns added by AUTH-003 on top of the original six, plus the
+    // user-timezone preference column (ADOPT-006).
     let columns = [
         "two_factor_secret",
         "two_factor_recovery_codes",
         "two_factor_confirmed_at",
         "remember_token",
+        "timezone",
     ];
     // Fields the model must hide from serialization (the kit's `Hidden`).
     let hidden = [

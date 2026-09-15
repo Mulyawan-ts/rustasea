@@ -92,6 +92,7 @@ fn provider_with(email: &str) -> Arc<MemoryUserProvider> {
             .hash("existing-secret")
             .expect("hash the seeded password"),
         email_verified_at: Some("2026-01-01T00:00:00Z".to_string()),
+        timezone: None,
     });
     Arc::new(provider)
 }
