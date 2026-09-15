@@ -156,6 +156,17 @@ pub enum RouteError {
         /// The unregistered authorization resource id.
         name: String,
     },
+    /// A route declared a `{param:field}` model binding with no registered
+    /// binder for `field`.
+    ///
+    /// Retained for API compatibility only: model binding is opt-in, so the
+    /// build path no longer produces this variant — an unregistered selector
+    /// falls back to a plain `:param` path parameter. See
+    /// [`crate::BindingRegistry::resolve`].
+    UnknownBinding {
+        /// The unregistered binding field (the selector after the colon).
+        name: String,
+    },
 }
 
 impl std::fmt::Display for RouteError {
@@ -166,6 +177,9 @@ impl std::fmt::Display for RouteError {
             }
             Self::UnknownAuthorization { name } => {
                 write!(formatter, "unknown authorization resource `{name}`")
+            }
+            Self::UnknownBinding { name } => {
+                write!(formatter, "unknown model binding `{name}`")
             }
         }
     }

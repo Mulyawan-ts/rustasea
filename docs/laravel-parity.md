@@ -124,6 +124,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Database\Eloquent\Concerns\HasTimestamps` | `rustasea-orm::Timestamps` | **Partial** | Timestamp inference real; write-path population pending. |
 | `Illuminate\Database\Eloquent\Concerns\HasRelationships` | `rustasea-orm::{Relation, RelationKind}` | **Adopted** | Relation declarations + eager-loading loader real (`crates/rustasea-orm/src/eager.rs:59`). |
 | `Illuminate\Database\Eloquent\Concerns\HasUuids` | `#[derive(Model)]` + `uuid::Uuid` `id` | **Partial** | UUID `id` enforced at derive time; no ULID variant. |
+| `cviebrock/eloquent-sluggable` (`SlugOptions` / `HasSlug`) | `rustasea_orm::sluggable` (`SlugOptions`, `slugify`, `SluggableFind`) | **Partial** | Unicode-aware slug generation, deterministic collision suffixing (`-2`, `-3`, …), `#[sluggable(...)]` derive opt-in, write-path hooks (`on_update`), `find_by_slug`/`find_by_slug_or_fail`, and `{post:slug}` route binding real (`crates/rustasea-orm/src/sluggable.rs`, `crates/rustasea-router/src/binding.rs`); no slug-history/redirect table. |
 | `Illuminate\Database\Eloquent\Factories\HasFactory` | `rustasea-orm::Factory` / `SqlSeeder` | **Adopted** | Factory + seeder traits execute against the pool (`crates/rustasea-orm/src/factory.rs`, `migration.rs:289`). |
 | `Illuminate\Database\ConnectionInterface` | `rustasea-orm::DbPool` | **Adopted** | Pool connect/ping + model CRUD round-trip real (`crates/rustasea-orm/src/db.rs:24`, `model_ops.rs:25`). |
 | `Illuminate\Database\ConnectionResolverInterface` | `rustasea-orm::DbPool` | **Partial** | Single-pool resolution; multi-connection resolver thinner. |
@@ -137,7 +138,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Contracts\Routing\Registrar` | `rustasea-router::Router` | **Partial** | Registration DSL real; full registrar contract (bindings, fallbacks) thinner. |
 | `Illuminate\Contracts\Routing\ResponseFactory` | `rustasea-http::JsonResponse` | **Partial** | JSON/status helpers only. |
 | `Illuminate\Contracts\Routing\UrlGenerator` | — | **Planned** | No named-route URL generator. |
-| `Illuminate\Contracts\Routing\UrlRoutable` | — | **Planned** | No implicit model route binding. |
+| `Illuminate\Contracts\Routing\UrlRoutable` | `rustasea-router::{ModelBinder, BindingRegistry}` | **Partial** | Implicit model binding for `{post:slug}` selector routes via registered binders (`crates/rustasea-router/src/binding.rs`); no named-route URL generation. |
 | `Illuminate\Routing\Contracts\ControllerDispatcher` | `rustasea-router::dispatch` | **Adopted** | Real controller dispatch landed in GAP-002. |
 | `Illuminate\Routing\Contracts\CallableDispatcher` | `rustasea-router::Handler` | **Partial** | Handler trait real; closure/callable dispatch breadth narrower. |
 | `Illuminate\Routing\Controllers\HasMiddleware` | `rustasea-macros::#[middleware]` | **Partial** | Attribute metadata emitted; runtime consumer pending (GAP-003). |

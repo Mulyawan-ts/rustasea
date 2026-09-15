@@ -41,6 +41,8 @@ sha2 = { workspace = true }
 hex = { workspace = true }
 # RFC 3986 percent-encoding for credentials interpolated into connection URLs.
 percent-encoding = "2"
+# Unicode→ASCII transliteration for slug generation (ADOPT-016).
+deunicode = { workspace = true }
 # Runtime API only — the compile-time `query!` macros are intentionally not
 # enabled (CI has no `DATABASE_URL`). Driver features are added via `[features]`.
 sqlx = { workspace = true }

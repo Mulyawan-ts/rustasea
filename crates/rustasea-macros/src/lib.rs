@@ -21,6 +21,7 @@ mod field_rules;
 mod model;
 mod model_activity;
 pub(crate) mod model_helpers;
+mod model_sluggable;
 
 use field_rules::field_rule_specs;
 use proc_macro::TokenStream;
@@ -190,7 +191,25 @@ pub fn validate_payload(input: TokenStream) -> TokenStream {
 ///     password: String,
 /// }
 /// ```
-#[proc_macro_derive(Model, attributes(model, logs_activity))]
+///
+/// # Slug opt-in
+///
+/// A container-level `#[sluggable(...)]` derives a URL-safe slug on write
+/// (ADOPT-016, eloquent-sluggable parity). `source` lists the columns to
+/// concatenate; `to` names the slug field (default: a field named `slug`).
+/// Optional keys: `separator`, `unique`, `on_update`, `max_len`:
+///
+/// ```rust,ignore
+/// #[derive(Model)]
+/// #[sluggable(source = "title,subtitle", to = "slug", max_len = "80")]
+/// struct Post {
+///     id: Uuid,
+///     title: String,
+///     subtitle: String,
+///     slug: String,
+/// }
+/// ```
+#[proc_macro_derive(Model, attributes(model, logs_activity, sluggable))]
 pub fn derive_model(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match model::expand(&input) {

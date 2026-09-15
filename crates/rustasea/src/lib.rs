@@ -68,9 +68,10 @@ pub use timezone::{
 };
 
 pub use orm::{
-    register_migration, register_seeder, registered_migrator, Migration, MigrationError,
+    register_migration, register_seeder, registered_migrator, slugify, Migration, MigrationError,
     MigrationRecord, Migrator, Model, OrmError, Paginator, QueryBuilder, Relation,
-    Result as OrmResult, ScopeRegistry, Seeder, SoftDeletes, Timestamps, UpsertError,
+    Result as OrmResult, ScopeRegistry, Seeder, SlugOptions, SluggableFind, SoftDeletes,
+    Timestamps, UpsertError,
 };
 
 /// Activity-log re-exports for audit-trail ergonomics (M2).

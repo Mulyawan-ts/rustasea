@@ -12,10 +12,12 @@ use std::sync::Arc;
 use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::middleware::Next;
+use axum::response::IntoResponse;
 use axum::routing::MethodRouter;
 use axum::Router as AxumRouter;
 
 use crate::authorize::{AuthorizeRegistry, AuthorizeResource};
+use crate::binding::{extract_param, selector_pairs, BindingRegistry, ModelBinder};
 use crate::handler::{stub_handler, ActionFactory, BoundAction, Handler};
 use crate::metadata::{MiddlewareApply, RouteError};
 use crate::route::{AuthorizeSpec, RouteEntry};
@@ -48,6 +50,7 @@ impl Router {
         let layers = self.layers;
         let registry = self.middleware_registry;
         let authorize_registry = self.authorize_registry;
+        let binding_registry = self.binding_registry;
 
         let mut router = AxumRouter::new();
         let mut registered: Vec<(String, String)> = Vec::new();
@@ -60,12 +63,20 @@ impl Router {
             }
             registered.push((entry.method.clone(), entry.path.clone()));
             let mut method_router = resolve(&entry, &mut actions, &controller_actions);
+            let axum_path = to_axum_path(&entry.path);
             // Authorization runs *innermost* — after the route's middleware
             // (which populates the principal and the resolved resource) and
             // before the handler, so a denial short-circuits the body.
             method_router = apply_authorize(method_router, &entry, &authorize_registry)?;
+            // Model binding wraps authorization so the bound model is in the
+            // request extensions before the authorizer reads it; it sits inside
+            // the route middleware (which populates the principal). The selector
+            // scan reads the Laravel-style `entry.path` (the axum path has
+            // already dropped the `:field` selector), while the runtime value
+            // extraction uses the axum `template`.
+            method_router =
+                apply_binding(method_router, &entry.path, &axum_path, &binding_registry);
             method_router = apply_middleware(method_router, &entry, &registry)?;
-            let axum_path = to_axum_path(&entry.path);
             router = router.merge(AxumRouter::new().route(&axum_path, method_router));
         }
         for apply in layers {
@@ -172,6 +183,57 @@ fn apply_authorize(
             }
         },
     )))
+}
+
+/// Apply a route's `{param:field}` model bindings as an outer layer.
+///
+/// Binding is *opt-in*: only selectors whose field resolves to a registered
+/// [`ModelBinder`] through `registry` are wrapped. A selector with no registered
+/// binder is skipped entirely — it stays metadata-only (consumed by `route:list`
+/// and the OpenAPI document) and the route keeps serving that segment as a plain
+/// `:param` path parameter, preserving the pre-binding contract. The resolved
+/// binders run inside a single `from_fn` layer placed *outside* the authorization
+/// layer (so the bound model is in the request extensions before an authorizer
+/// reads it) and *inside* the route middleware (so a preceding middleware may
+/// have populated the principal). The path value is read by aligning the axum
+/// `template` segments with the request URI segments; a missing value or a
+/// binder miss returns its response without executing the handler. A route with
+/// no resolvable selectors is returned untouched.
+fn apply_binding(
+    method_router: MethodRouter<()>,
+    laravel_path: &str,
+    axum_path: &str,
+    registry: &BindingRegistry,
+) -> MethodRouter<()> {
+    let mut checks: Vec<(Arc<dyn ModelBinder>, String)> = Vec::new();
+    for (field, param) in selector_pairs(laravel_path) {
+        if let Some(binder) = registry.resolve(&field) {
+            checks.push((binder, param));
+        }
+    }
+    if checks.is_empty() {
+        return method_router;
+    }
+    let template = axum_path.to_string();
+    let checks = Arc::new(checks);
+    method_router.layer(axum::middleware::from_fn(
+        move |mut request: Request, next: Next| {
+            let checks = Arc::clone(&checks);
+            let template = template.clone();
+            async move {
+                let uri_path = request.uri().path().to_string();
+                for (binder, param) in checks.iter() {
+                    let Some(value) = extract_param(&uri_path, &template, param) else {
+                        return StatusCode::NOT_FOUND.into_response();
+                    };
+                    if let Err(response) = binder.bind(&mut request, &value) {
+                        return response;
+                    }
+                }
+                next.run(request).await
+            }
+        },
+    ))
 }
 
 /// Resolve the executable method router for a route entry.

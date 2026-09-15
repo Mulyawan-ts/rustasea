@@ -25,6 +25,7 @@ pub mod profile;
 pub mod relations;
 pub mod schema;
 pub mod scopes;
+pub mod sluggable;
 pub mod tx;
 pub mod types;
 pub mod value;
@@ -63,7 +64,7 @@ pub use migration_guard::{
     guard_destructive_command, is_production, DestructiveCommandRefused, PRODUCTION,
 };
 pub use model::{Model, Relation, RelationKind, Relations, SoftDeletes, Timestamps};
-pub use model_ops::ModelOps;
+pub use model_ops::{ModelOps, SluggableFind};
 pub use naming::snake_plural;
 pub use profile::{
     clear_query_recorder, query_recorder, register_query_recorder, QueryRecorder, SqlQueryEvent,
@@ -74,6 +75,7 @@ pub use scopes::{
     try_registered_global_scopes, CallbackScope, GlobalScope, GlobalScopeEntry,
     GlobalScopeRegistry, Scope, ScopeRegistry, SoftDeletesScope,
 };
+pub use sluggable::{slugify, SlugOptions};
 pub use tx::{Transaction, TransactionError};
 pub use types::{ColumnType, JsonFilter};
 pub use value::Value;

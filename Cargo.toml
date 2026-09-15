@@ -86,6 +86,10 @@ rand = "0.8"
 # `fake` re-exports its `rand` 0.10 dependency as `fake::rand`, so no separate
 # rand entry is needed for the deterministic ChaCha12Rng.
 fake = { version = "5.1", features = ["derive", "chrono", "uuid"] }
+# Slug transliteration (ADOPT-016) — pure Unicode→ASCII transliteration for
+# `rustasea_orm::sluggable` (eloquent-sluggable parity). Already in the lock via
+# `fake`, so this adds no new upstream source.
+deunicode = "1"
 # Async streams (M6)
 futures-core = "0.3"
 futures-util = { version = "0.3", default-features = false }

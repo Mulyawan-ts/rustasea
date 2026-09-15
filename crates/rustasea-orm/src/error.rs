@@ -90,6 +90,15 @@ pub enum OrmError {
     /// never invisible to the caller.
     #[error("activity log error: {0}")]
     Activity(String),
+
+    /// Slug generation failed (ADOPT-016).
+    ///
+    /// Raised before any write when the configured source columns produce no
+    /// slug text — a silent empty slug would make the row unreachable by its
+    /// slug — or when the deterministic uniqueness search exhausts its
+    /// candidate budget.
+    #[error("slug error: {0}")]
+    Slug(String),
 }
 
 impl From<sqlx::Error> for OrmError {

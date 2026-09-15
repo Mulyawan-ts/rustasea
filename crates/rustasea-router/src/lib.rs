@@ -13,6 +13,7 @@
 //! with [`Router::register_middleware`].
 
 mod authorize;
+mod binding;
 mod dispatch;
 mod handler;
 mod metadata;
@@ -25,6 +26,7 @@ mod tests;
 mod url;
 
 pub use authorize::{AuthorizeRegistry, AuthorizeResource};
+pub use binding::{BindingRegistry, ModelBinder};
 pub use handler::Handler;
 pub use metadata::{MiddlewareApply, MiddlewareRegistry, RouteError};
 pub use route::{AuthorizeSpec, ControllerRef, RouteEntry};

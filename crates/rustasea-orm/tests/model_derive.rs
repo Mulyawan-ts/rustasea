@@ -316,3 +316,56 @@ fn derive_wrapper_style_has_no_tracked_columns() {
     assert!(ts <= account.timestamps.updated_at);
     assert!(account.soft_deletes.deleted_at.is_none());
 }
+
+/// A model opting into slug generation from its `name` field.
+#[allow(dead_code)]
+#[derive(rustasea_macros::Model)]
+#[model(soft_deletes = "none", timestamps = "none")]
+#[sluggable(source = "name")]
+struct Post {
+    id: Uuid,
+    name: String,
+    slug: String,
+}
+
+/// Verifies `#[sluggable(source = "name")]` emits the slug policy and helpers.
+#[test]
+fn derive_emits_slug_policy_and_helpers() {
+    assert!(<Post as Model>::sluggable());
+
+    let options = <Post as Model>::slug_options();
+    assert_eq!(options.source, vec!["name".to_string()]);
+    assert_eq!(options.slug_column, "slug");
+    assert_eq!(options.separator, '-');
+    assert!(options.unique);
+    assert!(!options.on_update);
+    assert_eq!(options.max_len, 255);
+
+    let mut post = Post {
+        id: Uuid::now_v7(),
+        name: "Hello World".into(),
+        slug: String::new(),
+    };
+    assert_eq!(
+        post.slug_source_values(),
+        vec![("name".to_string(), "Hello World".to_string())]
+    );
+    post.set_slug("hello-world");
+    assert_eq!(post.slug, "hello-world");
+}
+
+/// Verifies a plain model (no `#[sluggable]`) keeps the opt-out defaults.
+#[test]
+fn derive_defaults_to_non_sluggable() {
+    assert!(!<User as Model>::sluggable());
+    assert!(<User as Model>::slug_options().source.is_empty());
+
+    let user = User {
+        id: Uuid::now_v7(),
+        name: "Ada".into(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        deleted_at: None,
+    };
+    assert!(user.slug_source_values().is_empty());
+}

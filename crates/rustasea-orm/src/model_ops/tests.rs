@@ -6,6 +6,7 @@
 //! bind shape tracks the runtime dialect.
 
 use super::*;
+use chrono::DateTime;
 
 /// A fixed UUID string used across the type-fidelity assertions.
 const UUID_TEXT: &str = "f3c1f3c1-0000-4000-8000-000000000000";

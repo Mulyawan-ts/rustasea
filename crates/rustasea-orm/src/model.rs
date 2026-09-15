@@ -285,6 +285,39 @@ pub trait Model: Send + Sync {
         false
     }
 
+    /// Whether this model derives a URL-safe slug on write (ADOPT-016).
+    ///
+    /// Defaults to `false` (zero overhead); `#[derive(Model)]` emits `true` for
+    /// a `#[sluggable(...)]` struct.
+    fn sluggable() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
+
+    /// The slug-generation configuration (only used when [`Model::sluggable`]).
+    fn slug_options() -> crate::sluggable::SlugOptions
+    where
+        Self: Sized,
+    {
+        crate::sluggable::SlugOptions::default()
+    }
+
+    /// Store a freshly generated slug on the instance (no-op by default).
+    fn set_slug(&mut self, slug: &str) {
+        let _ = slug;
+    }
+
+    /// The current values of the configured slug source columns.
+    ///
+    /// The derive emits `(column, value)` pairs per `#[sluggable]` source field;
+    /// the default returns nothing. Fed to
+    /// [`crate::sluggable::SlugOptions::generate`].
+    fn slug_source_values(&self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
     /// Update tracked timestamps in memory (derive macro also emits `touch`).
     fn touch(&mut self) {}
 

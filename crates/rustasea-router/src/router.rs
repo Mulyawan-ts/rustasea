@@ -9,6 +9,7 @@
 use axum::Router as AxumRouter;
 
 use crate::authorize::AuthorizeRegistry;
+use crate::binding::BindingRegistry;
 use crate::handler::{action_factory, ActionFactory, BoundAction, Handler};
 use crate::metadata::MiddlewareRegistry;
 use crate::route::{
@@ -33,6 +34,8 @@ pub struct Router {
     pub(crate) middleware_registry: MiddlewareRegistry,
     /// `#[authorize]` resource registry consulted at build time.
     pub(crate) authorize_registry: AuthorizeRegistry,
+    /// `{param:field}` model-binding registry consulted at build time.
+    pub(crate) binding_registry: BindingRegistry,
     /// Index into [`Router::routes`] where the most recent registration batch
     /// started, so [`Router::named`] can name every route the last helper
     /// produced (e.g. all six methods of an `any` route).
@@ -55,6 +58,7 @@ impl Router {
             controller_actions: Vec::new(),
             middleware_registry: MiddlewareRegistry::new(),
             authorize_registry: AuthorizeRegistry::new(),
+            binding_registry: BindingRegistry::new(),
             batch_start: 0,
         }
     }
@@ -359,6 +363,7 @@ impl Router {
             controller_actions: Vec::new(),
             middleware_registry: MiddlewareRegistry::new(),
             authorize_registry: AuthorizeRegistry::new(),
+            binding_registry: BindingRegistry::new(),
             batch_start: 0,
         };
         f(&mut sub);
@@ -367,6 +372,7 @@ impl Router {
         self.controller_actions.extend(sub.controller_actions);
         self.middleware_registry.merge(sub.middleware_registry);
         self.authorize_registry.merge(sub.authorize_registry);
+        self.binding_registry.merge(sub.binding_registry);
         // Routes added by the group are not part of any open batch, so a
         // trailing `named` call cannot accidentally rename them.
         self.batch_start = self.routes.len();

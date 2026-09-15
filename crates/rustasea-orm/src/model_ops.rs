@@ -14,12 +14,17 @@ use crate::error::{OrmError, Result};
 use crate::m2::UpsertBuilder;
 use crate::model::Model;
 use crate::types::Value;
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use uuid::Uuid;
 
 mod activity_hooks;
+mod slug_hooks;
+mod timestamps;
+
+pub use slug_hooks::SluggableFind;
+use timestamps::{provided_timestamp, timestamp_value};
 
 /// Fields that are managed by the ORM and never written as user columns.
 const RESERVED_COLUMNS: &[&str] = &["id", "created_at", "updated_at", "deleted_at", "relations"];
@@ -38,6 +43,7 @@ pub trait ModelOps: Model + Sized {
             data.assign_id();
         }
         let id = data.primary_key();
+        slug_hooks::prepare_insert(pool, &mut data).await?;
         let recorder = activity_hooks::recorder::<Self>();
         let (sql, bindings) = build_insert::<Self>(&data, pool.dialect())?;
         pool.execute_bind(&sql, &bindings).await?;
@@ -64,6 +70,11 @@ pub trait ModelOps: Model + Sized {
             data.assign_id();
         }
         let id = data.primary_key();
+        // The upsert is atomic, so a slug is generated with insert semantics
+        // (fresh base + uniqueness). An existing row keeping its slug is
+        // preserved only when the caller leaves the slug untouched and
+        // `on_update` is off; use `update` for change-aware regeneration.
+        slug_hooks::prepare_insert(pool, &mut data).await?;
         let recorder = activity_hooks::recorder::<Self>();
         // When auditing, read the prior row first so the event can be classified
         // as Created or Updated (the upsert itself is atomic).
@@ -97,7 +108,7 @@ pub trait ModelOps: Model + Sized {
     ///
     /// Bumps `updated_at` when the model tracks timestamps; returns the
     /// re-read persisted row.
-    async fn update(pool: &DbPool, data: Self) -> Result<Self>
+    async fn update(pool: &DbPool, mut data: Self) -> Result<Self>
     where
         Self: Serialize + DeserializeOwned,
     {
@@ -109,6 +120,15 @@ pub trait ModelOps: Model + Sized {
             Some(_) => activity_hooks::snapshot::<Self>(pool, id).await?,
             None => None,
         };
+        // Regenerate the slug only when the model opts into `on_update`; the
+        // pre-read source values let the hook skip an unchanged source.
+        let slug_old = match Self::sluggable() && Self::slug_options().on_update {
+            true => Self::refresh(pool, id)
+                .await?
+                .map(|row| row.slug_source_values()),
+            false => None,
+        };
+        slug_hooks::prepare_update(pool, &mut data, slug_old.as_deref()).await?;
         let (sql, bindings) = build_update::<Self>(&data, pool.dialect())?;
         let affected = pool.execute_bind(&sql, &bindings).await?;
         if affected == 0 {
@@ -394,24 +414,6 @@ fn columns_from_object(object: &serde_json::Value) -> Result<Vec<(String, Value)
     Ok(columns)
 }
 
-/// Read a caller-supplied timestamp column from a serialized model object.
-///
-/// Returns `None` when the column is absent or `null`, so the write path can
-/// fall back to the current time. `chrono` serializes a `DateTime<Utc>` as an
-/// RFC3339 string by default; a numeric Unix timestamp is accepted too, matching
-/// the alternative `serde` representation.
-fn provided_timestamp(object: &serde_json::Value, column: &str) -> Option<DateTime<Utc>> {
-    match object.get(column)? {
-        serde_json::Value::String(text) => DateTime::parse_from_rfc3339(text)
-            .ok()
-            .map(|stamp| stamp.with_timezone(&Utc)),
-        serde_json::Value::Number(number) => number
-            .as_i64()
-            .and_then(|seconds| DateTime::from_timestamp(seconds, 0)),
-        _ => None,
-    }
-}
-
 /// Extract the writable `(column, value)` pairs from a model's serde object.
 ///
 /// Every declared attribute cast is applied first (in the persistence
@@ -479,20 +481,6 @@ fn json_to_value(column: &str, value: &serde_json::Value) -> Result<Value> {
         }
         other => Value::Json(other.clone()),
     })
-}
-
-/// The current timestamp as a bind value for `dialect`.
-///
-/// SQLite compares TEXT datetimes lexicographically, so the stored form is a
-/// fixed-width RFC3339 string; Postgres/MySQL receive a native `DateTime<Utc>`
-/// bound against their `timestamp`/`datetime` columns. The dialect is supplied
-/// by the runtime pool so the shape tracks the live driver, not the compiled
-/// feature set.
-fn timestamp_value(now: DateTime<Utc>, dialect: &str) -> Value {
-    match dialect {
-        "sqlite" => Value::Text(now.to_rfc3339_opts(SecondsFormat::Micros, true)),
-        _ => Value::Timestamp(now),
-    }
 }
 
 #[cfg(test)]

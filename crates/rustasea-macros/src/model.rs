@@ -31,6 +31,7 @@ use syn::{Data, DeriveInput, Fields, Type};
 
 use crate::model_activity::{build_activity_columns, field_skips_activity, parse_logs_activity};
 use crate::model_helpers::{column_name, is_created_at, is_deleted_at, is_updated_at};
+use crate::model_sluggable::{build_slug_impl, find_slug_field, parse_sluggable};
 
 /// A resolved cast declaration for one model field.
 struct FieldCast {
@@ -187,6 +188,7 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
     let name = &input.ident;
     let (table, soft_deletes, timestamps) = parse_container(input);
     let activity = parse_logs_activity(input)?;
+    let sluggable = parse_sluggable(input)?;
 
     // Reject non-struct targets early with a spanned error.
     let fields = match &input.data {
@@ -363,6 +365,15 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
         quote! {}
     };
 
+    // Slug opt-in: resolve the destination field and emit the override quartet
+    // only when `#[sluggable(...)]` is present.
+    let sluggable_impl = if sluggable.enabled {
+        let slug_field = find_slug_field(fields, &sluggable)?;
+        build_slug_impl(&sluggable, &slug_field, fields)
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         #[automatically_derived]
         impl rustasea_orm::model::Model for #name {
@@ -404,6 +415,7 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
 
             #casts_impl
             #activity_impl
+            #sluggable_impl
         }
     })
 }

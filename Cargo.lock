@@ -6087,6 +6087,7 @@ dependencies = [
  "async-trait",
  "chacha20poly1305",
  "chrono",
+ "deunicode",
  "hex",
  "percent-encoding",
  "pgvector",
