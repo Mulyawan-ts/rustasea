@@ -91,7 +91,7 @@ mod hidden_marker {
     /// Type-less marker const is private to the module it decorates.
     #[test]
     fn emits_marker() {
-        assert!(__RUSTASEA_HIDDEN);
+        const { assert!(__RUSTASEA_HIDDEN) };
     }
 }
 
@@ -105,7 +105,7 @@ mod fail_on_timeout_marker {
     /// Type-less marker const is private to the module it decorates.
     #[test]
     fn emits_marker() {
-        assert!(__RUSTASEA_FAIL_ON_TIMEOUT);
+        const { assert!(__RUSTASEA_FAIL_ON_TIMEOUT) };
     }
 }
 
@@ -119,7 +119,7 @@ mod without_broadcasting_marker {
     /// Type-less marker const is private to the module it decorates.
     #[test]
     fn emits_marker() {
-        assert!(__RUSTASEA_WITHOUT_BROADCASTING);
+        const { assert!(__RUSTASEA_WITHOUT_BROADCASTING) };
     }
 }
 
@@ -133,7 +133,7 @@ mod repair_tool_calls_marker {
     /// Type-less marker const is private to the module it decorates.
     #[test]
     fn emits_marker() {
-        assert!(__RUSTASEA_REPAIR_TOOL_CALLS);
+        const { assert!(__RUSTASEA_REPAIR_TOOL_CALLS) };
     }
 }
 
@@ -158,7 +158,7 @@ mod priority_marker {
     fn item_survives_and_consts_coexist() {
         assert_eq!(super::__RUSTASEA_TRIES_PriorityIngestJob, 5);
         assert_eq!(super::__RUSTASEA_QUEUE_PriorityIngestJob, "high");
-        assert!(__RUSTASEA_HIDDEN);
+        const { assert!(__RUSTASEA_HIDDEN) };
         // Struct body untouched: name + field still resolvable.
         let _ = core::mem::size_of::<super::PriorityIngestJob>();
     }
