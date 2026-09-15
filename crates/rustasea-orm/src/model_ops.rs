@@ -19,11 +19,14 @@ use crate::model::Model;
 use crate::types::Value;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::collections::HashSet;
 use uuid::Uuid;
 
 mod activity_hooks;
+mod cascade;
 mod composite;
 mod key;
+mod restore;
 mod slug_hooks;
 mod timestamps;
 mod write;
@@ -191,10 +194,21 @@ pub trait ModelOps: Model + Sized {
     /// Permanently remove the row addressed by a primary-key value tuple.
     async fn force_delete_by_key(pool: &DbPool, key: &[Value]) -> Result<bool> {
         let filter = resolve_key_filter::<Self>(key)?;
+        let cascading = Self::cascade_soft_deletes();
+        // Group the parent delete with its cascaded children under one batch id.
+        let _batch =
+            cascading.then(|| crate::activity::BatchScope::new(Uuid::now_v7().to_string()));
         let recorder = activity_hooks::recorder::<Self>();
         let old = match &recorder {
             Some(_) => activity_hooks::snapshot::<Self>(pool, &filter).await?,
             None => None,
+        };
+        // Capture the parent before it is removed, so the fan-out still sees the
+        // foreign-key values it must match on.
+        let cascade_parent = if cascading {
+            cascade::parent_snapshot::<Self>(pool, &filter).await?
+        } else {
+            None
         };
         let (sql, bindings) = composite::build_delete::<Self>(&filter);
         let affected = pool.execute_bind(&sql, &bindings).await?;
@@ -202,6 +216,19 @@ pub trait ModelOps: Model + Sized {
             if affected > 0 {
                 activity_hooks::record_deleted::<Self>(&recorder, &filter.event_id(), old, None)
                     .await?;
+            }
+        }
+        if affected > 0 {
+            if let Some(parent) = cascade_parent {
+                let mut visited = HashSet::new();
+                cascade::cascade::<Self>(
+                    pool,
+                    &parent,
+                    cascade::CascadeMode::ForceDelete,
+                    0,
+                    &mut visited,
+                )
+                .await?;
             }
         }
         Ok(affected > 0)
@@ -220,10 +247,21 @@ pub trait ModelOps: Model + Sized {
     /// Soft-delete the row addressed by a primary-key value tuple.
     async fn soft_delete_by_key(pool: &DbPool, key: &[Value]) -> Result<bool> {
         let filter = resolve_key_filter::<Self>(key)?;
+        let cascading = Self::cascade_soft_deletes();
+        // Group the parent soft delete with its cascaded children under one batch.
+        let _batch =
+            cascading.then(|| crate::activity::BatchScope::new(Uuid::now_v7().to_string()));
         let recorder = activity_hooks::recorder::<Self>();
         let old = match &recorder {
             Some(_) => activity_hooks::snapshot::<Self>(pool, &filter).await?,
             None => None,
+        };
+        // Capture the parent before it is stamped, so the fan-out still sees the
+        // foreign-key values and the pre-delete `deleted_at`.
+        let cascade_parent = if cascading {
+            cascade::parent_snapshot::<Self>(pool, &filter).await?
+        } else {
+            None
         };
         let (sql, bindings) = composite::build_soft_delete::<Self>(&filter, pool.dialect());
         let affected = pool.execute_bind(&sql, &bindings).await?;
@@ -236,7 +274,36 @@ pub trait ModelOps: Model + Sized {
                     .await?;
             }
         }
+        if affected > 0 {
+            if let Some(parent) = cascade_parent {
+                let mut visited = HashSet::new();
+                cascade::cascade::<Self>(
+                    pool,
+                    &parent,
+                    cascade::CascadeMode::SoftDelete,
+                    0,
+                    &mut visited,
+                )
+                .await?;
+            }
+        }
         Ok(affected > 0)
+    }
+
+    /// Restore the row by clearing its soft-delete marker.
+    async fn restore(pool: &DbPool, id: Uuid) -> Result<bool> {
+        Self::restore_by_key(pool, &[Value::Uuid(id)]).await
+    }
+
+    /// Restore the row addressed by a primary-key value tuple.
+    ///
+    /// Clears `deleted_at`; when the model declares `#[cascade_soft_deletes]`,
+    /// children soft-deleted together with the parent are restored too, while
+    /// rows deleted independently (earlier stamp) stay trashed. The tuple length
+    /// must match [`Model::primary_key_columns`].
+    async fn restore_by_key(pool: &DbPool, key: &[Value]) -> Result<bool> {
+        let filter = resolve_key_filter::<Self>(key)?;
+        restore::restore_by_key::<Self>(pool, &filter).await
     }
 
     /// Re-read the row by primary key, including soft-deleted rows.

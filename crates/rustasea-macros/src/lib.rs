@@ -20,6 +20,7 @@ mod attrs;
 mod field_rules;
 mod model;
 mod model_activity;
+mod model_cascade;
 pub(crate) mod model_helpers;
 mod model_primary_key;
 mod model_sluggable;
@@ -210,7 +211,10 @@ pub fn validate_payload(input: TokenStream) -> TokenStream {
 ///     slug: String,
 /// }
 /// ```
-#[proc_macro_derive(Model, attributes(model, logs_activity, sluggable))]
+#[proc_macro_derive(
+    Model,
+    attributes(model, logs_activity, sluggable, cascade_soft_deletes)
+)]
 pub fn derive_model(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match model::expand(&input) {

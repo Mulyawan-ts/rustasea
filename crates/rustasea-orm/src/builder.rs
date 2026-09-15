@@ -240,6 +240,12 @@ impl QueryBuilder {
         self
     }
 
+    /// Add a `WHERE column IS NOT NULL` clause (cascade restore guard uses this).
+    pub fn where_not_null(mut self, column: &str) -> Self {
+        self.push_condition("AND", format!("{column} IS NOT NULL"));
+        self
+    }
+
     /// Add a JSON filter clause (`@>`, path equality, or key exists).
     ///
     /// Filters that compare against a value (`Contains`, `PathEquals`) bind that

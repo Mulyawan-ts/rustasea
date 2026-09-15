@@ -30,6 +30,7 @@ use quote::{quote, ToTokens};
 use syn::{Data, DeriveInput, Fields, Type};
 
 use crate::model_activity::{build_activity_columns, field_skips_activity, parse_logs_activity};
+use crate::model_cascade::{build_cascade_impl, parse_cascade};
 use crate::model_helpers::{column_name, is_created_at, is_deleted_at, is_updated_at};
 use crate::model_primary_key::{build_composite_primary_key, parse_primary_key};
 use crate::model_sluggable::{build_slug_impl, find_slug_field, parse_sluggable};
@@ -192,6 +193,7 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
     let composite_primary_key = primary_key_columns.len() > 1;
     let activity = parse_logs_activity(input)?;
     let sluggable = parse_sluggable(input)?;
+    let cascade = parse_cascade(input)?;
 
     // Reject non-struct targets early with a spanned error.
     let fields = match &input.data {
@@ -395,6 +397,14 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
         quote! {}
     };
 
+    // Cascade opt-in: emit the override pair only when the container attribute
+    // is present, so a plain model keeps the default `false`/empty behaviour.
+    let cascade_impl = if cascade.enabled {
+        build_cascade_impl(&cascade)
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         #[automatically_derived]
         impl rustasea_orm::model::Model for #name {
@@ -428,6 +438,7 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
             #casts_impl
             #activity_impl
             #sluggable_impl
+            #cascade_impl
         }
     })
 }

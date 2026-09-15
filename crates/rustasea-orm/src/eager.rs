@@ -335,7 +335,7 @@ async fn load_many_to_many_composite<'a>(
 }
 
 /// Collect the distinct parent key bind values for `column` across `rows`.
-fn parent_keys(rows: &[JsonValue], column: &str) -> Vec<Value> {
+pub(crate) fn parent_keys(rows: &[JsonValue], column: &str) -> Vec<Value> {
     let mut seen: HashMap<String, Value> = HashMap::new();
     for row in rows {
         if let Some(key) = row_key(row, column) {
@@ -351,7 +351,7 @@ fn parent_keys(rows: &[JsonValue], column: &str) -> Vec<Value> {
 /// Rows missing any column (or with a `null` part) are skipped, and duplicate
 /// tuples are deduped on their joined string form, so the resulting predicate
 /// carries each tuple at most once.
-fn parent_rows(rows: &[JsonValue], columns: &[String]) -> Vec<Vec<Value>> {
+pub(crate) fn parent_rows(rows: &[JsonValue], columns: &[String]) -> Vec<Vec<Value>> {
     let mut seen: HashMap<String, Vec<Value>> = HashMap::new();
     for row in rows {
         let Some(key) = row_composite_key(row, columns) else {
@@ -379,7 +379,7 @@ fn row_composite_key(row: &JsonValue, columns: &[String]) -> Option<String> {
 }
 
 /// Read a row's key column as a string, when present and non-null.
-fn row_key(row: &JsonValue, column: &str) -> Option<String> {
+pub(crate) fn row_key(row: &JsonValue, column: &str) -> Option<String> {
     match row.get(column)? {
         JsonValue::String(text) => Some(text.clone()),
         JsonValue::Number(number) => Some(number.to_string()),
@@ -388,7 +388,7 @@ fn row_key(row: &JsonValue, column: &str) -> Option<String> {
 }
 
 /// Bind a string key as a UUID when it parses, else as text.
-fn key_to_value(key: &str) -> Value {
+pub(crate) fn key_to_value(key: &str) -> Value {
     match Uuid::parse_str(key) {
         Ok(id) => Value::Uuid(id),
         Err(_) => Value::Text(key.to_string()),

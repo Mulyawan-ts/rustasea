@@ -114,9 +114,8 @@ pub trait Model: Send + Sync {
 
     /// The primary-key column names.
     ///
-    /// Defaults to the single `["id"]` column. `#[derive(Model)]` overrides
-    /// this for a `#[model(primary_key = ["tenant_id", "user_id"])]` composite
-    /// key, so persistence and eager loading address the row by its full key.
+    /// Defaults to the single `["id"]` column; the derive overrides this for a
+    /// `#[model(primary_key = ["tenant_id", "user_id"])]` composite key.
     fn primary_key_columns() -> &'static [&'static str]
     where
         Self: Sized,
@@ -148,6 +147,26 @@ pub trait Model: Send + Sync {
         Self: Sized,
     {
         Vec::new()
+    }
+
+    /// Whether this model cascades soft deletes to its declared relations.
+    ///
+    /// Opt in with `#[cascade_soft_deletes("posts")]`; names must match
+    /// [`Model::relations`]. The default is `false`.
+    fn cascade_soft_deletes() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
+
+    /// The relation names whose rows cascade with this model's soft delete,
+    /// restore, and force delete (empty when cascading is off).
+    fn cascade_relations() -> &'static [&'static str]
+    where
+        Self: Sized,
+    {
+        &[]
     }
 
     /// Per-column attribute casts applied on hydration and persistence.
@@ -371,9 +390,8 @@ pub trait Model: Send + Sync {
 
     /// Query that includes soft-deleted rows.
     ///
-    /// Delegates to [`Model::query`] so the model's declared relations metadata
-    /// ([`Model::relations`]) is preserved for eager loading, then bypasses the
-    /// built-in [`SoftDeletesScope`].
+    /// Delegates to [`Model::query`] (preserving relations metadata) then
+    /// bypasses the built-in [`SoftDeletesScope`].
     fn query_with_trashed() -> QueryBuilder
     where
         Self: Sized,
@@ -414,9 +432,7 @@ pub trait Model: Send + Sync {
 
     /// Build a SELECT that refreshes the row for update.
     ///
-    /// `dialect` is the runtime pool dialect; the lock clause is validated and
-    /// emitted for that dialect, so an SQLite pool rejects `FOR UPDATE` with
-    /// [`OrmError::UnsupportedDriver`] even when `postgres` is compiled in.
+    /// `dialect` is the runtime pool dialect; an SQLite pool rejects `FOR UPDATE`.
     fn refresh_for_update(id: Uuid, dialect: &str) -> Result<QueryBuilder>
     where
         Self: Sized,
@@ -454,8 +470,7 @@ pub trait Model: Send + Sync {
     /// Resolve the row for update and surface typed errors on missing rows.
     ///
     /// `dialect` is the runtime pool dialect threaded into
-    /// [`Model::refresh_for_update`] so the lock decision tracks the live
-    /// driver rather than the compiled feature set.
+    /// [`Model::refresh_for_update`] so the lock decision tracks the live driver.
     fn first_for_update(id: Uuid, dialect: &str) -> Result<QueryBuilder>
     where
         Self: Sized,

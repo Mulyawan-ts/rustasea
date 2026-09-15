@@ -192,6 +192,27 @@ pub(crate) async fn record_deleted<T: Model>(
     dispatch(recorder, event).await
 }
 
+/// Record a restore event with the pre- and post-restore snapshots.
+///
+/// A restore always records (there is no no-op skip): the operation itself is
+/// the user-visible fact, and a restore may carry no other column change.
+pub(crate) async fn record_restored<T: Model>(
+    recorder: &Arc<dyn ActivityRecorder>,
+    model_id: &str,
+    old: Option<serde_json::Value>,
+    new: Option<serde_json::Value>,
+) -> Result<()> {
+    let changed = diff_changed(old.as_ref(), new.as_ref());
+    let event = event::<T>(
+        ActivityOperation::Restored,
+        model_id.to_string(),
+        old,
+        new,
+        changed,
+    );
+    dispatch(recorder, event).await
+}
+
 /// Hand an event to the recorder, mapping a recorder failure to a typed error.
 ///
 /// Audit integrity wins over write availability: a failed recording is surfaced

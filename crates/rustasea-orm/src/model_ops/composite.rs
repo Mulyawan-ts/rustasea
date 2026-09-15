@@ -167,3 +167,19 @@ pub(crate) fn build_soft_delete<T: Model>(key: &KeyFilter, dialect: &str) -> (St
         bindings,
     )
 }
+
+/// Build the restore statement and bindings for a resolved key filter.
+///
+/// Restoring clears the soft-delete marker (`deleted_at = NULL`) with no
+/// dialect-specific expression, so the same statement runs on every driver; the
+/// only bindings are the key values.
+pub(crate) fn build_restore<T: Model>(key: &KeyFilter) -> (String, Vec<Value>) {
+    let table = T::table_name();
+    (
+        format!(
+            "UPDATE {table} SET deleted_at = NULL WHERE {}",
+            key.where_sql()
+        ),
+        key.values.clone(),
+    )
+}
