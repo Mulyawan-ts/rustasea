@@ -250,3 +250,31 @@ pub fn into_cli(kind: &str, name: &str, err: GeneratorError) -> CliError {
         },
     }
 }
+
+/// The workspace-relative path `kind` would write for `name` (dry-run planning).
+///
+/// Mirrors the path each generator template uses, so `make:plan` can report the
+/// intended target without touching the filesystem. The migration prefix is
+/// rendered as a stable placeholder because the real one is timestamped.
+pub fn planned_path(kind: Kind, name: &str) -> String {
+    match kind {
+        Kind::Controller => format!("app/http/controllers/{}.rs", Generator::snake(name)),
+        Kind::Middleware => format!("app/http/middleware/{}.rs", Generator::snake(name)),
+        Kind::Request => format!("app/http/requests/{}.rs", Generator::snake(name)),
+        Kind::Model => format!("app/models/{}.rs", Generator::snake(name)),
+        Kind::Provider => format!("app/providers/{}.rs", Generator::snake(name)),
+        Kind::Command => format!("app/console/commands/{}.rs", Generator::snake(name)),
+        Kind::Job => format!("app/jobs/{}.rs", Generator::snake(name)),
+        Kind::Event => format!("app/events/{}.rs", Generator::snake(name)),
+        Kind::Listener => format!("app/listeners/{}.rs", Generator::snake(name)),
+        Kind::Observer => format!("app/observers/{}.rs", Generator::snake(name)),
+        Kind::Test => format!("tests/feature/{}.rs", Generator::snake(name)),
+        Kind::Seeder => format!("database/seeders/{}.rs", Generator::snake(name)),
+        Kind::Migration => format!(
+            "database/migrations/<timestamp>_{}.rs",
+            Generator::snake(name)
+        ),
+        Kind::Agent => format!("app/ai/agents/{}.rs", Generator::snake(name)),
+        Kind::Tool => format!("app/ai/tools/{}.rs", Generator::snake(name)),
+    }
+}

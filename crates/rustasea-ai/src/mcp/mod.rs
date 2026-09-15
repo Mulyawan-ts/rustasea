@@ -1,4 +1,4 @@
-//! MCP (Model Context Protocol) client — tool discovery and invocation.
+//! MCP (Model Context Protocol) — client discovery/invocation and server.
 //!
 //! With the `mcp` feature enabled, [`McpRegistry`] connects to configured MCP
 //! servers over stdio or streamable HTTP, performs the JSON-RPC handshake
@@ -7,12 +7,20 @@
 //! as [`crate::error::AiError::McpServerUnreachable`]; malformed frames surface
 //! as [`crate::error::AiError::McpProtocol`] — never a panic.
 //!
+//! The same feature also provides the server side: [`server::McpServer`] (and
+//! [`server::run_stdio`]) answer `initialize`, `tools/list`, `tools/call`,
+//! `resources/list`, `resources/read`, and `ping` against an injected
+//! [`server::McpBackend`], so an application can expose its knowledge (routes,
+//! docs, config) to AI agents without this crate depending on the application.
+//!
 //! Without the feature the crate stays dependency-light and every MCP
 //! operation degrades to [`crate::error::AiError::McpUnavailable`]
 //! (NFR-Sca-02).
 
 #[cfg(feature = "mcp")]
 pub mod client;
+#[cfg(feature = "mcp")]
+pub mod server;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -21,6 +29,8 @@ use crate::error::Result;
 
 #[cfg(feature = "mcp")]
 pub use client::{McpClient, McpTransport};
+#[cfg(feature = "mcp")]
+pub use server::{McpBackend, McpServer, SERVER_NAME};
 
 /// A tool discovered from an MCP server.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -33,6 +43,32 @@ pub struct McpTool {
     pub description: String,
     /// JSON Schema of the tool's input.
     pub input_schema: Value,
+}
+
+/// A resource advertised by an MCP server via `resources/list`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct McpResource {
+    /// Canonical resource URI (e.g. `rustasea://docs/milestones`).
+    pub uri: String,
+    /// Short human-readable name.
+    pub name: String,
+    /// Description shown to the client.
+    pub description: String,
+    /// MIME type of the resource body.
+    #[serde(rename = "mimeType")]
+    pub mime_type: String,
+}
+
+/// The body returned by `resources/read`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct McpResourceContent {
+    /// URI the content belongs to.
+    pub uri: String,
+    /// MIME type of the content.
+    #[serde(rename = "mimeType")]
+    pub mime_type: String,
+    /// Text body (JSON resources are serialized as text).
+    pub text: String,
 }
 
 /// Connection settings for one MCP server.

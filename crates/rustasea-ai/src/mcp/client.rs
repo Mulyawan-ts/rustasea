@@ -15,7 +15,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout};
 
 use crate::error::{AiError, Result};
-use crate::mcp::{McpServerConfig, McpTool};
+use crate::mcp::{McpResource, McpResourceContent, McpServerConfig, McpTool};
 
 /// MCP protocol revision this client advertises during `initialize`.
 pub const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
@@ -216,6 +216,82 @@ impl McpClient {
             ));
         }
         Ok(result)
+    }
+
+    /// Discover the server's resources via `resources/list`.
+    pub async fn list_resources(&mut self) -> Result<Vec<McpResource>> {
+        let result = self.request("resources/list", json!({})).await?;
+        let resources = result
+            .get("resources")
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                AiError::mcp_protocol(
+                    &self.server,
+                    "resources/list response missing `resources` array",
+                )
+            })?;
+        Ok(resources
+            .iter()
+            .map(|resource| McpResource {
+                uri: resource
+                    .get("uri")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                name: resource
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                description: resource
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+                mime_type: resource
+                    .get("mimeType")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+            })
+            .collect())
+    }
+
+    /// Read the resource at `uri` via `resources/read`.
+    ///
+    /// Returns the first content entry's `text`; a denied/unknown URI yields a
+    /// typed [`AiError::McpProtocol`] (the server answers with a JSON-RPC error
+    /// frame, which [`McpClient::request`] surfaces).
+    pub async fn read_resource(&mut self, uri: &str) -> Result<McpResourceContent> {
+        let params = json!({ "uri": uri });
+        let result = self.request("resources/read", params).await?;
+        let content = result
+            .get("contents")
+            .and_then(Value::as_array)
+            .and_then(|contents| contents.first())
+            .ok_or_else(|| {
+                AiError::mcp_protocol(
+                    &self.server,
+                    "resources/read response missing `contents` array",
+                )
+            })?;
+        Ok(McpResourceContent {
+            uri: content
+                .get("uri")
+                .and_then(Value::as_str)
+                .unwrap_or(uri)
+                .to_string(),
+            mime_type: content
+                .get("mimeType")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            text: content
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+        })
     }
 
     /// Send a JSON-RPC request and await the matching response's `result`.

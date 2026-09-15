@@ -7,6 +7,8 @@
 pub mod builtins;
 pub mod inspect;
 pub mod langcheck;
+#[cfg(feature = "mcp")]
+pub mod mcp_serve;
 pub mod openapi;
 pub mod ops;
 pub mod queue;
@@ -47,6 +49,8 @@ pub fn register_all_into(reg: &mut CommandRegistry) {
     reg.register(ops::MigrateRollback);
     reg.register(langcheck::LangCheck);
     reg.register(tinker::Tinker);
+    #[cfg(feature = "mcp")]
+    reg.register(mcp_serve::McpServe);
 }
 
 /// Register every built-in command into the global process registry.

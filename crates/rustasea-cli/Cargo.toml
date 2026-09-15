@@ -29,6 +29,10 @@ cli = [
     "dep:rustasea-openapi",
     "dep:rustasea-i18n",
 ]
+# `mcp:serve` exposes the project knowledge over the Model Context Protocol
+# (laravel/boost parity). Implies `cli` (the command registry lives there) and
+# pulls `rustasea-ai` with its server engine enabled.
+mcp = ["cli", "dep:rustasea-ai", "rustasea-ai/mcp", "dep:toml"]
 
 [dependencies]
 tokio = { workspace = true }
@@ -54,6 +58,11 @@ rustasea-openapi = { path = "../rustasea-openapi", optional = true }
 # `lang:check` reads translation dictionaries through the i18n loader; optional
 # so a core build that never checks locales does not link the i18n tree.
 rustasea-i18n = { path = "../rustasea-i18n", optional = true }
+# `mcp:serve` runs the MCP server engine (protocol + backend trait); optional so
+# a build without the `mcp` feature never links the AI tree.
+rustasea-ai = { path = "../rustasea-ai", optional = true }
+# TOML parsing for `mcp:serve` config resources (`config/*.toml` → redacted JSON).
+toml = { version = "0.8", optional = true }
 clap = { workspace = true, optional = true }
 dialoguer = { workspace = true, optional = true }
 indicatif = { workspace = true, optional = true }
@@ -61,3 +70,9 @@ console = { workspace = true, optional = true }
 comfy-table = { workspace = true, optional = true }
 # Readline backend for the interactive `tinker` REPL (line editing, history).
 rustyline = { workspace = true, optional = true }
+
+[dev-dependencies]
+# The `mcp_serve` round-trip test drives the real binary through the MCP client
+# (feature `mcp`), so the client engine is available to the test crate.
+rustasea-ai = { path = "../rustasea-ai", features = ["mcp"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
