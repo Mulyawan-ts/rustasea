@@ -242,6 +242,13 @@ make_command!(
     "Make a new AI tool (M6)",
     "make:tool {name} [--force]"
 );
+make_command!(
+    MakeAction,
+    Action,
+    "make:action",
+    "Make a new action class",
+    "make:action {name} [--force]"
+);
 
 /// Convenience used by tests to scaffold into a temp root.
 pub async fn scaffold_into(

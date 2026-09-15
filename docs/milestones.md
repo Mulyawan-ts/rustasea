@@ -45,7 +45,7 @@ section records the reason.
 | **M2** | ORM & Database | **Done** | Real sqlx pool + async execution (`crates/rustasea-orm/src/db.rs:24`, `db/exec.rs:72`); model CRUD (`model_ops.rs:28`), transactions (`tx.rs:67`), custom `Migrator` (`migration.rs:131`, `:189`), eager loading (`eager.rs:59`), pgvector (`vector.rs:100`); `raw`/`raw_sql` remain display-only fragments (`execution.rs:239`, `:247`) |
 | **M3** | Auth, Middleware & Validation | **Partial** | JWT/CSRF/throttle/validation real; session guard now real via `tower-sessions` (`crates/rustasea-auth/src/session.rs:160`, login `:279`, parse `:326`, refresh `:347`, logout `:375`); declarative attributes still emit metadata only (`crates/rustasea-macros/src/lib.rs:74`, `:111`) with no runtime consumer in the tree (see P0 note) |
 | **M4** | Queue, Cache, Scheduling & Events | **Partial** | Database/Redis queue drivers + worker + persistent failed jobs real (`crates/rustasea-queue/src/driver/database.rs:36`, `driver/worker.rs:75`); `queue:work`/`queue:failed`/`queue:retry` CLI real (`crates/rustasea-cli/src/commands/queue.rs:18`, `ops.rs:21`, `:72`); Redis cache store real behind the `redis` feature (`crates/rustasea-cache/src/redis.rs:155`); async listeners enqueue (`crates/rustasea-events/src/dispatcher.rs:82`); remaining: `SyncDriver` in-memory failed jobs (`crates/rustasea-queue/src/driver.rs:171`) and unconsumed declarative job metadata |
-| **M5** | DX, CLI & Testing | **Partial** | CLI + 15 `make:*` generators real (`crates/rustasea-cli/src/commands/mod.rs:17-31`); `cargo rustasea new --variant` real (`crates/cargo-rustasea/src/main.rs:46`); real `xtask` cycle detection (`xtask/src/cycles.rs:32`) and `xtask migrate` (`xtask/src/main.rs:37`); testcontainers-backed `PostgresTestDb` (`crates/rustasea-testing/src/fixtures.rs:49`) with a Docker-gated suite (`crates/rustasea/tests/feature/`); remaining: integration tests are opt-in and generated controllers still need manual route registration (`crates/rustasea-cli/src/generators/kinds/controller.rs:32`) |
+| **M5** | DX, CLI & Testing | **Partial** | CLI + 16 `make:*` generators real (`crates/rustasea-cli/src/commands/mod.rs:17-31`); `cargo rustasea new --variant` real (`crates/cargo-rustasea/src/main.rs:46`); real `xtask` cycle detection (`xtask/src/cycles.rs:32`) and `xtask migrate` (`xtask/src/main.rs:37`); testcontainers-backed `PostgresTestDb` (`crates/rustasea-testing/src/fixtures.rs:49`) with a Docker-gated suite (`crates/rustasea/tests/feature/`); remaining: integration tests are opt-in and generated controllers still need manual route registration (`crates/rustasea-cli/src/generators/kinds/controller.rs:32`) |
 | **M6** | Advanced (Broadcast, Search, FS, AI) | **Partial** | Broadcast WS/SSE, `object_store` storage + `config/storage.toml` facade, JSON:API, `rustasea-mail`, `rustasea-view`/`rustasea-inertia`/`rustasea-livewire`/`rustasea-scaffold`, real AI HTTP providers (`crates/rustasea-ai/src/providers/mod.rs:27`), AI queueing (`crates/rustasea-ai/src/queue.rs:41`), MCP client (`crates/rustasea-ai/src/mcp/client.rs:40`), and feature-gated pgvector (`crates/rustasea-search/src/pgvector.rs:24`) all real; remaining: Gemini/Bedrock unsupported (`crates/rustasea-ai/src/providers/client.rs:223`), deterministic stub embeddings (`crates/rustasea-search/src/embeddings.rs:97`), and `InProcessProvider` kept for tests (`crates/rustasea-ai/src/adapters.rs:50`) |
 
 ---
@@ -233,8 +233,8 @@ tracks failed jobs in memory, and declarative job metadata is not consumed.
 **Goal recap:** First-class CLI, code generation, and a Laravel-like testing
 story.
 
-**Status: Partial** — the CLI and 15 `make:*` generators are real (including
-`make:middleware`/`make:request`), `cargo rustasea new --variant` scaffolds real
+**Status: Partial** — the CLI and 16 `make:*` generators are real (including
+`make:middleware`/`make:request`/`make:action`), `cargo rustasea new --variant` scaffolds real
 starter kits, `xtask` has real cycle detection plus `migrate`, and the testing
 stack uses real `testcontainers` with a Docker-gated feature suite. Remaining:
 the integration suite is opt-in, and generated controllers still require manual
@@ -242,12 +242,13 @@ route registration.
 
 **Done**
 - `cargo artisan` CLI with command registry — `crates/rustasea-cli/src/registry.rs`, `crates/rustasea-cli/src/lib.rs`.
-- 15 `make:*` generators: controller, middleware, request, model, provider, command, job, event, listener, observer, test, seeder, migration, agent, tool — registrations `crates/rustasea-cli/src/commands/mod.rs:17-31`; kinds `crates/rustasea-cli/src/generators/kinds/{middleware,request}.rs:17` (`GAP-016`).
+- 16 `make:*` generators: controller, middleware, request, model, provider, command, job, event, listener, observer, test, seeder, migration, agent, tool, action — registrations `crates/rustasea-cli/src/commands/mod.rs:17-31`; kinds `crates/rustasea-cli/src/generators/kinds/{middleware,request}.rs:17` (`GAP-016`).
 - Typed command args/flags and prompt/table helpers.
 - Project scaffolder `cargo rustasea new <app> --variant {blade|react|vue|livewire}` — `crates/cargo-rustasea/src/main.rs:46`, `:64-74`; starter kits `crates/rustasea-scaffold/src/variant.rs:13`; `cargo artisan` remains a legacy alias via `normalize_args` (`:103`).
 - Real `xtask` cycle detection (`GAP-018`) — `xtask/src/cycles.rs:32` (`run()`, DFS over `cargo metadata`); task dispatch `xtask/src/main.rs:23` (`ci`), `:24` (`fmt`), `:25` (`clippy`), `:36` (`check-cycles`), `:37` (`migrate`).
 - `cargo xtask migrate` — `xtask/src/migrate.rs` via `xtask/src/main.rs:37`.
 - Real testcontainers-backed fixtures (`GAP-017`) — `crates/rustasea-testing/src/fixtures.rs:49` (`PostgresTestDb`), `:63` (`start`); feature `crates/rustasea-testing/Cargo.toml:10`; integration suite `crates/rustasea/tests/feature/` gated behind the `integration` feature (`crates/rustasea/Cargo.toml:86`) and `#[ignore = "requires docker"]` (`crates/rustasea/tests/feature/route_to_db.rs:81`).
+- Action pattern (ADOPT-028) — `crates/rustasea-action` (`Action` trait + HTTP/queue/CLI/event adapters, `make:action` generator); scaffold auth actions demonstrate the pattern (`crates/rustasea-scaffold/src/templates/app_auth.rs`).
 
 **Partial (reason)**
 - Generated controllers leave route registration manual — `crates/rustasea-cli/src/generators/kinds/controller.rs:32` ("Register routes against these handlers in `routes/web.rs`").

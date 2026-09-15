@@ -47,6 +47,8 @@ pub enum Kind {
     Agent,
     /// `make:tool` — AI tool scaffold (M6 adjacency).
     Tool,
+    /// `make:action` — action pattern scaffold (ADOPT-028).
+    Action,
 }
 
 impl Kind {
@@ -68,6 +70,7 @@ impl Kind {
             "migration" => Kind::Migration,
             "agent" => Kind::Agent,
             "tool" => Kind::Tool,
+            "action" | "actions" => Kind::Action,
             _ => return None,
         })
     }
@@ -90,6 +93,7 @@ impl Kind {
             Kind::Migration => "make:migration",
             Kind::Agent => "make:agent",
             Kind::Tool => "make:tool",
+            Kind::Action => "make:action",
         }
     }
 }
@@ -128,6 +132,7 @@ pub fn generate(kind: Kind, root: &Path, opts: &MakeOptions) -> CliResult<Vec<Ge
         Kind::Migration => "migration",
         Kind::Agent => "agent",
         Kind::Tool => "tool",
+        Kind::Action => "action",
     };
     // `make:migration` names are snake_case (`create_users_table`), so they
     // skip the PascalCase check shared by the class-based kinds.
@@ -193,6 +198,9 @@ pub fn generate(kind: Kind, root: &Path, opts: &MakeOptions) -> CliResult<Vec<Ge
         Kind::Tool => {
             written.push(kinds::tool::scaffold(root, opts)?);
         }
+        Kind::Action => {
+            written.push(kinds::action::scaffold(root, opts)?);
+        }
     }
     Ok(written)
 }
@@ -215,6 +223,7 @@ pub fn kind_help(kind: Kind) -> &'static str {
         Kind::Migration => "Make a new database migration",
         Kind::Agent => "Make a new AI agent (M6)",
         Kind::Tool => "Make a new AI tool (M6)",
+        Kind::Action => "Make a new action class",
     }
 }
 
@@ -235,7 +244,8 @@ pub fn kind_usage(kind: Kind) -> &'static str {
         | Kind::Test
         | Kind::Seeder
         | Kind::Agent
-        | Kind::Tool => "make:* {name} [--force]",
+        | Kind::Tool
+        | Kind::Action => "make:* {name} [--force]",
     }
 }
 
@@ -276,5 +286,6 @@ pub fn planned_path(kind: Kind, name: &str) -> String {
         ),
         Kind::Agent => format!("app/ai/agents/{}.rs", Generator::snake(name)),
         Kind::Tool => format!("app/ai/tools/{}.rs", Generator::snake(name)),
+        Kind::Action => format!("app/actions/{}.rs", Generator::snake(name)),
     }
 }

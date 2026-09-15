@@ -141,6 +141,13 @@ fn class_cases() -> Vec<Case> {
             marker: "SearchDocs",
             resource: false,
         },
+        Case {
+            kind: Kind::Action,
+            name: "PublishPost",
+            rel: "app/actions/publish_post.rs",
+            marker: "impl Action for",
+            resource: false,
+        },
     ]
 }
 

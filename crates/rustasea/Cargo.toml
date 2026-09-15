@@ -70,6 +70,9 @@ rustasea-excel = { path = "../rustasea-excel", optional = true }
 # image codec stack (image crate); consumers re-export it as `image` via the
 # matching feature.
 rustasea-image = { path = "../rustasea-image", optional = true }
+# Action pattern (ADOPT-028). Opt-in so the core build never links the action
+# adapters; consumers re-export it as `action` via the matching feature.
+rustasea-action = { path = "../rustasea-action", optional = true }
 
 [features]
 default = []
@@ -127,6 +130,9 @@ excel = ["dep:rustasea-excel"]
 # Image manipulation (ADOPT-024). Opt-in so the core build never links the
 # image codec stack; consumers re-export the crate as `image`.
 image = ["dep:rustasea-image"]
+# Action pattern (ADOPT-028). Opt-in so the core build never links the action
+# adapters; consumers re-export the crate as `action`.
+action = ["dep:rustasea-action"]
 # Broadcast Redis fan-out driver (ADOPT-022). Forwards to `rustasea-broadcast`'s
 # `redis` feature so `rustasea::broadcast` exposes the cross-process Pub/Sub
 # driver; off by default (pay-for-what-you-use, NFR-Sca-02).

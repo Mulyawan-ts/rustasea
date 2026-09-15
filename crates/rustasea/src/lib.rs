@@ -367,3 +367,16 @@ pub use rustasea_excel as excel;
 /// stack (NFR-Sca-02).
 #[cfg(feature = "image")]
 pub use rustasea_image as image;
+
+/// Action pattern re-export (ADOPT-028) — only with the `action` feature.
+///
+/// [`Action`](rustasea_action::Action) is one unit of work with a typed
+/// input/output/error and optional `validate`/`authorize` hooks. The same
+/// action is driven by
+/// [`ActionController`](rustasea_action::ActionController) (HTTP),
+/// [`ActionJob`](rustasea_action::ActionJob) (queue),
+/// [`ActionCommand`](rustasea_action::ActionCommand) (CLI), and
+/// [`ActionListener`](rustasea_action::ActionListener) (events). Opt-in so the
+/// core build never links the action adapters (NFR-Sca-02).
+#[cfg(feature = "action")]
+pub use rustasea_action as action;

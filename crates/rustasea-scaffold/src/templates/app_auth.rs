@@ -58,10 +58,15 @@ pub mod redirect_if_authenticated;
 "##;
 
 const CREATE_NEW_USER: &str = r##"//! Creates and persists a user during registration.
+//!
+//! Registration is an [`Action`](rustasea::action::Action): the same unit of
+//! work is reachable from the HTTP registration controller, a queued job, the
+//! CLI, or an event without duplicating the persistence logic.
 
 use crate::app::models::User;
 
 /// Validated registration input.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NewUser {
     /// Display name.
     pub name: String,
@@ -71,18 +76,44 @@ pub struct NewUser {
     pub password: String,
 }
 
-/// Create a user, hashing the password and applying registration defaults.
-pub fn create(input: NewUser) -> Result<User, rustasea::auth::AuthError> {
-    let _ = &input;
-    // The session guard hashes with argon2id and rotates the session id on
-    // login; this action owns persistence only.
-    todo!("persist the user via the ORM writer")
+/// The registration action.
+pub struct CreateNewUser;
+
+#[rustasea::action::async_trait]
+impl rustasea::action::Action for CreateNewUser {
+    type Input = NewUser;
+    type Output = User;
+    type Error = rustasea::auth::AuthError;
+
+    /// Create a user, hashing the password and applying registration defaults.
+    ///
+    /// The session guard hashes with argon2id and rotates the session id on
+    /// login; this action owns persistence only.
+    async fn handle(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+        let _ = input;
+        todo!("persist the user via the ORM writer")
+    }
 }
 "##;
 
 const ATTEMPT_TO_AUTHENTICATE: &str = r##"//! Attempts to authenticate a login request against the session guard.
+//!
+//! Authentication is an [`Action`](rustasea::action::Action): the free
+//! `attempt` helper holds the guard-generic logic, and `AttemptToAuthenticate`
+//! exposes it through the action trait so it can run from any adapter.
+
+use std::sync::Arc;
 
 use rustasea::auth::{AuthError, SessionGuard};
+
+/// Login credentials accepted by the authentication action.
+#[derive(Debug, Clone)]
+pub struct AttemptInput {
+    /// Email address supplied by the login form.
+    pub email: String,
+    /// Plaintext password supplied by the login form.
+    pub password: String,
+}
 
 /// Authenticate `email` + `password`, rotating the session id on success.
 pub fn attempt<S>(guard: &SessionGuard<S>, email: &str, password: &str) -> Result<(), AuthError>
@@ -91,6 +122,30 @@ where
 {
     let _ = (guard, email, password);
     todo!("verify credentials and rotate the session id")
+}
+
+/// The authentication action, holding the session guard to authenticate against.
+pub struct AttemptToAuthenticate<S>
+where
+    S: tower_sessions::SessionStore + Send + Sync + 'static,
+{
+    /// Session guard the credentials are verified against.
+    pub guard: Arc<SessionGuard<S>>,
+}
+
+#[rustasea::action::async_trait]
+impl<S> rustasea::action::Action for AttemptToAuthenticate<S>
+where
+    S: tower_sessions::SessionStore + Send + Sync + 'static,
+{
+    type Input = AttemptInput;
+    type Output = ();
+    type Error = AuthError;
+
+    /// Authenticate the submitted credentials via [`attempt`].
+    async fn handle(&self, input: Self::Input) -> Result<Self::Output, Self::Error> {
+        attempt(&self.guard, &input.email, &input.password).map(|_| ())
+    }
 }
 "##;
 

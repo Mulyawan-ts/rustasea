@@ -1,0 +1,44 @@
+[package]
+name = "rustasea-action"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Action pattern (ADOPT-028) — one unit of work invoked across HTTP/queue/CLI/events with validate/authorize hooks (laravel-actions parity)."
+
+[dependencies]
+# The `Action` trait is declared with `#[async_trait]`, so implementing it needs
+# the macro at the call site; re-exported so generated actions depend only on
+# this crate.
+async-trait = { workspace = true }
+# Action inputs/outputs serialize for queue transport, CLI JSON arguments, and
+# the HTTP JSON body bridge.
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+# Typed crate errors.
+thiserror = { workspace = true }
+# `ErrorBag` is the shared 422 validation shape every adapter maps onto.
+rustasea-validation = { path = "../rustasea-validation" }
+# HTTP adapter (`ActionController`, `HttpOutcome`).
+axum = { workspace = true, optional = true }
+# Queue adapter (`ActionJob` implementing the `Job` trait).
+rustasea-queue = { path = "../rustasea-queue", optional = true }
+# Event adapter (`ActionListener` implementing `Listener<E>`).
+rustasea-events = { path = "../rustasea-events", optional = true }
+
+[features]
+default = ["http", "queue", "events"]
+# HTTP controller adapter.
+http = ["dep:axum"]
+# Queue job adapter.
+queue = ["dep:rustasea-queue"]
+# Event listener adapter.
+events = ["dep:rustasea-events"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+axum = { workspace = true }
+# A file-backed sqlite queue exercises the real database driver in the parity
+# suite; the sync connection alone would not prove job serialization.
+rustasea-queue = { path = "../rustasea-queue" }
+rustasea-orm = { path = "../rustasea-orm" }
+rustasea-events = { path = "../rustasea-events" }

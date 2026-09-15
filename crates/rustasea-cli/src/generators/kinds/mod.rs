@@ -10,6 +10,7 @@ use std::path::Path;
 use crate::error::CliResult;
 use crate::generator::{Generated, Generator};
 
+pub mod action;
 pub mod agent;
 pub mod command;
 pub mod controller;

@@ -5891,6 +5891,7 @@ name = "rustasea"
 version = "0.1.0"
 dependencies = [
  "axum 0.7.9",
+ "rustasea-action",
  "rustasea-activitylog",
  "rustasea-ai",
  "rustasea-auth",
@@ -5931,6 +5932,22 @@ dependencies = [
  "serde_json",
  "tokio",
  "tower",
+]
+
+[[package]]
+name = "rustasea-action"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum 0.7.9",
+ "rustasea-events",
+ "rustasea-orm",
+ "rustasea-queue",
+ "rustasea-validation",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]

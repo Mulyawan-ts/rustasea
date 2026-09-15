@@ -271,14 +271,22 @@ pub mod actions_test;
 
 const ACTIONS_TEST: &str = r##"//! Unit tests for the generated auth actions and validation concerns.
 
+use @@app_snake@@::app::actions::auth::create_new_user::CreateNewUser;
 use @@app_snake@@::app::actions::auth::redirect_if_authenticated;
 use @@app_snake@@::app::concerns::profile_validation_rules;
+use rustasea::action::Action as _;
 
 /// Guest-only redirects detect an authenticated session.
 #[test]
 fn authenticated_users_are_detected() {
     assert!(redirect_if_authenticated::is_authenticated(Some("user-id")));
     assert!(!redirect_if_authenticated::is_authenticated(None));
+}
+
+/// The registration action implements the shared `Action` trait.
+#[test]
+fn registration_action_is_an_action() {
+    let _action = CreateNewUser;
 }
 
 /// A blank display name is rejected by the profile rules.

@@ -34,6 +34,7 @@ pub fn register_all_into(reg: &mut CommandRegistry) {
     reg.register(builtins::MakeMigration);
     reg.register(builtins::MakeAgent);
     reg.register(builtins::MakeTool);
+    reg.register(builtins::MakeAction);
     reg.register(inspect::RouteList);
     reg.register(inspect::ShowModel);
     reg.register(openapi::OpenApiGenerate);

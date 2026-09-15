@@ -53,7 +53,7 @@ name = "unit"
 path = "tests/unit/mod.rs"
 
 [dependencies]
-rustasea = { version = "0.1", features = ["view"] }
+rustasea = { version = "0.1", features = ["view", "action"] }
 rustasea-view = "0.1"
 axum = "0.7"
 serde = { version = "1", features = ["derive"] }
@@ -103,7 +103,7 @@ name = "unit"
 path = "tests/unit/mod.rs"
 
 [dependencies]
-rustasea = { version = "0.1", features = ["inertia", "wasm-dioxus"] }
+rustasea = { version = "0.1", features = ["inertia", "wasm-dioxus", "action"] }
 rustasea-inertia = "0.1"
 rustasea-inertia-adapters = { version = "0.1", features = ["react"] }
 axum = "0.7"
@@ -154,7 +154,7 @@ name = "unit"
 path = "tests/unit/mod.rs"
 
 [dependencies]
-rustasea = { version = "0.1", features = ["inertia", "wasm-leptos"] }
+rustasea = { version = "0.1", features = ["inertia", "wasm-leptos", "action"] }
 rustasea-inertia = "0.1"
 rustasea-inertia-adapters = { version = "0.1", features = ["vue"] }
 axum = "0.7"
@@ -208,7 +208,7 @@ path = "tests/unit/mod.rs"
 # `broadcast` is re-exported by `rustasea` unconditionally, so there is no
 # `broadcast` cargo feature to enable (requesting one fails dependency
 # resolution); the livewire kit only needs the `view` feature.
-rustasea = { version = "0.1", features = ["view"] }
+rustasea = { version = "0.1", features = ["view", "action"] }
 rustasea-view = "0.1"
 rustasea-livewire = "0.1"
 axum = "0.7"
@@ -247,15 +247,15 @@ mod tests {
     #[test]
     fn cargo_manifest_carries_variant_features() {
         let blade = cargo_toml(StarterKitVariant::Blade);
-        assert!(blade.contains("features = [\"view\"]"));
+        assert!(blade.contains("features = [\"view\", \"action\"]"));
         let react = cargo_toml(StarterKitVariant::React);
         assert!(react.contains("wasm-dioxus"));
-        assert!(react.contains("features = [\"react\"]"));
+        assert!(react.contains("features = [\"inertia\", \"wasm-dioxus\", \"action\"]"));
         let vue = cargo_toml(StarterKitVariant::Vue);
         assert!(vue.contains("wasm-leptos"));
-        assert!(vue.contains("features = [\"vue\"]"));
+        assert!(vue.contains("features = [\"inertia\", \"wasm-leptos\", \"action\"]"));
         let livewire = cargo_toml(StarterKitVariant::Livewire);
-        assert!(livewire.contains("features = [\"view\"]"));
+        assert!(livewire.contains("features = [\"view\", \"action\"]"));
         assert!(!livewire.contains("\"view\", \"broadcast\""));
     }
 
