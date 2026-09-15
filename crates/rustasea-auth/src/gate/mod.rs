@@ -36,6 +36,17 @@
 //! constraints). A `before` bypass applies even to abilities that are not
 //! explicitly defined, mirroring `Gate::before(fn ($user) => $user->isAdmin())`.
 //!
+//! # Permission fallback
+//!
+//! When a [`PermissionResolver`] is installed with [`Gate::with_permissions`]
+//! the evaluation chain gains a role/permission step after the defined
+//! abilities: **before hooks → defined ability/policy → permission resolver →
+//! after hooks**. An ability registered with [`Gate::define`] always wins; the
+//! resolver only fills the gap for an ability the Gate does not define, so the
+//! classic `#[authorize("users.edit")]` permission name resolves through the
+//! RBAC registry while record-level policies keep precedence. The resolver is
+//! skipped when no user is present, and a `None` result still fails closed.
+//!
 //! # Error surface
 //!
 //! [`Gate::authorize`] returns a dedicated [`AuthorizationError`] with two
@@ -55,6 +66,7 @@ use axum::Json;
 use thiserror::Error;
 
 use crate::guard::AuthUser;
+use crate::rbac::PermissionResolver;
 
 /// Object-safe ability callback: `(user, target) -> allowed`.
 ///
@@ -170,6 +182,8 @@ pub struct Gate {
     after: Vec<Arc<AfterCallback>>,
     /// Optional synchronous resolver for the implicit current user.
     user_resolver: Option<Arc<UserResolver>>,
+    /// Optional role/permission resolver consulted after defined abilities.
+    permission_resolver: Option<Arc<dyn PermissionResolver>>,
 }
 
 impl Gate {
@@ -234,6 +248,18 @@ impl Gate {
         F: Fn() -> Option<AuthUser> + Send + Sync + 'static,
     {
         self.user_resolver = Some(Arc::new(resolver));
+        self
+    }
+
+    /// Install a role/permission resolver consulted after defined abilities.
+    ///
+    /// The resolver (typically an [`crate::rbac::RbacRegistry`]) answers
+    /// permission-name checks for abilities the Gate does not define, so
+    /// `#[authorize("users.edit")]` and `Gate::allows("users.edit", &())` resolve
+    /// through RBAC. It is skipped when no user is present; an ability
+    /// registered with [`Gate::define`] always takes precedence.
+    pub fn with_permissions(mut self, resolver: Arc<dyn PermissionResolver>) -> Self {
+        self.permission_resolver = Some(resolver);
         self
     }
 
@@ -309,18 +335,25 @@ impl Gate {
         self.user_resolver.as_ref().and_then(|resolver| resolver())
     }
 
-    /// Core evaluation: run `before` hooks, the ability callback, then `after`.
+    /// Core evaluation: `before` hooks → defined ability → permission → `after`.
     ///
-    /// Returns `None` only when the ability is undefined *and* no `before` hook
-    /// short-circuited, which the callers translate into a fail-closed denial.
+    /// Returns `None` only when the ability is undefined, no `before` hook
+    /// short-circuited, and no permission resolver produced a decision — the
+    /// callers translate that into a fail-closed denial. The permission step is
+    /// skipped when no user is present or no resolver is installed.
     fn evaluate(&self, user: Option<&AuthUser>, ability: &str, target: &dyn Any) -> Option<bool> {
         for before in &self.before {
             if let Some(decision) = before(user, ability, target) {
                 return Some(decision);
             }
         }
-        let callback = self.abilities.get(ability)?;
-        let mut result = callback(user, target);
+        let mut result = match self.abilities.get(ability) {
+            Some(callback) => callback(user, target),
+            None => match (self.permission_resolver.as_ref(), user) {
+                (Some(resolver), Some(user)) => resolver.has_permission(&user.id, ability),
+                _ => return None,
+            },
+        };
         for after in &self.after {
             result = after(user, ability, target, result);
         }
@@ -336,143 +369,13 @@ impl std::fmt::Debug for Gate {
             .field("before", &self.before.len())
             .field("after", &self.after.len())
             .field("has_user_resolver", &self.user_resolver.is_some())
+            .field(
+                "has_permission_resolver",
+                &self.permission_resolver.is_some(),
+            )
             .finish()
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A minimal resource carrying its author id.
-    struct Post {
-        author_id: String,
-    }
-
-    fn post(author_id: &str) -> Post {
-        Post {
-            author_id: author_id.to_string(),
-        }
-    }
-
-    fn user(id: &str) -> AuthUser {
-        AuthUser::new(id, Some(format!("{id}@example.com")), "session")
-    }
-
-    /// `edit-post` allows the author and nobody else.
-    fn author_gate() -> Gate {
-        let mut gate = Gate::new();
-        gate.define("edit-post", |user, target| {
-            let Some(post) = target.downcast_ref::<Post>() else {
-                return false;
-            };
-            user.map(|u| u.id == post.author_id).unwrap_or(false)
-        });
-        gate
-    }
-
-    /// Positive: the author may edit their own post.
-    #[test]
-    fn author_is_allowed_to_edit_post() {
-        let gate = author_gate();
-        let post = post("user-1");
-        let author = user("user-1");
-        assert!(gate.allows_for(Some(&author), "edit-post", &post));
-        assert!(!gate.denies_for(Some(&author), "edit-post", &post));
-        assert_eq!(
-            gate.authorize_for(Some(&author), "edit-post", &post),
-            Ok(())
-        );
-    }
-
-    /// Negative: a non-author is denied with a typed `AuthorizationError`.
-    #[test]
-    fn non_author_is_denied() {
-        let gate = author_gate();
-        let post = post("user-1");
-        let other = user("user-2");
-        assert!(!gate.allows_for(Some(&other), "edit-post", &post));
-        assert!(gate.denies_for(Some(&other), "edit-post", &post));
-        assert_eq!(
-            gate.authorize_for(Some(&other), "edit-post", &post),
-            Err(AuthorizationError::Denied {
-                ability: "edit-post".to_string()
-            })
-        );
-    }
-
-    /// A `before` hook bypasses the ability callback (super-admin override).
-    #[test]
-    fn before_hook_overrides_decision() {
-        let mut gate = author_gate();
-        gate.before(|user, _ability, _target| {
-            if user.map(|u| u.id == "super-admin").unwrap_or(false) {
-                Some(true)
-            } else {
-                None
-            }
-        });
-        let post = post("user-1");
-        let super_admin = user("super-admin");
-        // Not the author, yet allowed because `before` short-circuits.
-        assert!(gate.allows_for(Some(&super_admin), "edit-post", &post));
-        assert_eq!(
-            gate.authorize_for(Some(&super_admin), "edit-post", &post),
-            Ok(())
-        );
-        // The bypass also covers an ability that was never defined.
-        assert!(gate.allows_for(Some(&super_admin), "delete-post", &post));
-    }
-
-    /// An undefined ability fails closed for both `allows` and `authorize`.
-    #[test]
-    fn undefined_ability_fails_closed() {
-        let gate = author_gate();
-        let post = post("user-1");
-        let author = user("user-1");
-        assert!(!gate.allows_for(Some(&author), "delete-post", &post));
-        assert!(gate.denies_for(Some(&author), "delete-post", &post));
-        assert_eq!(
-            gate.authorize_for(Some(&author), "delete-post", &post),
-            Err(AuthorizationError::AbilityNotDefined {
-                ability: "delete-post".to_string()
-            })
-        );
-        assert_eq!(gate.abilities(), vec!["edit-post".to_string()]);
-        assert!(gate.has("edit-post"));
-    }
-
-    /// The implicit entry points resolve the user through the installed resolver.
-    #[test]
-    fn implicit_user_resolves_via_resolver() {
-        let gate = author_gate().with_user_resolver(|| Some(user("user-1")));
-        let post = post("user-1");
-        assert!(gate.allows("edit-post", &post));
-        assert_eq!(gate.authorize("edit-post", &post), Ok(()));
-
-        // No resolver installed => `None` user => fail closed.
-        let bare = author_gate();
-        assert!(bare.denies("edit-post", &post));
-    }
-
-    /// `after` hooks can rewrite the computed result.
-    #[test]
-    fn after_hook_rewrites_result() {
-        let mut gate = author_gate();
-        gate.after(|_user, _ability, _target, _result| false);
-        let post = post("user-1");
-        let author = user("user-1");
-        assert!(!gate.allows_for(Some(&author), "edit-post", &post));
-    }
-
-    /// The typed error renders the documented `403` JSON envelope.
-    #[test]
-    fn error_renders_403_envelope() {
-        let err = AuthorizationError::Denied {
-            ability: "edit-post".to_string(),
-        };
-        assert_eq!(err.code(), "AuthorizationError::Denied");
-        let response = err.into_response();
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    }
-}
+mod tests;

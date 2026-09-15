@@ -25,6 +25,7 @@ pub mod jwt;
 pub mod passkeys;
 pub mod password_reset;
 pub mod policy;
+pub mod rbac;
 pub mod session;
 pub mod session_cookie;
 pub mod signed_url;
@@ -34,7 +35,7 @@ pub mod users;
 pub mod verification;
 pub mod verify;
 
-pub use authorize::{authorizer_for, GateResource};
+pub use authorize::{authorizer_for, authorizer_for_abilities, AbilityGateResource, GateResource};
 pub use config::{
     password_timeout_secs, AuthConfig, AuthDefaults, ConfigResult, FortifyConfig,
     FortifyFeaturesConfig, FortifyLimiterConfig, FortifyPasskeyFeatureConfig,
@@ -56,6 +57,7 @@ pub use password_reset::{
     PasswordResetStore, RESET_TOKEN_LEN,
 };
 pub use policy::{Policy, PolicyAction, PolicyRegistry};
+pub use rbac::{HasRoles, PermissionResolver, RbacError, RbacRegistry, Role};
 pub use session::{
     DatabaseSessionStore, DeserializationAllowList, SessionGuard, SessionPolicy, SessionUser,
 };

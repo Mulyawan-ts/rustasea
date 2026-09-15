@@ -56,20 +56,39 @@ pub struct ControllerRef {
 
 /// A record-level `#[authorize]` declaration attached to a route.
 ///
-/// Emitted as `__RUSTASEA_AUTHORIZE_<Fn>: (&str, &str)` by the `#[authorize]`
-/// attribute and consumed by [`crate::Router::authorize_meta`] at registration
-/// time. `ability` is the Gate ability name (e.g. `"update"`); `resource` is a
-/// caller-chosen id naming the request extension that carries the resolved
-/// resource instance (see [`crate::AuthorizeResource`]).
+/// Two forms are supported, matching the two `#[authorize]` grammars:
+///
+/// * [`AuthorizeSpec::Resource`] — `#[authorize("update", &post)]`. Emitted as
+///   `__RUSTASEA_AUTHORIZE_<Fn>: (&str, &str)` and consumed by
+///   [`crate::Router::authorize_meta`]. `ability` is the Gate ability name
+///   (e.g. `"update"`); `resource` is a caller-chosen id naming the request
+///   extension that carries the resolved resource instance (see
+///   [`crate::AuthorizeResource`]).
+/// * [`AuthorizeSpec::Ability`] — `#[authorize("users.edit")]`. Emitted as
+///   `__RUSTASEA_AUTHORIZE_ABILITY_<Fn>: &str` and consumed by
+///   [`crate::Router::authorize_ability_meta`]. `name` is a permission/ability
+///   name resolved through the ability-gate registry registered with
+///   [`crate::Router::authorize_abilities`] (typically a Gate permission check
+///   with no resource).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AuthorizeSpec {
-    /// Gate ability name, e.g. `"update"` or `"delete"`.
-    pub ability: String,
-    /// Extension id of the resolved resource, e.g. `"post"`.
-    ///
-    /// May be empty when the attribute omitted the resource id; the
-    /// authorization layer then falls back to the single registered resource.
-    pub resource: String,
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AuthorizeSpec {
+    /// A record-level check against a resolved resource instance.
+    Resource {
+        /// Gate ability name, e.g. `"update"` or `"delete"`.
+        ability: String,
+        /// Extension id of the resolved resource, e.g. `"post"`.
+        ///
+        /// May be empty when the attribute omitted the resource id; the
+        /// authorization layer then falls back to the single registered
+        /// resource.
+        resource: String,
+    },
+    /// An ability/permission check with no resource (e.g. `"users.edit"`).
+    Ability {
+        /// Ability or permission name, e.g. `"users.edit"`.
+        name: String,
+    },
 }
 
 /// Normalize a prefix to start with / and not end with /.

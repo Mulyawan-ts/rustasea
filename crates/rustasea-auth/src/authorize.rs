@@ -123,6 +123,76 @@ where
     Arc::new(GateResource::<T>::new(gate))
 }
 
+/// Bridges a [`Gate`] to the router's ability-only `#[authorize]` layer.
+///
+/// Unlike [`GateResource`], this adapter has no target resource type: it
+/// enforces a bare ability/permission name (`#[authorize("users.edit")]`)
+/// against the request's principal and an empty target. The Gate's own
+/// fallback chain decides — a defined ability, a `before` bypass, or the
+/// installed [`crate::rbac::PermissionResolver`] permission check. Register one
+/// per router with [`rustasea_router::Router::authorize_abilities`]:
+///
+/// ```rust,ignore
+/// let gate = Arc::new(build_gate()); // permissions installed
+/// router.authorize_abilities(authorizer_for_abilities(gate));
+/// router.authorize_ability_meta(__RUSTASEA_AUTHORIZE_ABILITY_users_edit)
+///       .get_action("/users/:id/edit", edit_user);
+/// ```
+///
+/// A missing principal fails closed; a denial renders the Gate's shared `403`
+/// JSON envelope.
+pub struct AbilityGateResource {
+    gate: Arc<Gate>,
+}
+
+impl AbilityGateResource {
+    /// Bind `gate` as the router's ability-only authorizer.
+    pub fn new(gate: Arc<Gate>) -> Self {
+        Self { gate }
+    }
+}
+
+impl AuthorizeResource for AbilityGateResource {
+    /// Authorize `ability` for the request's principal with an empty target.
+    ///
+    /// Reads the [`AuthUser`] from the request extensions and delegates to
+    /// [`Gate::authorize_for`]. A missing principal is denied; a Gate denial
+    /// renders the shared `403` JSON envelope.
+    fn authorize(&self, request: &Request, ability: &str) -> Result<(), Response> {
+        let user = request.extensions().get::<AuthUser>();
+        let Some(user) = user else {
+            // No principal — an unauthenticated caller must never be allowed.
+            return Err(AuthorizationError::Denied {
+                ability: ability.to_string(),
+            }
+            .into_response());
+        };
+        self.gate
+            .authorize_for(Some(user), ability, &())
+            .map_err(IntoResponse::into_response)
+    }
+}
+
+impl std::fmt::Debug for AbilityGateResource {
+    /// Manual debug — the Gate has a `Debug` impl.
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AbilityGateResource")
+            .finish_non_exhaustive()
+    }
+}
+
+/// Build a type-erased [`AbilityGateResource`], ready for registration.
+///
+/// Ergonomic shorthand for `Arc::new(AbilityGateResource::new(gate))`:
+///
+/// ```rust,ignore
+/// router.authorize_abilities(rustasea_auth::authorizer_for_abilities(gate));
+/// ```
+pub fn authorizer_for_abilities(gate: Arc<Gate>) -> Arc<dyn AuthorizeResource> {
+    Arc::new(AbilityGateResource::new(gate))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

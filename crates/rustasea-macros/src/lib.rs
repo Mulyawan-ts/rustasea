@@ -120,37 +120,22 @@ pub fn middleware(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///       .route_meta(__RUSTASEA_ROUTE_update_post, update_post);
 /// ```
 ///
-/// The const is `pub` (matching `#[middleware]`) so the controller module that
-/// owns the handler can hand its metadata to `Router::authorize_meta` at
-/// registration time; the runtime resolves the resource id through the router's
-/// authorization registry and denies with the Gate's `403` envelope before the
-/// body when the check fails.
+/// # Ability-only form
+///
+/// `#[authorize("users.edit")]` (no target) additionally emits a doc-hidden
+/// `pub const __RUSTASEA_AUTHORIZE_ABILITY_<Fn>: &str` carrying the bare
+/// permission name. The router resolves it through
+/// `Router::authorize_ability_meta` against the ability-gate registry
+/// (`Router::authorize_abilities`), enforcing a Gate permission check with the
+/// same `403` envelope. The legacy `(ability, "")` tuple is still emitted so
+/// existing `authorize_meta` call sites keep compiling.
+///
+/// The consts are `pub` (matching `#[middleware]`) so the controller module
+/// that owns the handler can hand its metadata to the router at registration
+/// time.
 #[proc_macro_attribute]
 pub fn authorize(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(item as ItemFn);
-    let ident = input.sig.ident.clone();
-    match attrs::parse_authorize(attr.into()) {
-        Ok((ability, target)) => {
-            let const_name = syn::Ident::new(
-                &format!("__RUSTASEA_AUTHORIZE_{ident}"),
-                proc_macro2::Span::call_site(),
-            );
-            let tuple = if target.is_empty() {
-                quote! { (#ability, "") }
-            } else {
-                quote! { (#ability, #target) }
-            };
-            let expanded = quote! {
-                #input
-
-                #[doc(hidden)]
-                #[allow(non_upper_case_globals)]
-                pub const #const_name: (&str, &str) = #tuple;
-            };
-            expanded.into()
-        }
-        Err(err) => err.to_compile_error().into(),
-    }
+    attrs::expand_authorize(attr, item)
 }
 
 /// Derive macro marking a payload as validated.

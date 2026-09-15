@@ -5410,6 +5410,7 @@ dependencies = [
  "hmac 0.12.1",
  "jsonwebtoken",
  "p256",
+ "rustasea-cache",
  "rustasea-config",
  "rustasea-foundation",
  "rustasea-http",

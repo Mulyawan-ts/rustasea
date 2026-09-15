@@ -11,7 +11,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::Parser;
-use syn::{parse_macro_input, Item};
+use syn::{parse_macro_input, Item, ItemFn};
 
 /// Extract the ident from an annotated struct/enum/union.
 ///
@@ -285,6 +285,59 @@ pub(crate) fn parse_authorize(
         )
     })?;
     Ok((ability, target))
+}
+
+/// Expand the `#[authorize]` attribute into metadata consts.
+///
+/// Source-preserving: the handler is re-emitted unchanged and one or two
+/// doc-hidden consts are appended. The resource form (`#[authorize("update",
+/// &post)]`) emits `__RUSTASEA_AUTHORIZE_<Fn>: (&str, &str)` recording the
+/// ability and the resource id. The ability-only form (`#[authorize("users.edit")]`)
+/// additionally emits `__RUSTASEA_AUTHORIZE_ABILITY_<Fn>: &str` recording the
+/// bare ability name, so the router can enforce it through a Gate permission
+/// check instead of a record-level resource. The legacy `(ability, "")` tuple
+/// is still emitted for the ability-only form, so existing
+/// `authorize_meta(__RUSTASEA_AUTHORIZE_<Fn>)` call sites keep compiling
+/// (FS-M3-06, TC-M3-02).
+pub(crate) fn expand_authorize(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemFn);
+    let ident = input.sig.ident.clone();
+    let tuple_name = syn::Ident::new(
+        &format!("__RUSTASEA_AUTHORIZE_{ident}"),
+        proc_macro2::Span::call_site(),
+    );
+    match parse_authorize(attr.into()) {
+        Ok((ability, target)) => {
+            if target.is_empty() {
+                let ability_name = syn::Ident::new(
+                    &format!("__RUSTASEA_AUTHORIZE_ABILITY_{ident}"),
+                    proc_macro2::Span::call_site(),
+                );
+                quote! {
+                    #input
+
+                    #[doc(hidden)]
+                    #[allow(non_upper_case_globals)]
+                    pub const #tuple_name: (&str, &str) = (#ability, "");
+
+                    #[doc(hidden)]
+                    #[allow(non_upper_case_globals)]
+                    pub const #ability_name: &str = #ability;
+                }
+                .into()
+            } else {
+                quote! {
+                    #input
+
+                    #[doc(hidden)]
+                    #[allow(non_upper_case_globals)]
+                    pub const #tuple_name: (&str, &str) = (#ability, #target);
+                }
+                .into()
+            }
+        }
+        Err(err) => err.to_compile_error().into(),
+    }
 }
 
 /// Derive the recorded resource id from an `#[authorize]` target expression.

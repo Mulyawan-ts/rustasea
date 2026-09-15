@@ -18,7 +18,7 @@ use axum::Router as AxumRouter;
 use crate::authorize::{AuthorizeRegistry, AuthorizeResource};
 use crate::handler::{stub_handler, ActionFactory, BoundAction, Handler};
 use crate::metadata::{MiddlewareApply, RouteError};
-use crate::route::RouteEntry;
+use crate::route::{AuthorizeSpec, RouteEntry};
 use crate::router::Router;
 
 impl Router {
@@ -114,7 +114,8 @@ fn apply_middleware(
 /// Apply a route's declared `#[authorize]` checks as the innermost layer.
 ///
 /// Each [`AuthorizeSpec`] resolves to an [`AuthorizeResource`] through
-/// `registry`; an unregistered resource id is a fail-closed build error
+/// `registry`; an unregistered resource id (or a missing ability gate for the
+/// ability-only form) is a fail-closed build error
 /// ([`RouteError::UnknownAuthorization`]). The checks run inside a single
 /// `from_fn` layer placed *after* the route's middleware (so the principal and
 /// resolved resource are already in the request extensions) and *before* the
@@ -131,19 +132,31 @@ fn apply_authorize(
     let mut checks: Vec<(Arc<dyn AuthorizeResource>, String)> =
         Vec::with_capacity(entry.authorizations.len());
     for spec in &entry.authorizations {
-        // An omitted resource id resolves to the sole registered authorizer;
-        // with zero or several registrations the declaration is ambiguous and
-        // fails the build closed.
-        let resource = if spec.resource.is_empty() {
-            registry
-                .sole()
-                .ok_or_else(|| RouteError::UnknownAuthorization {
-                    name: spec.resource.clone(),
-                })?
-        } else {
-            registry.resolve(&spec.resource)?
+        let (resource, ability) = match spec {
+            AuthorizeSpec::Resource { ability, resource } => {
+                // An omitted resource id resolves to the sole registered
+                // authorizer; with zero or several registrations the
+                // declaration is ambiguous and fails the build closed.
+                let resolved = if resource.is_empty() {
+                    registry
+                        .sole()
+                        .ok_or_else(|| RouteError::UnknownAuthorization {
+                            name: resource.clone(),
+                        })?
+                } else {
+                    registry.resolve(resource)?
+                };
+                (resolved, ability.clone())
+            }
+            AuthorizeSpec::Ability { name } => {
+                // Ability-only checks resolve through the single ability gate.
+                let gate = registry
+                    .ability()
+                    .ok_or_else(|| RouteError::UnknownAuthorization { name: name.clone() })?;
+                (gate, name.clone())
+            }
         };
-        checks.push((resource, spec.ability.clone()));
+        checks.push((resource, ability));
     }
     let checks = Arc::new(checks);
     Ok(method_router.layer(axum::middleware::from_fn(

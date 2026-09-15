@@ -16,6 +16,16 @@ pub fn entries() -> Vec<TemplateFile> {
             "database/migrations/create_password_reset_tokens.rs",
             CREATE_PASSWORD_RESET_TOKENS,
         ),
+        ("database/migrations/create_roles.rs", CREATE_ROLES),
+        (
+            "database/migrations/create_permissions.rs",
+            CREATE_PERMISSIONS,
+        ),
+        ("database/migrations/create_role_user.rs", CREATE_ROLE_USER),
+        (
+            "database/migrations/create_permission_role.rs",
+            CREATE_PERMISSION_ROLE,
+        ),
         ("database/factories/mod.rs", FACTORIES_MOD),
         ("database/factories/user_factory.rs", USER_FACTORY),
         ("database/seeders/mod.rs", SEEDERS_MOD),
@@ -33,6 +43,10 @@ pub mod seeders;
 const MIGRATIONS_MOD: &str = r##"//! Versioned, reversible schema migrations.
 
 pub mod create_password_reset_tokens;
+pub mod create_permission_role;
+pub mod create_permissions;
+pub mod create_role_user;
+pub mod create_roles;
 pub mod create_sessions;
 pub mod create_users;
 "##;
@@ -130,6 +144,128 @@ impl Migration for CreatePasswordResetTokens {
 
     fn down(&self) -> OrmResult<String> {
         Ok("DROP TABLE IF EXISTS password_reset_tokens;".to_string())
+    }
+}
+"##;
+
+const CREATE_ROLES: &str = r##"//! Creates the `roles` table (RBAC).
+
+use rustasea::orm::Migration;
+use rustasea::OrmResult;
+
+/// `create_roles_table` migration.
+pub struct CreateRoles;
+
+impl Migration for CreateRoles {
+    fn name(&self) -> &str {
+        "2027_01_01_000004_create_roles_table"
+    }
+
+    fn up(&self) -> OrmResult<String> {
+        Ok(r#"CREATE TABLE roles (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    guard VARCHAR(255) NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);"#
+        .to_string())
+    }
+
+    fn down(&self) -> OrmResult<String> {
+        Ok("DROP TABLE IF EXISTS roles;".to_string())
+    }
+}
+"##;
+
+const CREATE_PERMISSIONS: &str = r##"//! Creates the `permissions` table (RBAC).
+
+use rustasea::orm::Migration;
+use rustasea::OrmResult;
+
+/// `create_permissions_table` migration.
+pub struct CreatePermissions;
+
+impl Migration for CreatePermissions {
+    fn name(&self) -> &str {
+        "2027_01_01_000005_create_permissions_table"
+    }
+
+    fn up(&self) -> OrmResult<String> {
+        Ok(r#"CREATE TABLE permissions (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    guard VARCHAR(255) NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);"#
+        .to_string())
+    }
+
+    fn down(&self) -> OrmResult<String> {
+        Ok("DROP TABLE IF EXISTS permissions;".to_string())
+    }
+}
+"##;
+
+const CREATE_ROLE_USER: &str = r##"//! Creates the `role_user` pivot table (RBAC user ↔ role assignments).
+
+use rustasea::orm::Migration;
+use rustasea::OrmResult;
+
+/// `create_role_user_table` migration.
+pub struct CreateRoleUser;
+
+impl Migration for CreateRoleUser {
+    fn name(&self) -> &str {
+        "2027_01_01_000006_create_role_user_table"
+    }
+
+    fn up(&self) -> OrmResult<String> {
+        Ok(r#"CREATE TABLE role_user (
+    user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES roles (id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (user_id, role_id)
+);
+CREATE INDEX role_user_role_id_index ON role_user (role_id);"#
+        .to_string())
+    }
+
+    fn down(&self) -> OrmResult<String> {
+        Ok("DROP TABLE IF EXISTS role_user;".to_string())
+    }
+}
+"##;
+
+const CREATE_PERMISSION_ROLE: &str = r##"//! Creates the `permission_role` pivot table (RBAC permission ↔ role grants).
+
+use rustasea::orm::Migration;
+use rustasea::OrmResult;
+
+/// `create_permission_role_table` migration.
+pub struct CreatePermissionRole;
+
+impl Migration for CreatePermissionRole {
+    fn name(&self) -> &str {
+        "2027_01_01_000007_create_permission_role_table"
+    }
+
+    fn up(&self) -> OrmResult<String> {
+        Ok(r#"CREATE TABLE permission_role (
+    permission_id UUID NOT NULL REFERENCES permissions (id) ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES roles (id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (permission_id, role_id)
+);
+CREATE INDEX permission_role_role_id_index ON permission_role (role_id);"#
+        .to_string())
+    }
+
+    fn down(&self) -> OrmResult<String> {
+        Ok("DROP TABLE IF EXISTS permission_role;".to_string())
     }
 }
 "##;

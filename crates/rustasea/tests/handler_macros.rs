@@ -54,9 +54,11 @@ fn middleware_macro_emits_name_list() {
 }
 
 /// Authorize metadata consts exist with `(ability, target)`; a missing
-/// target is recorded as an empty string.
+/// target is recorded as an empty string. The ability-only form additionally
+/// emits `__RUSTASEA_AUTHORIZE_ABILITY_<Fn>` with the bare permission name.
 #[test]
 fn authorize_macro_emits_ability_and_target() {
     assert_eq!(__RUSTASEA_AUTHORIZE_update_user, ("update", "User"));
     assert_eq!(__RUSTASEA_AUTHORIZE_view_user, ("view", ""));
+    assert_eq!(__RUSTASEA_AUTHORIZE_ABILITY_view_user, "view");
 }

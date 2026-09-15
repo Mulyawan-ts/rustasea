@@ -70,10 +70,17 @@ pub trait AuthorizeResource: Send + Sync + 'static {
 /// [`crate::Router::try_into_axum_router`]. A resource id declared by a route
 /// but absent here is a build error ([`RouteError::UnknownAuthorization`]), not
 /// a silent no-op — mirroring [`crate::MiddlewareRegistry`].
+///
+/// The registry also holds the optional *ability gate* — the authorizer
+/// enforcing the ability-only form (`#[authorize("users.edit")]`), registered
+/// with [`Router::authorize_abilities`]. Because an ability-only check has no
+/// resource id, there is exactly one ability gate per router.
 #[derive(Default, Clone)]
 pub struct AuthorizeRegistry {
     /// Resource id → shared authorizer.
     resources: HashMap<String, Arc<dyn AuthorizeResource>>,
+    /// Optional authorizer enforcing ability-only `#[authorize]` declarations.
+    ability: Option<Arc<dyn AuthorizeResource>>,
 }
 
 impl AuthorizeRegistry {
@@ -85,6 +92,16 @@ impl AuthorizeRegistry {
     /// Insert (or replace) the authorizer registered under `name`.
     pub fn insert(&mut self, name: impl Into<String>, resource: Arc<dyn AuthorizeResource>) {
         self.resources.insert(name.into(), resource);
+    }
+
+    /// Install (or replace) the authorizer enforcing ability-only declarations.
+    pub fn set_ability(&mut self, ability: Arc<dyn AuthorizeResource>) {
+        self.ability = Some(ability);
+    }
+
+    /// The ability gate, if one was registered.
+    pub fn ability(&self) -> Option<Arc<dyn AuthorizeResource>> {
+        self.ability.clone()
     }
 
     /// Resolve the authorizer registered under `name`.
@@ -118,15 +135,19 @@ impl AuthorizeRegistry {
 
     /// Whether the registry holds no authorizers.
     pub fn is_empty(&self) -> bool {
-        self.resources.is_empty()
+        self.resources.is_empty() && self.ability.is_none()
     }
 
     /// Absorb every entry from `other`, replacing same-named authorizers.
     ///
     /// Used by [`crate::Router::group`] so authorizers registered inside a group
-    /// are available when the parent router is compiled.
+    /// are available when the parent router is compiled. An ability gate in
+    /// `other` overrides the current one.
     pub fn merge(&mut self, other: AuthorizeRegistry) {
         self.resources.extend(other.resources);
+        if other.ability.is_some() {
+            self.ability = other.ability;
+        }
     }
 }
 
@@ -138,6 +159,7 @@ impl std::fmt::Debug for AuthorizeRegistry {
         formatter
             .debug_struct("AuthorizeRegistry")
             .field("resources", &names)
+            .field("has_ability_gate", &self.ability.is_some())
             .finish()
     }
 }
@@ -163,6 +185,27 @@ impl Router {
         self
     }
 
+    /// Register the authorizer enforcing ability-only `#[authorize]` checks.
+    ///
+    /// An ability-only declaration (`#[authorize("users.edit")]`, no target)
+    /// carries no resource id, so it resolves through this single ability gate
+    /// instead of the per-resource registry. The gate typically bridges the
+    /// Gate's permission fallback (see the `rustasea-auth` ability-gate adapter)
+    /// and renders the same `403` envelope. Without a registered ability gate an
+    /// ability-only declaration fails the build closed with
+    /// [`RouteError::UnknownAuthorization`]:
+    ///
+    /// ```rust,ignore
+    /// let gate = Arc::new(build_gate()); // permissions installed
+    /// router.authorize_abilities(authorizer_for_abilities(gate));
+    /// router.authorize_ability_meta(__RUSTASEA_AUTHORIZE_ABILITY_users_edit)
+    ///       .get_action("/users/:id/edit", edit_user);
+    /// ```
+    pub fn authorize_abilities(&mut self, gate: Arc<dyn AuthorizeResource>) -> &mut Self {
+        self.authorize_registry.set_ability(gate);
+        self
+    }
+
     /// Declare a record-level authorization from `#[authorize]` metadata.
     ///
     /// Consumes the doc-hidden `__RUSTASEA_AUTHORIZE_<Fn>` tuple emitted by the
@@ -171,9 +214,24 @@ impl Router {
     /// sticky, so declare it inside a [`Router::group`] or immediately before
     /// the target route.
     pub fn authorize_meta(&mut self, meta: (&str, &str)) -> &mut Self {
-        self.pending_authorizations.push(AuthorizeSpec {
+        self.pending_authorizations.push(AuthorizeSpec::Resource {
             ability: meta.0.to_string(),
             resource: meta.1.to_string(),
+        });
+        self
+    }
+
+    /// Declare an ability-only authorization from `#[authorize]` metadata.
+    ///
+    /// Consumes the doc-hidden `__RUSTASEA_AUTHORIZE_ABILITY_<Fn>` string
+    /// emitted by the ability-only `#[authorize("users.edit")]` form and
+    /// attaches it to the route registered next. The name is enforced through
+    /// the ability gate registered with [`Router::authorize_abilities`]; a route
+    /// declaring one without that gate fails the build closed with
+    /// [`RouteError::UnknownAuthorization`].
+    pub fn authorize_ability_meta(&mut self, name: &str) -> &mut Self {
+        self.pending_authorizations.push(AuthorizeSpec::Ability {
+            name: name.to_string(),
         });
         self
     }

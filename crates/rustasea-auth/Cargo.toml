@@ -32,6 +32,7 @@ tower-sessions = { workspace = true }
 async-trait = { workspace = true }
 rustasea-orm = { path = "../rustasea-orm" }
 rustasea-router = { path = "../rustasea-router" }
+rustasea-cache = { path = "../rustasea-cache" }
 time = "0.3"
 
 [dev-dependencies]
