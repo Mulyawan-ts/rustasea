@@ -8,6 +8,7 @@
 //! `updateTimestamps` only fills a stamp that is not already set). Only the
 //! `sqlx` runtime API is used — never the compile-time `query!` macros.
 
+use crate::activity::ActivityOperation;
 use crate::db::DbPool;
 use crate::error::{OrmError, Result};
 use crate::m2::UpsertBuilder;
@@ -17,6 +18,8 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use uuid::Uuid;
+
+mod activity_hooks;
 
 /// Fields that are managed by the ORM and never written as user columns.
 const RESERVED_COLUMNS: &[&str] = &["id", "created_at", "updated_at", "deleted_at", "relations"];
@@ -35,9 +38,16 @@ pub trait ModelOps: Model + Sized {
             data.assign_id();
         }
         let id = data.primary_key();
+        let recorder = activity_hooks::recorder::<Self>();
         let (sql, bindings) = build_insert::<Self>(&data, pool.dialect())?;
         pool.execute_bind(&sql, &bindings).await?;
-        Ok(Self::refresh(pool, id).await?.unwrap_or(data))
+        let (persisted, snapshot) =
+            activity_hooks::refresh_with_snapshot::<Self>(pool, id, recorder.as_ref(), data)
+                .await?;
+        if let Some(recorder) = recorder {
+            activity_hooks::record_created::<Self>(&recorder, id, snapshot).await?;
+        }
+        Ok(persisted)
     }
 
     /// Persist `data` with a single atomic upsert (insert-or-update).
@@ -54,9 +64,33 @@ pub trait ModelOps: Model + Sized {
             data.assign_id();
         }
         let id = data.primary_key();
+        let recorder = activity_hooks::recorder::<Self>();
+        // When auditing, read the prior row first so the event can be classified
+        // as Created or Updated (the upsert itself is atomic).
+        let old = match &recorder {
+            Some(_) => activity_hooks::snapshot::<Self>(pool, id).await?,
+            None => None,
+        };
         let (sql, bindings) = build_upsert::<Self>(&data, pool.dialect())?;
         pool.execute_bind(&sql, &bindings).await?;
-        Ok(Self::refresh(pool, id).await?.unwrap_or(data))
+        let (persisted, snapshot) =
+            activity_hooks::refresh_with_snapshot::<Self>(pool, id, recorder.as_ref(), data)
+                .await?;
+        if let Some(recorder) = recorder {
+            if old.is_some() {
+                activity_hooks::record_updated::<Self>(
+                    &recorder,
+                    id,
+                    old,
+                    snapshot,
+                    ActivityOperation::Updated,
+                )
+                .await?;
+            } else {
+                activity_hooks::record_created::<Self>(&recorder, id, snapshot).await?;
+            }
+        }
+        Ok(persisted)
     }
 
     /// Update the row identified by the model's primary key.
@@ -68,12 +102,32 @@ pub trait ModelOps: Model + Sized {
         Self: Serialize + DeserializeOwned,
     {
         let id = data.primary_key();
+        let recorder = activity_hooks::recorder::<Self>();
+        // Only pre-read the prior row when auditing is on, so a non-opted model
+        // pays no extra round-trip.
+        let old = match &recorder {
+            Some(_) => activity_hooks::snapshot::<Self>(pool, id).await?,
+            None => None,
+        };
         let (sql, bindings) = build_update::<Self>(&data, pool.dialect())?;
         let affected = pool.execute_bind(&sql, &bindings).await?;
         if affected == 0 {
             return Err(OrmError::NotFound);
         }
-        Ok(Self::refresh(pool, id).await?.unwrap_or(data))
+        let (persisted, snapshot) =
+            activity_hooks::refresh_with_snapshot::<Self>(pool, id, recorder.as_ref(), data)
+                .await?;
+        if let Some(recorder) = recorder {
+            activity_hooks::record_updated::<Self>(
+                &recorder,
+                id,
+                old,
+                snapshot,
+                ActivityOperation::Updated,
+            )
+            .await?;
+        }
+        Ok(persisted)
     }
 
     /// Delete the row: soft delete when the model soft-deletes, else hard delete.
@@ -87,8 +141,18 @@ pub trait ModelOps: Model + Sized {
 
     /// Permanently remove the row, bypassing soft deletes.
     async fn force_delete(pool: &DbPool, id: Uuid) -> Result<bool> {
+        let recorder = activity_hooks::recorder::<Self>();
+        let old = match &recorder {
+            Some(_) => activity_hooks::snapshot::<Self>(pool, id).await?,
+            None => None,
+        };
         let sql = Self::delete_sql(&Self::table_name());
         let affected = pool.execute_bind(&sql, &[Value::Uuid(id)]).await?;
+        if let Some(recorder) = recorder {
+            if affected > 0 {
+                activity_hooks::record_deleted::<Self>(&recorder, id, old, None).await?;
+            }
+        }
         Ok(affected > 0)
     }
 
@@ -100,6 +164,11 @@ pub trait ModelOps: Model + Sized {
     /// soft deletes working when `postgres` is enabled but an SQLite pool is in
     /// use.
     async fn soft_delete(pool: &DbPool, id: Uuid) -> Result<bool> {
+        let recorder = activity_hooks::recorder::<Self>();
+        let old = match &recorder {
+            Some(_) => activity_hooks::snapshot::<Self>(pool, id).await?,
+            None => None,
+        };
         let mut bindings = vec![Value::Uuid(id)];
         let expr = match pool.dialect() {
             "sqlite" => {
@@ -113,6 +182,14 @@ pub trait ModelOps: Model + Sized {
             Self::table_name(),
         );
         let affected = pool.execute_bind(&sql, &bindings).await?;
+        if let Some(recorder) = recorder {
+            if affected > 0 {
+                // The row still exists with `deleted_at` set, so the event
+                // carries both the pre- and post-delete snapshots.
+                let new = activity_hooks::snapshot::<Self>(pool, id).await?;
+                activity_hooks::record_deleted::<Self>(&recorder, id, old, new).await?;
+            }
+        }
         Ok(affected > 0)
     }
 
@@ -121,8 +198,7 @@ pub trait ModelOps: Model + Sized {
     where
         Self: DeserializeOwned,
     {
-        let row = Self::query_with_trashed().where_key(id).first(pool).await?;
-        match row {
+        match refresh_raw::<Self>(pool, id).await? {
             Some(value) => Ok(Some(crate::casts::hydrate::<Self>(value)?)),
             None => Ok(None),
         }
@@ -150,6 +226,18 @@ pub trait ModelOps: Model + Sized {
 }
 
 impl<T: Model> ModelOps for T {}
+
+/// Re-read a row by primary key as its raw JSON object, including trashed rows.
+///
+/// The write path calls this once after a mutation so the same row can serve
+/// both the hydrated return value and the activity snapshot — avoiding a second
+/// SELECT when auditing is on.
+async fn refresh_raw<T: Model>(pool: &DbPool, id: Uuid) -> Result<Option<serde_json::Value>> {
+    <T as Model>::query_with_trashed()
+        .where_key(id)
+        .first(pool)
+        .await
+}
 
 /// Collect the insertable `(column, value)` pairs for a model instance.
 ///

@@ -4,6 +4,7 @@
 //! conventions, and feature-gated driver dialects (Postgres/MySQL/SQLite) plus the
 //! `vector` feature for pgvector similarity search.
 
+pub mod activity;
 pub mod blueprint;
 pub mod builder;
 pub mod casts;
@@ -28,6 +29,12 @@ pub mod types;
 pub mod value;
 pub mod vector;
 
+pub use activity::{
+    activity_recorder, changed_columns, clear_activity_recorder, clear_causer_resolver,
+    current_batch_uuid, current_causer, filter_columns, object_keys, register_activity_recorder,
+    set_batch_uuid, set_causer_resolver, ActivityColumnMode, ActivityColumns, ActivityEvent,
+    ActivityLogError, ActivityOperation, ActivityRecorder, BatchScope,
+};
 pub use blueprint::Blueprint;
 pub use builder::{Executor, Lock, OrderDirection, QueryBuilder, Raw};
 pub use casts::{

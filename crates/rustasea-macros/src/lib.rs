@@ -17,9 +17,12 @@
 //! runtime reads (FS-M5-03, FR-506).
 
 mod attrs;
+mod field_rules;
 mod model;
+mod model_activity;
 pub(crate) mod model_helpers;
 
+use field_rules::field_rule_specs;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput, ItemFn};
@@ -170,7 +173,24 @@ pub fn validate_payload(input: TokenStream) -> TokenStream {
 /// Optional `#[model(...)]` container attributes: `table = "..."` overrides
 /// the derived name; `soft_deletes = "none"` / `timestamps = "none"` opt out
 /// of inferred columns. Structs must carry a `uuid::Uuid` field named `id`.
-#[proc_macro_derive(Model, attributes(model))]
+///
+/// # Activity log opt-in
+///
+/// A container-level `#[logs_activity]` records this model's create/update/
+/// delete changes in the audit log (see `rustasea-activitylog`). Refine the
+/// logged columns with `only = "a,b"` / `except = "password,secret"` and skip
+/// a no-op update with `only_dirty = "true"`:
+///
+/// ```rust,ignore
+/// #[derive(Model)]
+/// #[logs_activity(except = "password", only_dirty = "true")]
+/// struct User {
+///     id: Uuid,
+///     #[logs_activity(skip)]
+///     password: String,
+/// }
+/// ```
+#[proc_macro_derive(Model, attributes(model, logs_activity))]
 pub fn derive_model(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     match model::expand(&input) {
@@ -341,144 +361,4 @@ pub fn queue(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn connection(attr: TokenStream, item: TokenStream) -> TokenStream {
     attrs::string_attr(attr, item, "connection", "CONNECTION")
-}
-
-/// Collect per-field rule declarations and return a field-clean copy.
-///
-/// Supported field grammar, both Laravel-pipeline and single-rule forms:
-///
-/// ```rust,ignore
-/// #[validate("required|min:3")]  // pipe-separated rule list
-/// #[validate(contains_strict = "admin")] // single name-value rule
-/// ```
-///
-/// On success returns `(rules, fields_without_validate_attrs)`. Any
-/// `#[validate]`-shaped field attribute that does not parse — including a
-/// bare `#[validate]` with no rules — is a hard compile error: a validator
-/// with no rules silently passes every payload.
-fn field_rule_specs(
-    fields: &syn::Fields,
-) -> Result<(Vec<(String, String)>, syn::Fields), syn::Error> {
-    let mut emitted = fields.clone();
-    let mut specs: Vec<(String, String)> = Vec::new();
-
-    for field in emitted.iter_mut() {
-        let field_name = match &field.ident {
-            Some(ident) => ident.to_string(),
-            None => {
-                return Err(syn::Error::new_spanned(
-                    field,
-                    "#[validate] supports only named struct fields",
-                ));
-            }
-        };
-        let mut rules: Vec<String> = Vec::new();
-        let mut has_validate_attr = false;
-        for attr in &field.attrs {
-            if !attr.path().is_ident("validate") {
-                continue;
-            }
-            has_validate_attr = true;
-            match &attr.meta {
-                syn::Meta::List(list) => {
-                    // A single literal string carries a pipe-separated list.
-                    match list.parse_args::<syn::LitStr>() {
-                        Ok(lit) => {
-                            let spec = lit.value();
-                            if spec.trim().is_empty() {
-                                return Err(syn::Error::new_spanned(
-                                    list,
-                                    "field #[validate(\"...\")] rule list must not be empty",
-                                ));
-                            }
-                            rules.push(spec);
-                        }
-                        Err(_) => {
-                            // Fall back to name-value form: rule = value.
-                            let name_values =
-                                list
-                                    .parse_args_with(
-                                        syn::punctuated::Punctuated::<
-                                            syn::MetaNameValue,
-                                            syn::Token![,],
-                                        >::parse_terminated,
-                                    )
-                                    .map_err(|e| {
-                                        syn::Error::new_spanned(
-                                            list,
-                                            format!(
-                                                "field #[validate] rule must be a string \
-                                             (\"required|min:3\") or name=value \
-                                             (contains_strict=\"admin\"); {e}"
-                                            ),
-                                        )
-                                    })?;
-                            for nv in name_values {
-                                let value = match &nv.value {
-                                    syn::Expr::Lit(expr_lit) => match &expr_lit.lit {
-                                        syn::Lit::Str(s) => s.value(),
-                                        _ => {
-                                            return Err(syn::Error::new_spanned(
-                                                &nv.value,
-                                                "field #[validate] rule values must be strings",
-                                            ));
-                                        }
-                                    },
-                                    _ => {
-                                        return Err(syn::Error::new_spanned(
-                                            &nv.value,
-                                            "field #[validate] rule values must be strings",
-                                        ));
-                                    }
-                                };
-                                let rule_name = nv
-                                    .path
-                                    .segments
-                                    .iter()
-                                    .map(|s| s.ident.to_string())
-                                    .collect::<Vec<_>>()
-                                    .join("::");
-                                rules.push(format!("{rule_name}:{value}"));
-                            }
-                        }
-                    }
-                }
-                syn::Meta::Path(_) => {
-                    return Err(syn::Error::new_spanned(
-                        attr,
-                        format!(
-                            "field `{field_name}` has bare #[validate] with no rules; \
-                             declare rules as #[validate(\"rule|rule\")]"
-                        ),
-                    ));
-                }
-                syn::Meta::NameValue(_) => {
-                    return Err(syn::Error::new_spanned(
-                        attr,
-                        format!(
-                            "field `{field_name}` uses unsupported #[validate = \"...\"]; \
-                             declare rules as #[validate(\"rule|rule\")]"
-                        ),
-                    ));
-                }
-            }
-        }
-        if has_validate_attr {
-            // Consumed — remove from the emitted struct so rustc never sees
-            // an attribute macro on a field.
-            field.attrs.retain(|a| !a.path().is_ident("validate"));
-        }
-        if !rules.is_empty() {
-            specs.push((field_name, rules.join("|")));
-        }
-    }
-
-    if specs.is_empty() {
-        return Err(syn::Error::new_spanned(
-            fields,
-            "#[validate] requires at least one field-level rule declaration; \
-             a validator with no rules would silently pass every payload",
-        ));
-    }
-    Ok((specs, emitted))
 }

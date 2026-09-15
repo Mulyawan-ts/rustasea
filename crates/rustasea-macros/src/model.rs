@@ -29,6 +29,7 @@ use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{Data, DeriveInput, Fields, Type};
 
+use crate::model_activity::{build_activity_columns, field_skips_activity, parse_logs_activity};
 use crate::model_helpers::{column_name, is_created_at, is_deleted_at, is_updated_at};
 
 /// A resolved cast declaration for one model field.
@@ -41,7 +42,7 @@ struct FieldCast {
     target_ty: Type,
 }
 
-/// The cast target: a built-in name or a caller-supplied type path.
+/// The resolved cast target: a built-in name or a caller-supplied type path.
 enum CastSpec {
     /// One of the built-in cast names.
     Builtin(String),
@@ -185,6 +186,7 @@ fn parse_container(input: &DeriveInput) -> (Option<String>, bool, bool) {
 pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
     let name = &input.ident;
     let (table, soft_deletes, timestamps) = parse_container(input);
+    let activity = parse_logs_activity(input)?;
 
     // Reject non-struct targets early with a spanned error.
     let fields = match &input.data {
@@ -212,6 +214,7 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
     let mut id_field = syn::Ident::new("id", proc_macro2::Span::call_site());
     let mut touch_fields: Vec<TokenStream> = Vec::new();
     let mut casts: Vec<FieldCast> = Vec::new();
+    let mut skipped_columns: Vec<String> = Vec::new();
 
     for field in &fields.named {
         let ident = match &field.ident {
@@ -219,6 +222,9 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
             None => continue,
         };
         let col = column_name(&ident.to_string());
+        if field_skips_activity(field)? {
+            skipped_columns.push(col.clone());
+        }
         match col.as_str() {
             "id" if field.ty.to_token_stream().to_string().contains("Uuid") => {
                 has_id = true;
@@ -331,6 +337,32 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
         }
     };
 
+    // Activity-log opt-in: emit the override trio only when the container
+    // attribute is present, so a plain model keeps the default `false`/`All`
+    // behaviour with zero extra tokens.
+    let activity_impl = if activity.enabled {
+        let columns_expr = build_activity_columns(&activity, &skipped_columns);
+        let only_dirty = activity.only_dirty;
+        quote! {
+            /// Whether this model's changes are recorded in the activity log.
+            fn logs_activity() -> bool {
+                true
+            }
+
+            /// Which columns participate in the activity log.
+            fn activity_columns() -> rustasea_orm::activity::ActivityColumns {
+                #columns_expr
+            }
+
+            /// Whether a no-op update should write no activity row.
+            fn activity_log_only_dirty() -> bool {
+                #only_dirty
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         #[automatically_derived]
         impl rustasea_orm::model::Model for #name {
@@ -371,6 +403,7 @@ pub fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
             }
 
             #casts_impl
+            #activity_impl
         }
     })
 }

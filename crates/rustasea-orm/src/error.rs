@@ -82,6 +82,14 @@ pub enum OrmError {
         /// Human-readable failure reason.
         message: String,
     },
+
+    /// An activity-log recorder failed while persisting an audit row.
+    ///
+    /// Audit integrity wins over write availability: a failed recording is
+    /// surfaced rather than silently swallowed, so a missing audit entry is
+    /// never invisible to the caller.
+    #[error("activity log error: {0}")]
+    Activity(String),
 }
 
 impl From<sqlx::Error> for OrmError {

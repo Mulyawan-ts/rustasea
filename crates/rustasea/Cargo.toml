@@ -11,6 +11,8 @@ rustasea-router = { path = "../rustasea-router" }
 rustasea-http = { path = "../rustasea-http" }
 rustasea-macros = { path = "../rustasea-macros" }
 rustasea-orm = { path = "../rustasea-orm" }
+# Activity log / audit trail (M2): model-change history with causer + diffs.
+rustasea-activitylog = { path = "../rustasea-activitylog" }
 rustasea-auth = { path = "../rustasea-auth" }
 rustasea-validation = { path = "../rustasea-validation" }
 rustasea-queue = { path = "../rustasea-queue" }

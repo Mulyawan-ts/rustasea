@@ -1,5 +1,6 @@
 //! RustaSea umbrella crate — re-exports foundation, config, and M0–M4 crates.
 
+pub use rustasea_activitylog as activitylog;
 pub use rustasea_cache as cache;
 pub use rustasea_config as config;
 pub use rustasea_events as events;
@@ -58,6 +59,13 @@ pub use orm::{
     register_migration, register_seeder, registered_migrator, Migration, MigrationError,
     MigrationRecord, Migrator, Model, OrmError, Paginator, QueryBuilder, Relation,
     Result as OrmResult, ScopeRegistry, Seeder, SoftDeletes, Timestamps, UpsertError,
+};
+
+/// Activity-log re-exports for audit-trail ergonomics (M2).
+pub use activitylog::{
+    register as register_activity_log_migration, Activity, ActivityColumnMode, ActivityColumns,
+    ActivityError, ActivityEvent, ActivityLogger, ActivityOperation, ActivityQuery,
+    ActivityRecorder, CreateAuditLogTable,
 };
 
 /// Auth re-exports for handler ergonomics (`Auth::guard`, guards, CSRF).

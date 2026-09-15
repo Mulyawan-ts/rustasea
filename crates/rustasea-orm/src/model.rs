@@ -247,6 +247,44 @@ pub trait Model: Send + Sync {
         scopes
     }
 
+    /// Whether this model's changes are recorded in the activity log.
+    ///
+    /// Defaults to `false`, so a model that does not opt in never triggers the
+    /// audit hooks (zero overhead). `#[derive(Model)]` emits `true` when the
+    /// struct carries `#[logs_activity]`; a hand-written impl opts in by
+    /// overriding this method.
+    fn logs_activity() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
+
+    /// Which columns of this model participate in the activity log.
+    ///
+    /// Only consulted when [`Model::logs_activity`] is true. The derive emits
+    /// `Only`/`Except` for `#[logs_activity(only = "...")]` /
+    /// `#[logs_activity(except = "...")]` and `All` otherwise; a hand-written
+    /// impl can return its own policy. Skipped columns never appear in the
+    /// persisted properties.
+    fn activity_columns() -> crate::activity::ActivityColumns
+    where
+        Self: Sized,
+    {
+        crate::activity::ActivityColumns::all()
+    }
+
+    /// Whether an update that changed nothing should be skipped.
+    ///
+    /// Defaults to `false` (an empty diff is still recorded). Set `true` via
+    /// `#[logs_activity(only_dirty = "true")]` so a no-op update writes no row.
+    fn activity_log_only_dirty() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
+
     /// Update tracked timestamps in memory (derive macro also emits `touch`).
     fn touch(&mut self) {}
 
