@@ -6,6 +6,7 @@
 
 pub mod builtins;
 pub mod inspect;
+pub mod langcheck;
 pub mod openapi;
 pub mod ops;
 pub mod queue;
@@ -44,6 +45,7 @@ pub fn register_all_into(reg: &mut CommandRegistry) {
     reg.register(ops::Migrate);
     reg.register(ops::MigrateFresh);
     reg.register(ops::MigrateRollback);
+    reg.register(langcheck::LangCheck);
     reg.register(tinker::Tinker);
 }
 

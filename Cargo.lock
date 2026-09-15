@@ -5490,6 +5490,7 @@ dependencies = [
  "indicatif",
  "rustasea-config",
  "rustasea-foundation",
+ "rustasea-i18n",
  "rustasea-macros",
  "rustasea-openapi",
  "rustasea-orm",

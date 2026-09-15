@@ -27,6 +27,7 @@ cli = [
     "dep:rustyline",
     "dep:rustasea-router",
     "dep:rustasea-openapi",
+    "dep:rustasea-i18n",
 ]
 
 [dependencies]
@@ -50,6 +51,9 @@ rustasea-router = { path = "../rustasea-router", optional = true }
 # `openapi:generate` turns the same route table into an OpenAPI 3.1 document;
 # optional so a core build that only needs the command registry never links it.
 rustasea-openapi = { path = "../rustasea-openapi", optional = true }
+# `lang:check` reads translation dictionaries through the i18n loader; optional
+# so a core build that never checks locales does not link the i18n tree.
+rustasea-i18n = { path = "../rustasea-i18n", optional = true }
 clap = { workspace = true, optional = true }
 dialoguer = { workspace = true, optional = true }
 indicatif = { workspace = true, optional = true }

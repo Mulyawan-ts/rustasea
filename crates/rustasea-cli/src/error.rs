@@ -84,6 +84,20 @@ pub enum CliError {
         /// The environment that triggered the refusal.
         environment: String,
     },
+
+    /// `lang:check` found cross-locale inconsistencies (missing keys or
+    /// duplicate values).
+    ///
+    /// Unlike a [`CliError::Domain`] failure this is a *reportable* result: the
+    /// findings themselves are printed on stdout by the command, and this
+    /// variant only carries the counts so the process exits non-zero for CI.
+    #[error("lang:check found {missing} missing key(s) and {duplicate} duplicate value(s)")]
+    TranslationCheckFailed {
+        /// Number of keys missing from one or more non-reference locales.
+        missing: usize,
+        /// Number of duplicate message values found across keys.
+        duplicate: usize,
+    },
 }
 
 /// Convenience alias for CLI results.
@@ -111,6 +125,7 @@ pub fn exit_code(err: &CliError) -> i32 {
         CliError::AlreadyExists { .. } => 4,
         CliError::ShutdownTimeout(_) => 5,
         CliError::DestructiveCommand { .. } => 6,
+        CliError::TranslationCheckFailed { .. } => 7,
         CliError::NotAProject { .. }
         | CliError::GenerationFailed { .. }
         | CliError::Io(_)
