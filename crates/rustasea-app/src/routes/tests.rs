@@ -73,6 +73,13 @@ mod debugbar;
 #[cfg(feature = "queue-dashboard")]
 mod queue_dashboard;
 
+/// Broadcasting authorization surface (`POST /broadcasting/auth`) tests
+/// (ADOPT-022), split into a sibling module so `tests.rs` stays under the cap.
+/// Gated on the `broadcasting` feature because the route/module only exist with
+/// it.
+#[cfg(feature = "broadcasting")]
+mod broadcasting;
+
 /// Build the served router with a throwaway state.
 fn app() -> Router {
     compile(table(), Arc::new(AppState::new("testing", true)))

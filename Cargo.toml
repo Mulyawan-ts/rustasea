@@ -39,6 +39,10 @@ sha2 = "0.10"
 sha1 = "0.10"
 hex = "0.4"
 subtle = "2"
+# Pusher HTTP API (ADOPT-022) — the request body is signed with an MD5 digest
+# (`body_md5`) over the canonical JSON body, per the Pusher HTTP API spec.
+# `md5` is a tiny pure-Rust implementation with no transitive deps.
+md5 = "0.7"
 # Two-factor authentication (AUTH-016) — TOTP uses HMAC-SHA1 (the RFC 6238 /
 # authenticator-app default); the secret/recovery payloads are sealed with an
 # authenticated cipher (ChaCha20-Poly1305) keyed from `app.key`.

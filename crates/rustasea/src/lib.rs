@@ -157,6 +157,24 @@ pub use rustasea_ai as ai;
 /// Broadcast re-exports for channel/SSE ergonomics (M6).
 pub use broadcast::{Authorize, BroadcastError, Channel, ShouldBroadcast};
 
+/// Broadcast driver re-exports (ADOPT-022).
+///
+/// The [`BroadcastManager`](broadcast::BroadcastManager) owns the named
+/// connections (the in-process hub plus the optional Pusher/Redis drivers) and
+/// is the façade for publishing events and authorizing channel subscriptions;
+/// [`BroadcastingConfig`](broadcast::BroadcastingConfig) resolves the
+/// `[broadcasting]` config table. The `broadcast-pusher` / `broadcast-redis`
+/// features expose the matching drivers.
+pub use broadcast::{
+    broadcast_config, broadcast_gate, broadcast_manager, clear_broadcast_config,
+    set_broadcast_config, set_broadcast_gate, set_broadcast_manager, BroadcastManager,
+    BroadcastPayload, Broadcaster, BroadcastingConfig,
+};
+#[cfg(feature = "broadcast-pusher")]
+pub use broadcast::{ChannelAuth, PusherBroadcaster, PusherConfig, PusherTransport};
+#[cfg(feature = "broadcast-redis")]
+pub use broadcast::{RedisBroadcaster, RedisConfig, RedisSubscriber};
+
 /// Storage re-exports for read-through disk ergonomics (M6).
 pub use storage::{
     LocalDisk, ObjectDisk, ReadThrough, Storage, StorageConfig, StorageError, StorageManager,

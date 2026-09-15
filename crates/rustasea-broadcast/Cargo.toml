@@ -15,8 +15,29 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+# Layered `config/*.toml` + environment loader used by `BroadcastingConfig` to
+# resolve the `[broadcasting]` table (ADOPT-022). A lightweight, dependency-free
+# leaf crate (only `config` + `serde` + `dotenvy`), so this adds no cycle.
+rustasea-config = { path = "../rustasea-config" }
+
+# `pusher` driver (ADOPT-022): HTTP transport + HMAC-SHA256 request signing and
+# the MD5 body digest the Pusher HTTP API requires. Optional so the core build
+# links neither the HTTP client nor the crypto stack (NFR-Sca-02).
+reqwest = { version = "0.12", default-features = false, features = ["json"], optional = true }
+hmac = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+md5 = { workspace = true, optional = true }
+# `redis` driver (ADOPT-022): Pub/Sub fan-out across processes. Optional so the
+# core build never links the async Redis client.
+redis = { workspace = true, optional = true }
 
 [features]
 default = ["ws"]
 # `ws` pulls axum's WebSocket feature (FS-M6-01: axum::extract::ws).
 ws = ["axum/ws"]
+# External broadcast drivers (ADOPT-022). `pusher` adds the HTTP driver (Pusher
+# protocol, `pusher`/`private-`/`presence-` client auth) and `redis` the
+# cross-process Pub/Sub fan-out driver; both are opt-in.
+pusher = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "dep:md5"]
+redis = ["dep:redis"]

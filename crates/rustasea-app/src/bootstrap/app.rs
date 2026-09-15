@@ -64,6 +64,7 @@ pub fn configure() -> Result<Application, BootError> {
     install_observability(&app);
     install_debugbar();
     install_queue_dashboard(&app);
+    install_broadcasting(&app);
     install_error_pages(&app);
     Ok(app)
 }
@@ -197,6 +198,48 @@ fn install_queue_dashboard(app: &Application) {
 /// No-op stand-in for [`install_queue_dashboard`] when the feature is off.
 #[cfg(not(feature = "queue-dashboard"))]
 fn install_queue_dashboard(_app: &Application) {}
+
+/// Install the broadcast config, gate, and manager (ADOPT-022).
+///
+/// Reads `[broadcasting]` from the boot-time config loader and installs the
+/// parsed config plus a built [`BroadcastManager`](rustasea::broadcast::BroadcastManager)
+/// into the process-wide slots so the `POST /broadcasting/auth` handler can
+/// authorize and sign channel subscriptions.
+///
+/// No authorization gate is installed here (the scaffold has no channel
+/// policy registry yet), so private/presence subscriptions fail closed as
+/// unauthenticated until an app installs one with
+/// [`set_broadcast_gate`](rustasea::broadcast::set_broadcast_gate).
+///
+/// Best-effort: a config or build failure is logged and boot continues. The
+/// facade enables `rustasea-broadcast`'s default `ws` feature, so the
+/// in-process `hub` connection always builds; a config selecting an
+/// unconfigured external driver is reported and skipped rather than aborting
+/// boot.
+#[cfg(feature = "broadcasting")]
+fn install_broadcasting(app: &Application) {
+    let Some(loader) = app.config().cloned() else {
+        return;
+    };
+    let config = match rustasea::broadcast::BroadcastingConfig::from_loader(&loader) {
+        Ok(config) => config,
+        Err(error) => {
+            tracing::warn!(%error, "broadcast config failed");
+            return;
+        }
+    };
+    match rustasea::broadcast::BroadcastManager::from_config(&config, None) {
+        Ok(manager) => {
+            rustasea::broadcast::set_broadcast_config(config);
+            rustasea::broadcast::set_broadcast_manager(std::sync::Arc::new(manager));
+        }
+        Err(error) => tracing::warn!(%error, "broadcast manager build failed"),
+    }
+}
+
+/// No-op stand-in for [`install_broadcasting`] when the feature is off.
+#[cfg(not(feature = "broadcasting"))]
+fn install_broadcasting(_app: &Application) {}
 
 /// Resolve the database connection URL from the environment, then config.
 ///

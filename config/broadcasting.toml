@@ -1,0 +1,63 @@
+# Broadcasting configuration (Laravel 13.x `config/broadcasting.php` parity).
+#
+# Loaded by `rustasea-config` and parsed by
+# `rustasea_broadcast::BroadcastingConfig::from_loader`. The shape mirrors
+# Laravel one-for-one so a migrated `broadcasting.php` maps onto the same keys:
+#
+#   [broadcasting]                          <- `return [ ... ]` root
+#   broadcasting.default                    <- `'default' => env('BROADCAST_CONNECTION', ...)`
+#   [broadcasting.connections.<name>]       <- `'connections' => [ '<name>' => [ ... ] ]`
+#
+# Drivers implemented by RustaSea (ADOPT-022):
+#   * `hub`    — the in-process WebSocket/SSE fan-out (always available).
+#   * `pusher` — the Pusher HTTP API (requires the crate's `pusher` feature).
+#   * `redis`  — cross-process Redis Pub/Sub fan-out (requires the `redis`
+#                feature; the subscriber re-publishes into the local hub).
+#
+# A connection that is selected as the default but is missing credentials is a
+# typed `BroadcastError::NotConfigured` at load time rather than a silent
+# fallback, so a migrated production config can never quietly degrade.
+#
+# Environment overrides (single-underscore variables are bridged explicitly
+# because the loader's `__` separator never reaches the nested table):
+#   BROADCAST_CONNECTION          -> broadcasting.default
+#   PUSHER_APP_ID / PUSHER_APP_KEY / PUSHER_APP_SECRET / PUSHER_APP_CLUSTER
+#   PUSHER_HOST / PUSHER_PORT / PUSHER_SCHEME
+#   BROADCAST_REDIS_URL / REDIS_URL / BROADCAST_REDIS_PREFIX
+
+[broadcasting]
+# Connection used when a publish names none. RustaSea's in-process hub is the
+# zero-dependency default.
+default = "hub"
+
+# --- In-process hub ----------------------------------------------------------
+
+# The hub is always available (compiled into the broadcast crate); it needs no
+# configuration beyond selecting it. This block is documentary.
+
+# --- Pusher (HTTP API) -------------------------------------------------------
+
+# Requires the broadcast crate's `pusher` feature. `cluster` selects the hosted
+# endpoint (`https://api-{cluster}.pusher.com/apps/{app_id}/events`); setting
+# `host` instead targets a self-hosted Pusher-compatible server (e.g. soketi)
+# at `{scheme}://{host}:{port}/apps/{app_id}/events` (defaults `http` / 6001).
+# `timeout` is the per-request HTTP timeout in seconds.
+[broadcasting.connections.pusher]
+# app_id = "123456"
+# key = "your-pusher-key"
+# secret = "your-pusher-secret"
+# cluster = "us2"
+# host = "127.0.0.1"
+# port = 6001
+# scheme = "http"
+# timeout = 10
+
+# --- Redis Pub/Sub -----------------------------------------------------------
+
+# Requires the broadcast crate's `redis` feature. Channels are
+# `{prefix}.{wire_channel}`; a subscriber process psubscribes `{prefix}.*` and
+# re-publishes into its local hub. `url` accepts a `redis://` (or `rediss://`)
+# connection string.
+[broadcasting.connections.redis]
+# url = "redis://127.0.0.1:6379"
+# prefix = "broadcasting"

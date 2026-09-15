@@ -220,6 +220,9 @@ pub(crate) fn csrf_protected(method: &axum::http::Method, path: &str) -> bool {
             | ("POST", "/passkeys/login")
             | ("PATCH", "/settings/profile")
             | ("PUT", "/settings/password")
+            // Broadcasting channel authorization (ADOPT-022). A Pusher client
+            // posts `socket_id`/`channel_name` here; the write is CSRF-gated.
+            | ("POST", "/broadcasting/auth")
     )
 }
 

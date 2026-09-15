@@ -6,15 +6,22 @@
 //! WebSocket broadcast handler. Events are serializable, cloneable payloads —
 //! no `Any` (C-03).
 
+pub mod broadcaster;
 pub mod channel;
 pub mod error;
 #[cfg(feature = "ws")]
 pub mod hub;
+pub mod manager;
+#[cfg(feature = "pusher")]
+pub mod pusher;
+#[cfg(feature = "redis")]
+pub mod redis_driver;
 pub mod sse;
 #[cfg(feature = "ws")]
 pub mod ws;
 
 pub use async_trait::async_trait;
+pub use broadcaster::{BroadcastPayload, Broadcaster};
 pub use channel::{
     authorize_subscription, AuthDecision, Authorize, Channel, PresenceUser, Private, Public,
     Subscriber, WS_CLOSE_UNAUTHENTICATED, WS_CLOSE_UNAUTHORIZED,
@@ -22,6 +29,18 @@ pub use channel::{
 pub use error::{BroadcastError, Result};
 #[cfg(feature = "ws")]
 pub use hub::{BroadcastHub, WsMessage};
+pub use manager::{
+    clear as clear_broadcast_config, config as broadcast_config, gate as broadcast_gate,
+    manager as broadcast_manager, set_config as set_broadcast_config,
+    set_gate as set_broadcast_gate, set_manager as set_broadcast_manager, BroadcastManager,
+    BroadcastingConfig, CONNECTION_HUB, CONNECTION_PUSHER, CONNECTION_REDIS, DEFAULT_CONNECTION,
+};
+#[cfg(feature = "pusher")]
+pub use pusher::{ChannelAuth, PusherBroadcaster, PusherConfig, PusherTransport};
+#[cfg(all(feature = "redis", feature = "ws"))]
+pub use redis_driver::RedisSubscriber;
+#[cfg(feature = "redis")]
+pub use redis_driver::{RedisBroadcaster, RedisConfig};
 pub use sse::{event_stream, event_stream_response, EventSender, EventStream, SseEvent};
 #[cfg(feature = "ws")]
 pub use ws::{

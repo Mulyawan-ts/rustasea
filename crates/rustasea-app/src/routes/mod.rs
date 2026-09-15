@@ -10,6 +10,10 @@
 //! shim header); the canonical route definitions live here.
 
 pub mod auth;
+/// Broadcasting authorization surface — `POST /broadcasting/auth` (ADOPT-022),
+/// compiled only with the `broadcasting` feature.
+#[cfg(feature = "broadcasting")]
+pub mod broadcasting;
 pub mod console;
 #[cfg(feature = "debugbar")]
 pub mod debugbar;
@@ -85,6 +89,10 @@ pub fn table() -> RouteTable {
     // additionally require `[queue.dashboard].enabled` and `AppState::debug`.
     #[cfg(feature = "queue-dashboard")]
     queue_dashboard::register(&mut table);
+    // Broadcasting authorization surface (`POST /broadcasting/auth`), compiled
+    // only with the `broadcasting` feature (ADOPT-022).
+    #[cfg(feature = "broadcasting")]
+    broadcasting::register(&mut table);
     table
 }
 

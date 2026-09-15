@@ -73,7 +73,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Session` | `rustasea-auth` (`SessionGuard`, `SessionPolicy`) | **Partial** | `tower-sessions` declared but session store not wired (GAP-007). |
 | `Illuminate\Cookie` | `rustasea-http` (CORS + `SecurityConfig`) | **Partial** | No queued-cookie jar / cookie encryption layer yet. |
 | `Illuminate\Filesystem` | `rustasea-storage` (`Storage`, `StorageManager`, `LocalDisk`, `ObjectDisk`, `ReadThrough`) | **Adopted** | `object_store`-backed disks + read-through with path confinement. |
-| `Illuminate\Broadcasting` | `rustasea-broadcast` (`ShouldBroadcast`, `BroadcastEvent`, `Channel`, `BroadcastHub`) | **Partial** | WS + SSE real; driver matrix (Pusher/Ably/Redis) absent. |
+| `Illuminate\Broadcasting` | `rustasea-broadcast` (`ShouldBroadcast`, `BroadcastEvent`, `Channel`, `BroadcastHub`, `BroadcastManager`) | **Partial** | WS + SSE real; Pusher HTTP driver + Redis Pub/Sub fan-out real (ADOPT-022); Ably absent. |
 | `Illuminate\Pagination` | `rustasea-orm` (`Paginator`, `PageMeta`) | **Adopted** | Paginator wired into query execution (`crates/rustasea-orm/src/builder/exec.rs:145`). |
 | `Illuminate\Pipeline` | — | **N-A** | Tower middleware chains replace the PHP pipeline; no `Illuminate\Pipeline` analogue required. |
 | `Illuminate\Encryption` | — | **Planned** | No encrypter / key-rotation service. |
@@ -205,8 +205,8 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Contracts\Filesystem\Cloud` | `rustasea-storage::ObjectDisk` | **Partial** | `object_store`-backed disk real; visibility/temporary-URL surface thinner. |
 | `Illuminate\Filesystem\FilesystemAdapter` | `rustasea-storage::{LocalDisk, ObjectDisk}` | **Partial** | Disk adapters real; adapter method breadth smaller. |
 | `Illuminate\Contracts\Broadcasting\ShouldBroadcast` | `rustasea-broadcast::ShouldBroadcast` | **Adopted** | Broadcast marker implemented. |
-| `Illuminate\Contracts\Broadcasting\Broadcaster` | `rustasea-broadcast::BroadcastHub` | **Partial** | WS/SSE hub real; third-party broadcasters absent. |
-| `Illuminate\Contracts\Broadcasting\Factory` | `rustasea-broadcast::BroadcastHub` | **Partial** | Hub selection real; connection factory thinner. |
+| `Illuminate\Contracts\Broadcasting\Broadcaster` | `rustasea-broadcast::Broadcaster` (`BroadcastHub`, `PusherBroadcaster`, `RedisBroadcaster`) | **Partial** | In-process hub + Pusher HTTP + Redis Pub/Sub broadcasters real (ADOPT-022); Ably absent. |
+| `Illuminate\Contracts\Broadcasting\Factory` | `rustasea-broadcast::BroadcastManager` | **Partial** | Named connections + `[broadcasting]` config + env bridge real (ADOPT-022); thinner than Laravel's factory. |
 | `Illuminate\Foundation\Testing\TestCase` (class) | `rustasea-testing::TestCase` | **Partial** | Base test case real; refresh/DB traits absent. |
 | `Illuminate\Foundation\Testing\RefreshDatabase` (trait) | — | **Planned** | No DB refresh/transaction test trait. |
 | `Illuminate\Foundation\Testing\WithFaker` (trait) | `rustasea-testing::faker::Faker` | **Partial** | Locale-aware `Faker` facade (`fake` 5.1) behind the `faker` feature: seeded deterministic generation, 14 locales, `unique_*` helpers; the trait-style mixin is not reproduced. |

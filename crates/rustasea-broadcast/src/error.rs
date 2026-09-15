@@ -38,6 +38,35 @@ pub enum BroadcastError {
     /// A serialization failure occurred while encoding a payload.
     #[error("broadcast serialization failed: {0}")]
     Serialization(String),
+
+    /// The selected broadcast connection is declared but not fully configured
+    /// (missing credentials or a required field), so it cannot be built.
+    ///
+    /// Surfaces instead of silently falling back to the in-process hub, so a
+    /// production config can never quietly degrade (ADOPT-022).
+    #[error("broadcast connection {connection} is not configured")]
+    NotConfigured {
+        /// Connection name that is missing required configuration.
+        connection: String,
+    },
+
+    /// A connection name was requested that the manager does not know.
+    #[error("unknown broadcast connection {connection}")]
+    ConnectionUnknown {
+        /// Connection name that was requested.
+        connection: String,
+    },
+
+    /// An external driver failed (HTTP transport, a non-2xx status, or a
+    /// Pub/Sub transport error). Carries the connection name and a message that
+    /// includes the status code plus a response-body snippet where available.
+    #[error("broadcast driver {connection} failed: {message}")]
+    Driver {
+        /// Connection name whose driver failed.
+        connection: String,
+        /// Human-readable failure detail (status code + body snippet).
+        message: String,
+    },
 }
 
 impl From<serde_json::Error> for BroadcastError {
