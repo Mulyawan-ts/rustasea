@@ -84,12 +84,34 @@ pub fn table() -> RouteTable {
 pub fn compile(mut table: RouteTable, state: Arc<AppState>) -> axum::Router {
     table.layer(axum::Extension(Arc::clone(&state)));
     match table.try_into_axum_router() {
-        Ok(router) => with_csrf(with_session(mount_assets(router), &state), &state),
+        Ok(router) => with_sentry(with_csrf(
+            with_session(mount_assets(router), &state),
+            &state,
+        )),
         Err(error) => {
             eprintln!("route table build failed: {error}");
             axum::Router::new().fallback(|| async { StatusCode::INTERNAL_SERVER_ERROR })
         }
     }
+}
+
+/// Apply the Sentry request-context layer to a compiled router (ADOPT-004).
+///
+/// The middleware tags each request with its method/path/request-id and captures
+/// a Sentry event for any 5xx response. It is a no-op while no Sentry client is
+/// bound, so the layer is safe to apply unconditionally — but it only exists
+/// when the `sentry` feature is compiled in, hence the `cfg` gate.
+#[cfg(feature = "sentry")]
+fn with_sentry(router: axum::Router) -> axum::Router {
+    router.layer(axum::middleware::from_fn(
+        rustasea_http::sentry::sentry_context_middleware,
+    ))
+}
+
+/// No-op stand-in for [`with_sentry`] when the `sentry` feature is off.
+#[cfg(not(feature = "sentry"))]
+fn with_sentry(router: axum::Router) -> axum::Router {
+    router
 }
 
 /// Apply the session → `Extension<AuthUser>` layer to a compiled router.

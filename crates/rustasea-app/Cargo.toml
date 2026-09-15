@@ -10,6 +10,13 @@ license.workspace = true
 publish = false
 description = "RustaSea runnable app scaffold — `cargo dev` serves the example HTTP application."
 
+[features]
+# Sentry error tracking (ADOPT-004): forwards the `sentry` feature to the HTTP
+# request-context middleware and the logging subscriber's Sentry layer/client.
+# Off by default so the standard `cargo run -p rustasea-app` links no Sentry SDK.
+default = []
+sentry = ["rustasea-http/sentry", "rustasea-logging/sentry"]
+
 [dependencies]
 # `view` exposes the view layer (`ViewResponse`, `ViewEngine`); the forwarded
 # `view-runtime-templates` feature enables the runtime minijinja engine the app
@@ -44,6 +51,14 @@ chrono = { workspace = true }
 # (SHA-256 of the user's email, lowercase hex).
 sha2 = { workspace = true }
 hex = { workspace = true }
+# The HTTP layer is a direct dependency so the app can install the Sentry
+# request-context middleware (ADOPT-004) and the facade does not have to
+# re-export every middleware symbol.
+rustasea-http = { path = "../rustasea-http" }
+# The logging facade is a direct dependency so the app can install the global
+# `tracing` subscriber at boot (`init_from_config`), fixing the gap where the
+# re-export was never called at runtime (CFG-005 / ADOPT-004).
+rustasea-logging = { path = "../rustasea-logging" }
 
 [dev-dependencies]
 # `ServiceExt::oneshot` drives the compiled router in route tests.

@@ -12,10 +12,29 @@
 #   LOG_DAILY_DAYS  — retention (days) of the `daily` channel.
 #   LOG_SLACK_*     — accepted for parity; inert (the `slack` driver is
 #                     recognised but unsupported, see the note below).
+#
+# Sentry error tracking (ADOPT-004) is opt-in and lives in `[logging.sentry]`
+# below; it also honours the `SENTRY_*` environment variables. Nothing is sent
+# until a DSN is configured.
 
 [logging]
 # Channel used when no channel is requested explicitly.
 default = "stack"
+
+# Sentry error tracking (ADOPT-004). The `sentry` cargo feature must be enabled
+# on `rustasea-logging`/`rustasea-app` for these keys to take effect; the section
+# is inert otherwise. Leave `dsn` empty (or omit the section) to disable Sentry
+# entirely — no client is initialised and no events are sent.
+#
+# Environment overrides (win over these values):
+#   SENTRY_DSN                  — project DSN; empty disables Sentry.
+#   SENTRY_TRACES_SAMPLE_RATE   — fraction in 0.0..=1.0 (invalid values ignored).
+#   SENTRY_ENVIRONMENT          — deployment environment label.
+#
+# [logging.sentry]
+# dsn = ""
+# traces_sample_rate = 0.0
+# environment = "local"
 
 # Deprecation reporting. Parsed for parity; RustaSea does not yet route
 # deprecations through a dedicated channel, so these values are inert.

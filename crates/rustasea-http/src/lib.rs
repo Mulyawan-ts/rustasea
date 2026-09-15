@@ -1,5 +1,10 @@
 //! RustaSea HTTP layer — AppState, JSON helpers, middleware stubs, and HTTP client.
 
+/// Sentry request-context middleware (ADOPT-004) — opt-in via the `sentry`
+/// feature; a no-op while no Sentry client is bound.
+#[cfg(feature = "sentry")]
+pub mod sentry;
+
 use std::any::Any;
 use std::sync::Arc;
 

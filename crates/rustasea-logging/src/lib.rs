@@ -54,6 +54,10 @@
 pub mod config;
 pub mod error;
 pub mod init;
+/// Sentry error-tracking integration (ADOPT-004) — opt-in via the `sentry`
+/// feature, inert until a DSN is configured.
+#[cfg(feature = "sentry")]
+pub mod sentry;
 
 pub use config::{
     ChannelConfig, DeprecationsConfig, Driver, LoggingConfig, DEFAULT_CHANNEL, DEFAULT_DAILY_FILES,
@@ -61,3 +65,8 @@ pub use config::{
 };
 pub use error::{LoggingError, Result};
 pub use init::{build, init, init_from_config, LoggingGuard};
+
+/// Sentry re-exports (ADOPT-004): config parsing, client init, and the
+/// `before_send` secret-scrubbing hook.
+#[cfg(feature = "sentry")]
+pub use sentry::{init as init_sentry, scrub_event, ClientInitGuard, SentryConfig};

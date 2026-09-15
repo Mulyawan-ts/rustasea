@@ -216,6 +216,15 @@ const LOGGING: &str = r##"# Logging configuration — mirrors Laravel 13.x confi
 [logging]
 default = "stack"
 
+# Sentry error tracking (ADOPT-004). Requires the `sentry` cargo feature on
+# `rustasea-logging`/`rustasea-app`. Leave `dsn` empty to disable Sentry.
+# Environment overrides: SENTRY_DSN, SENTRY_TRACES_SAMPLE_RATE, SENTRY_ENVIRONMENT.
+#
+# [logging.sentry]
+# dsn = ""
+# traces_sample_rate = 0.0
+# environment = "local"
+
 [logging.deprecations]
 channel = "null"
 trace = false

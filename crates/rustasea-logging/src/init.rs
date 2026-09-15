@@ -84,6 +84,8 @@ pub fn build(config: &LoggingConfig) -> Result<(BoxedSubscriber, LoggingGuard)> 
     let mut builder = LayerBuilder::new(&config.channels);
     let root = config.default_channel()?;
     builder.expand(&config.default, root)?;
+    #[cfg(feature = "sentry")]
+    builder.push_sentry_layer();
 
     let subscriber: BoxedSubscriber = Box::new(Registry::default().with(builder.layers));
     Ok((
@@ -198,6 +200,19 @@ impl<'a> LayerBuilder<'a> {
         })();
         self.visiting.pop();
         result
+    }
+
+    /// Push the Sentry tracing layer (ADOPT-004), when the `sentry` feature is
+    /// on.
+    ///
+    /// The layer is composed **unconditionally** — the [`crate::sentry`] client
+    /// is installed separately during app bootstrap, and `sentry-tracing`
+    /// documents that it silently drops events while no client is bound. This
+    /// keeps the subscriber shape stable whether or not a DSN is configured, so
+    /// the layer is only present at all when the feature is compiled in.
+    #[cfg(feature = "sentry")]
+    fn push_sentry_layer(&mut self) {
+        self.layers.push(crate::sentry::tracing_layer().boxed());
     }
 
     /// Push the concrete layer(s) for a non-stack driver.

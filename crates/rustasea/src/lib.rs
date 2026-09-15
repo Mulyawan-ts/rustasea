@@ -255,3 +255,11 @@ pub use rustasea_logging::{
     ChannelConfig as LoggingChannelConfig, Driver as LoggingDriver, LoggingConfig, LoggingError,
     LoggingGuard,
 };
+
+/// Sentry error-tracking re-exports (ADOPT-004) — only with the `sentry` feature.
+///
+/// [`init_sentry`](rustasea_logging::init_sentry) installs the process-global
+/// Sentry client from a [`SentryConfig`](rustasea_logging::SentryConfig); the
+/// returned guard must be kept alive for the process lifetime.
+#[cfg(feature = "sentry")]
+pub use rustasea_logging::{init_sentry, scrub_event as scrub_sentry_event, SentryConfig};

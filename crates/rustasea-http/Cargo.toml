@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "HTTP layer for RustaSea — AppState, middleware, and HTTP client"
 
+[features]
+# Sentry request-context middleware (ADOPT-004). Opt-in so the core build never
+# links the Sentry SDK tree (NFR-Sca-02). With no client bound the middleware's
+# `sentry` calls are no-ops.
+default = []
+sentry = ["dep:sentry"]
+
 [dependencies]
 axum = { version = "0.7" }
 tower = "0.5"
@@ -15,6 +22,17 @@ thiserror = "1"
 tokio = { version = "1", features = ["rt", "macros", "time"] }
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 rustasea-router = { path = "../rustasea-router" }
+# Sentry SDK (ADOPT-004). Default features are disabled; the middleware only
+# needs the core client + protocol types. The `panic`/`contexts`/`debug-images`
+# integrations match `rustasea-logging`'s client so the two stay in lockstep.
+sentry = { version = "0.49", default-features = false, features = [
+    "reqwest",
+    "rustls",
+    "backtrace",
+    "panic",
+    "contexts",
+    "debug-images",
+], optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "net"] }
