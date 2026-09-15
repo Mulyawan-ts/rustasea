@@ -5344,6 +5344,7 @@ dependencies = [
  "rustasea-logging",
  "rustasea-macros",
  "rustasea-mongo",
+ "rustasea-openapi",
  "rustasea-orm",
  "rustasea-queue",
  "rustasea-router",
@@ -5401,6 +5402,7 @@ dependencies = [
  "hex",
  "rustasea",
  "rustasea-mail",
+ "rustasea-openapi",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -5489,6 +5491,7 @@ dependencies = [
  "rustasea-config",
  "rustasea-foundation",
  "rustasea-macros",
+ "rustasea-openapi",
  "rustasea-orm",
  "rustasea-queue",
  "rustasea-router",
@@ -5675,6 +5678,15 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "toml 0.8.23",
+]
+
+[[package]]
+name = "rustasea-openapi"
+version = "0.1.0"
+dependencies = [
+ "rustasea-router",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

@@ -15,6 +15,7 @@ pub use rustasea_auth as auth;
 pub use rustasea_cli as cli;
 pub use rustasea_http as http;
 pub use rustasea_macros as macros;
+pub use rustasea_openapi as openapi;
 pub use rustasea_orm as orm;
 pub use rustasea_router as router;
 pub use rustasea_testing as testing;
@@ -79,6 +80,9 @@ pub use auth::{
 
 /// Validation re-exports (`#[validate]` wiring surface).
 pub use validation::{ErrorBag, FormRequest, Rules, Validatable, ValidationError};
+
+/// OpenAPI re-exports for spec-generation ergonomics (ADOPT-011).
+pub use openapi::{generate, generate_with_info, OpenApiError, SpecInfo};
 
 /// CLI re-exports (`Artisan::call`, `Command` trait, generators).
 pub use cli::{

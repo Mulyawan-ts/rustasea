@@ -26,6 +26,7 @@ cli = [
     "dep:comfy-table",
     "dep:rustyline",
     "dep:rustasea-router",
+    "dep:rustasea-openapi",
 ]
 
 [dependencies]
@@ -46,6 +47,9 @@ rustasea-orm = { path = "../rustasea-orm" }
 # `route:list` reads the application route table (`RouteEntry`); optional so the
 # router/axum tree is only linked with the `cli` feature.
 rustasea-router = { path = "../rustasea-router", optional = true }
+# `openapi:generate` turns the same route table into an OpenAPI 3.1 document;
+# optional so a core build that only needs the command registry never links it.
+rustasea-openapi = { path = "../rustasea-openapi", optional = true }
 clap = { workspace = true, optional = true }
 dialoguer = { workspace = true, optional = true }
 indicatif = { workspace = true, optional = true }

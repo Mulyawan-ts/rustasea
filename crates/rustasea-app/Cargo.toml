@@ -15,6 +15,9 @@ description = "RustaSea runnable app scaffold — `cargo dev` serves the example
 # `view-runtime-templates` feature enables the runtime minijinja engine the app
 # renders `resources/views/*.html` with.
 rustasea = { path = "../rustasea", features = ["view", "view-runtime-templates"] }
+# `/openapi.json` generates the spec from the live route table; `/docs` serves
+# the Scalar UI over it (both dev-only).
+rustasea-openapi = { path = "../rustasea-openapi" }
 tokio = { workspace = true }
 axum = { workspace = true }
 anyhow = "1"

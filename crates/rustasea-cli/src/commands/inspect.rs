@@ -52,6 +52,7 @@ impl Command for RouteList {
             "Name".to_string(),
             "Action".to_string(),
             "Middleware".to_string(),
+            "Binding".to_string(),
         ]];
         for route in &routes {
             rows.push(vec![
@@ -60,6 +61,7 @@ impl Command for RouteList {
                 route.name.clone().unwrap_or_else(|| ABSENT.to_string()),
                 action_label(route),
                 middleware_label(route),
+                binding_label(route),
             ]);
         }
         io.line(output::table(rows).trim_end());
@@ -84,6 +86,18 @@ fn middleware_label(route: &RouteEntry) -> String {
         return ABSENT.to_string();
     }
     route.middleware.join(", ")
+}
+
+/// Render a route's path-binding fields as a comma-separated list.
+///
+/// These are the `{var}` / `{var:field}` segments parsed from the route path
+/// (Laravel feature #20 — `route:list` binding fields), so an operator can see
+/// which parameters a route extracts without reading its definition.
+fn binding_label(route: &RouteEntry) -> String {
+    if route.binding_fields.is_empty() {
+        return ABSENT.to_string();
+    }
+    route.binding_fields.join(", ")
 }
 
 /// `show:model` — inspect a model's attributes/relations/casts (FR-109).
@@ -134,7 +148,7 @@ mod tests {
     /// Serializes tests that share the process-wide route registry.
     static ROUTE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-    /// Build a route entry carrying one middleware id.
+    /// Build a route entry carrying one middleware id and any path bindings.
     fn entry(method: &str, path: &str, name: Option<&str>) -> RouteEntry {
         RouteEntry {
             method: method.to_string(),
@@ -143,19 +157,35 @@ mod tests {
             middleware: vec!["auth".to_string()],
             authorizations: Vec::new(),
             domain: None,
-            binding_fields: Vec::new(),
+            binding_fields: binding_fields(path),
             controller: None,
             handler: None,
         }
     }
 
-    /// A published route table renders every route with all five columns.
+    /// Extract `{var}` / `{var:field}` names from a path (test-local mirror).
+    fn binding_fields(path: &str) -> Vec<String> {
+        let mut fields = Vec::new();
+        for segment in path.split('/') {
+            let Some(inner) = segment.strip_prefix('{').and_then(|s| s.strip_suffix('}')) else {
+                continue;
+            };
+            let name = inner.split(':').next().unwrap_or(inner);
+            if !name.is_empty() {
+                fields.push(name.to_string());
+            }
+        }
+        fields
+    }
+
+    /// A published route table renders every route with all six columns.
     #[tokio::test]
     async fn route_list_renders_registered_routes() {
         let _guard = ROUTE_LOCK.lock().await;
         crate::routes::set_routes(vec![
             entry("GET", "/dashboard", Some("dashboard")),
             entry("GET", "/settings/profile", Some("settings.profile.edit")),
+            entry("GET", "/users/{user:slug}", Some("users.show")),
         ]);
 
         let mut io = Io::default();
@@ -167,6 +197,7 @@ mod tests {
 
         assert!(io.stdout.contains("Method"), "stdout: {}", io.stdout);
         assert!(io.stdout.contains("URI"), "stdout: {}", io.stdout);
+        assert!(io.stdout.contains("Binding"), "stdout: {}", io.stdout);
         assert!(io.stdout.contains("/dashboard"), "stdout: {}", io.stdout);
         assert!(
             io.stdout.contains("settings.profile.edit"),
@@ -174,6 +205,7 @@ mod tests {
             io.stdout
         );
         assert!(io.stdout.contains("auth"), "stdout: {}", io.stdout);
+        assert!(io.stdout.contains("user"), "stdout: {}", io.stdout);
     }
 
     /// `--json` emits the structured route array.
@@ -196,6 +228,23 @@ mod tests {
         assert_eq!(array[0]["path"], "/login");
         assert_eq!(array[0]["name"], "login");
         assert_eq!(array[0]["middleware"][0], "auth");
+    }
+
+    /// `--json` includes the parsed binding fields for a parameterised route.
+    #[tokio::test]
+    async fn route_list_json_includes_binding_fields() {
+        let _guard = ROUTE_LOCK.lock().await;
+        crate::routes::set_routes(vec![entry("GET", "/users/{user:slug}", Some("users.show"))]);
+
+        let mut io = Io::default();
+        RouteList
+            .run(vec!["--json".to_string()], &mut io)
+            .await
+            .expect("route:list runs");
+        crate::routes::clear_route_source();
+
+        let parsed: serde_json::Value = serde_json::from_str(io.stdout.trim()).expect("valid JSON");
+        assert_eq!(parsed[0]["binding_fields"][0], "user");
     }
 
     /// An empty registry yields a header-only table and `[]` JSON.

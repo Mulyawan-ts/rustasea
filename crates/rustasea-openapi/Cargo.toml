@@ -1,0 +1,13 @@
+[package]
+name = "rustasea-openapi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "RustaSea OpenAPI — generate an OpenAPI 3.1 document from the live route table."
+
+[dependencies]
+# The route metadata model (`RouteEntry`, `AuthorizeSpec`) is the single source
+# of truth this crate documents; no HTTP/axum runtime is linked.
+rustasea-router = { path = "../rustasea-router" }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

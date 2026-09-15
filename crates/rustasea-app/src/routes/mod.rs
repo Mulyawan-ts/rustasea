@@ -11,6 +11,7 @@
 
 pub mod auth;
 pub mod console;
+pub mod docs;
 mod helpers;
 pub mod settings;
 pub mod web;
@@ -65,6 +66,7 @@ pub fn table() -> RouteTable {
     auth::register(&mut table);
     settings::register(&mut table);
     console::register(&mut table);
+    docs::register(&mut table);
     table
 }
 

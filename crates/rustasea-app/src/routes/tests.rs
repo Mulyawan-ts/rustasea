@@ -48,6 +48,10 @@ mod two_factor;
 /// `tests.rs` stays under the cap.
 mod passkeys;
 
+/// Dev-only API docs surface (`/openapi.json`, `/docs`) tests, split into a
+/// sibling module so `tests.rs` stays under the cap.
+mod docs;
+
 /// Build the served router with a throwaway state.
 fn app() -> Router {
     compile(table(), Arc::new(AppState::new("testing", true)))

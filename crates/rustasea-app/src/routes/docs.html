@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RustaSea API Reference</title>
+  </head>
+  <body>
+    <!--
+      Scalar renders the OpenAPI 3.1 document served at /openapi.json.
+      This page is dev-only: the /docs route answers 404 when AppState::debug
+      is false, so the bundle is never loaded in production.
+    -->
+    <script id="api-reference" data-url="/openapi.json"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  </body>
+</html>

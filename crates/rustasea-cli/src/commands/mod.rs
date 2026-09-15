@@ -6,6 +6,7 @@
 
 pub mod builtins;
 pub mod inspect;
+pub mod openapi;
 pub mod ops;
 pub mod queue;
 pub mod tinker;
@@ -32,6 +33,7 @@ pub fn register_all_into(reg: &mut CommandRegistry) {
     reg.register(builtins::MakeTool);
     reg.register(inspect::RouteList);
     reg.register(inspect::ShowModel);
+    reg.register(openapi::OpenApiGenerate);
     reg.register(ops::QueueFailed);
     reg.register(ops::QueueRetry);
     reg.register(queue::QueueWork);
