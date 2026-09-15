@@ -297,6 +297,8 @@ fn validate_identifier(label: &str, name: &str) -> Result<()> {
 /// use the native `NOW()`. Restore and force delete need no dialect branch. The
 /// `table` is validated here as well, at the exact interpolation point, so a
 /// future caller cannot splice an unvalidated identifier into `UPDATE`/`DELETE`.
+/// A successful statement bumps the child table's cache generation, so a cached
+/// query on that child table misses on the next read (ADOPT-019).
 async fn execute_child_chunk(
     pool: &DbPool,
     table: &str,
@@ -330,6 +332,7 @@ async fn execute_child_chunk(
         CascadeMode::ForceDelete => format!("DELETE FROM {table} WHERE id IN ({list})"),
     };
     pool.execute_bind(&sql, &bindings).await?;
+    super::cache_hooks::invalidate_table(table);
     Ok(())
 }
 

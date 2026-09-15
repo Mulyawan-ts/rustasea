@@ -7,6 +7,7 @@
 pub mod activity;
 pub mod blueprint;
 pub mod builder;
+pub mod cache;
 pub mod casts;
 pub mod clause;
 pub mod connections;
@@ -20,6 +21,7 @@ pub mod migration;
 pub mod migration_guard;
 pub mod model;
 pub mod model_ops;
+pub(crate) mod model_sql;
 pub mod naming;
 pub mod profile;
 pub mod relation;
@@ -40,6 +42,10 @@ pub use activity::{
 };
 pub use blueprint::Blueprint;
 pub use builder::{Executor, Lock, OrderDirection, QueryBuilder, Raw};
+pub use cache::{
+    bump_table_generation, cache_store, clear_cache_store, flush_model_cache, query_cache_key,
+    register_cache_store, table_generation, QueryCacheStore,
+};
 pub use casts::{
     BooleanCast, CastBinding, CastsAttributes, DateTimeCast, EncryptedCast, FloatCast, IntegerCast,
     JsonCast, NullableCast, StringCast,

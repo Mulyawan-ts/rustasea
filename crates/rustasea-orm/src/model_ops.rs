@@ -23,6 +23,7 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 mod activity_hooks;
+mod cache_hooks;
 mod cascade;
 mod composite;
 mod key;
@@ -62,6 +63,7 @@ pub trait ModelOps: Model + Sized {
         if let Some(recorder) = recorder {
             activity_hooks::record_created::<Self>(&recorder, &key.event_id(), snapshot).await?;
         }
+        cache_hooks::invalidate_table(&Self::table_name());
         Ok(persisted)
     }
 
@@ -115,6 +117,7 @@ pub trait ModelOps: Model + Sized {
                     .await?;
             }
         }
+        cache_hooks::invalidate_table(&Self::table_name());
         Ok(persisted)
     }
 
@@ -165,6 +168,7 @@ pub trait ModelOps: Model + Sized {
             )
             .await?;
         }
+        cache_hooks::invalidate_table(&Self::table_name());
         Ok(persisted)
     }
 
@@ -231,6 +235,7 @@ pub trait ModelOps: Model + Sized {
                 .await?;
             }
         }
+        cache_hooks::invalidate_table(&Self::table_name());
         Ok(affected > 0)
     }
 
@@ -287,6 +292,7 @@ pub trait ModelOps: Model + Sized {
                 .await?;
             }
         }
+        cache_hooks::invalidate_table(&Self::table_name());
         Ok(affected > 0)
     }
 
@@ -362,6 +368,14 @@ pub trait ModelOps: Model + Sized {
             Some(value) => crate::casts::hydrate::<Self>(value),
             None => Err(OrmError::NotFound),
         }
+    }
+
+    /// Invalidate every cached query on this model's table (ADOPT-019).
+    ///
+    /// Bumps the table generation (so existing keys miss) and flushes the store's
+    /// table scope when one is installed. A cache-free build is a no-op.
+    async fn flush_cache() -> Result<()> {
+        crate::cache::flush_model_cache(&Self::table_name()).await
     }
 }
 

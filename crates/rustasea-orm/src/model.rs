@@ -1,10 +1,10 @@
 //! Model trait, timestamps, soft deletes, and relations.
 
-use crate::builder::{QueryBuilder, Raw, SqlFragment};
+use crate::builder::{QueryBuilder, Raw};
 use crate::casts::CastBinding;
 use crate::error::{OrmError, Result};
 use crate::execution::count_sql;
-use crate::m2::{InsertBuilder, ModelScopes, UpsertBuilder};
+use crate::m2::{InsertBuilder, UpsertBuilder};
 use crate::naming::snake_plural;
 use crate::scopes::{GlobalScopeEntry, SoftDeletesScope};
 use crate::types::Value;
@@ -331,7 +331,7 @@ pub trait Model: Send + Sync {
     where
         Self: Sized,
     {
-        ModelScopes::insert_sql(builder, crate::builder::dialect())
+        crate::model_sql::insert_sql(builder)
     }
 
     /// Upsert SQL with a strict `uniqueBy` (empty → typed error).
@@ -339,70 +339,81 @@ pub trait Model: Send + Sync {
     where
         Self: Sized,
     {
-        builder.to_sql()
+        crate::model_sql::upsert_sql(builder)
     }
 
-    /// Update SQL: `UPDATE t SET <cols> WHERE id = ?`.
-    ///
-    /// `assignments` are caller-owned `col = ?`-shaped fragments; the primary
-    /// key filter and optional `updated_at = now()` bump are appended.
+    /// Update SQL: `UPDATE t SET <cols> WHERE id = ?` with an optional timestamp bump.
     fn update_sql(table: &str, assignments: &[String]) -> String
     where
         Self: Sized,
     {
-        let mut parts = assignments.to_vec();
-        if let Some(col) = Self::updated_column() {
-            parts.push(format!("{col} = now()"));
-        }
-        let cols = parts.join(", ");
-        format!("UPDATE {table} SET {cols} WHERE id = $1")
+        crate::model_sql::update_sql(table, assignments, Self::updated_column())
     }
 
     /// Delete SQL: hard delete by primary key.
     fn delete_sql(table: &str) -> String {
-        format!("DELETE FROM {table} WHERE id = $1")
+        crate::model_sql::delete_sql(table)
     }
 
     /// Soft-delete SQL: `UPDATE t SET deleted_at = now() WHERE id = ?`.
     fn soft_delete_sql(table: &str) -> String {
-        format!("UPDATE {table} SET deleted_at = now() WHERE id = $1")
+        crate::model_sql::soft_delete_sql(table)
     }
 
     /// Restore SQL: `UPDATE t SET deleted_at = NULL WHERE id = ?`.
     fn restore_sql(table: &str) -> String {
-        format!("UPDATE {table} SET deleted_at = NULL WHERE id = $1")
+        crate::model_sql::restore_sql(table)
+    }
+
+    /// Whether query/model result caching is enabled for this model.
+    fn cacheable() -> bool {
+        false
+    }
+
+    /// The default TTL for this model's cached queries (`None` = forever).
+    fn cache_ttl() -> Option<std::time::Duration> {
+        None
     }
 
     /// Start a filtered query on the model table with its global scopes.
     ///
-    /// The model's [`Model::global_scopes`] (soft deletes plus any registered
-    /// application scopes) are attached and applied when the query executes, so
-    /// deleted rows are hidden by default. Bypass with
-    /// [`QueryBuilder::without_global_scopes`].
+    /// [`Model::global_scopes`] are attached and applied at execution, so deleted
+    /// rows are hidden by default. A `#[cacheable]` model also gets its default
+    /// policy here (the `cache::model_query` helper); a caller may override it
+    /// with `.without_cache()` or another `.cache(...)`.
     fn query() -> QueryBuilder
     where
         Self: Sized,
     {
-        QueryBuilder::table(Self::table_name())
-            .with_global_scopes(Self::global_scopes())
-            .with_relations(Self::relations())
+        crate::cache::model_query(
+            QueryBuilder::table(Self::table_name())
+                .with_global_scopes(Self::global_scopes())
+                .with_relations(Self::relations()),
+            Self::cacheable(),
+            Self::cache_ttl(),
+        )
     }
 
     /// Query that includes soft-deleted rows.
     ///
     /// Delegates to [`Model::query`] (preserving relations metadata) then
-    /// bypasses the built-in [`SoftDeletesScope`].
+    /// bypasses the built-in [`SoftDeletesScope`]. The cache policy is cleared:
+    /// the write path re-reads a row through this query right after mutating it
+    /// (before the generation bump), so it must read through to the database.
     fn query_with_trashed() -> QueryBuilder
     where
         Self: Sized,
     {
-        Self::query().without_global_scope::<SoftDeletesScope>()
+        Self::query()
+            .without_global_scope::<SoftDeletesScope>()
+            .without_cache()
     }
 
     /// Query restricted to soft-deleted rows.
     ///
     /// Delegates to [`Model::query`] (preserving relations metadata) and keeps
-    /// only rows where the soft-delete marker is set.
+    /// only rows where the soft-delete marker is set. Like
+    /// [`Model::query_with_trashed`], the cache policy is cleared.
     fn query_only_trashed() -> QueryBuilder
     where
         Self: Sized,
@@ -410,6 +421,7 @@ pub trait Model: Send + Sync {
         Self::query()
             .without_global_scope::<SoftDeletesScope>()
             .only_trashed()
+            .without_cache()
     }
 
     /// Raw SELECT fragment over the model table (`Model::raw_sql`).
@@ -417,22 +429,10 @@ pub trait Model: Send + Sync {
     where
         Self: Sized,
     {
-        let fragment: SqlFragment = sql.into();
-        let clause = fragment.sql;
-        let full = format!(
-            "SELECT * FROM {} WHERE {}",
-            Self::table_name(),
-            clause.trim()
-        );
-        Ok(Raw {
-            sql: full,
-            bindings: Vec::new(),
-        })
+        crate::model_sql::raw_select(&Self::table_name(), sql)
     }
 
-    /// Build a SELECT that refreshes the row for update.
-    ///
-    /// `dialect` is the runtime pool dialect; an SQLite pool rejects `FOR UPDATE`.
+    /// Build a SELECT that refreshes the row for update (SQLite rejects `FOR UPDATE`).
     fn refresh_for_update(id: Uuid, dialect: &str) -> Result<QueryBuilder>
     where
         Self: Sized,
@@ -469,8 +469,8 @@ pub trait Model: Send + Sync {
 
     /// Resolve the row for update and surface typed errors on missing rows.
     ///
-    /// `dialect` is the runtime pool dialect threaded into
-    /// [`Model::refresh_for_update`] so the lock decision tracks the live driver.
+    /// `dialect` is threaded into [`Model::refresh_for_update`] so the lock
+    /// decision tracks the live driver.
     fn first_for_update(id: Uuid, dialect: &str) -> Result<QueryBuilder>
     where
         Self: Sized,

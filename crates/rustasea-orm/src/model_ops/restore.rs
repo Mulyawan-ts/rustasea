@@ -16,6 +16,7 @@ use crate::error::Result;
 use crate::model::Model;
 
 use super::activity_hooks::{record_restored, recorder, snapshot};
+use super::cache_hooks::invalidate_table;
 use super::cascade::{cascade, parent_snapshot, CascadeMode};
 use super::composite::build_restore;
 use super::key::KeyFilter;
@@ -57,5 +58,6 @@ pub(crate) async fn restore_by_key<T: Model>(pool: &DbPool, filter: &KeyFilter) 
             cascade::<T>(pool, &parent, CascadeMode::Restore, 0, &mut visited).await?;
         }
     }
+    invalidate_table(&T::table_name());
     Ok(affected > 0)
 }

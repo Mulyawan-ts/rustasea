@@ -8,11 +8,14 @@
 //! `sqlx` runtime API is used — never the compile-time `query!` macros.
 
 use super::{QueryBuilder, Raw, SqlFragment};
+use crate::cache::{cache_store, query_cache_key, table_generation};
 use crate::db::DbPool;
 use crate::error::{OrmError, Result};
 use crate::execution::Paginator;
 use crate::tx::Transaction;
 use crate::types::Value;
+
+use super::CacheMode;
 
 /// Deserialize a JSON row into a concrete model or value type.
 ///
@@ -115,6 +118,17 @@ impl<'a> Executor<'a> {
             Executor::Transaction(tx) => Executor::Transaction(tx),
         }
     }
+
+    /// The active driver dialect (`sqlite` / `postgres` / `mysql`).
+    ///
+    /// Used as a cache-key component so a query rendered for one driver never
+    /// serves a result from another.
+    pub fn dialect(&self) -> &'static str {
+        match self {
+            Executor::Pool(pool) => pool.dialect(),
+            Executor::Transaction(tx) => tx.dialect(),
+        }
+    }
 }
 
 impl Raw {
@@ -168,7 +182,17 @@ impl QueryBuilder {
         let resolved = self.resolved();
         let sql = resolved.to_sql()?;
         let bindings = resolved.bindings().to_vec();
-        executor.into().fetch_json(&sql, &bindings).await
+        let table = resolved.table_name().to_string();
+        let mut executor = executor.into();
+        fetch_json_cached(
+            &mut executor,
+            resolved.cache_mode(),
+            &table,
+            &sql,
+            &bindings,
+            "",
+        )
+        .await
     }
 
     /// Execute the query with `LIMIT 1` and return the first row, if any.
@@ -193,7 +217,19 @@ impl QueryBuilder {
         let resolved = self.resolved();
         let sql = crate::execution::count_sql(&resolved)?;
         let bindings = resolved.bindings().to_vec();
-        let rows = executor.into().fetch_json(&sql, &bindings).await?;
+        let table = resolved.table_name().to_string();
+        let mut executor = executor.into();
+        // The `count:` namespace keeps a COUNT from colliding with a row query
+        // that renders to the same SQL text.
+        let rows = fetch_json_cached(
+            &mut executor,
+            resolved.cache_mode(),
+            &table,
+            &sql,
+            &bindings,
+            "count:",
+        )
+        .await?;
         Ok(scalar_count(rows.first()))
     }
 
@@ -219,7 +255,18 @@ impl QueryBuilder {
         let resolved = self.resolved();
         let count_sql = crate::execution::count_sql(&resolved)?;
         let count_bindings = resolved.bindings().to_vec();
-        let count_rows = executor.fetch_json(&count_sql, &count_bindings).await?;
+        let count_table = resolved.table_name().to_string();
+        // The COUNT shares the `count:` namespace with `count()`, so a paginated
+        // query and an explicit `count()` on the same filters hit one entry.
+        let count_rows = fetch_json_cached(
+            &mut executor,
+            resolved.cache_mode(),
+            &count_table,
+            &count_sql,
+            &count_bindings,
+            "count:",
+        )
+        .await?;
         let total = scalar_count(count_rows.first());
 
         let offset = page.saturating_sub(1).saturating_mul(per_page);
@@ -277,4 +324,48 @@ fn scalar_count(row: Option<&serde_json::Value>) -> u64 {
         .and_then(|object| object.values().next())
         .and_then(|value| value.as_u64())
         .unwrap_or(0)
+}
+
+/// Fetch rows through the query cache when a mode and store are present.
+///
+/// On a hit the stored JSON array is returned without touching the database; on
+/// a miss the query runs and the rows are stored for next time. Caching is
+/// best-effort: a missing store, an unreadable entry, or a store error degrades
+/// to a normal database round-trip — a cache problem never fails the query.
+/// `namespace` disambiguates shapes (e.g. `"count:"`) that would otherwise hash
+/// to the same key as a row query.
+async fn fetch_json_cached(
+    executor: &mut Executor<'_>,
+    mode: Option<CacheMode>,
+    table: &str,
+    sql: &str,
+    bindings: &[Value],
+    namespace: &str,
+) -> Result<Vec<serde_json::Value>> {
+    let Some(store) = cache_store() else {
+        return executor.fetch_json(sql, bindings).await;
+    };
+    let Some(mode) = mode else {
+        return executor.fetch_json(sql, bindings).await;
+    };
+
+    let key = query_cache_key(
+        table,
+        table_generation(table),
+        &format!("{namespace}{sql}"),
+        bindings,
+        executor.dialect(),
+    );
+
+    if let Ok(Some(bytes)) = store.get(&key).await {
+        if let Ok(rows) = serde_json::from_slice::<Vec<serde_json::Value>>(&bytes) {
+            return Ok(rows);
+        }
+    }
+
+    let rows = executor.fetch_json(sql, bindings).await?;
+    if let Ok(bytes) = serde_json::to_vec(&rows) {
+        let _ = store.put(&key, bytes, mode.ttl()).await;
+    }
+    Ok(rows)
 }

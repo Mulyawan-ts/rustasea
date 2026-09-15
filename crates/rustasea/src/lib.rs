@@ -74,6 +74,18 @@ pub use orm::{
     Timestamps, UpsertError,
 };
 
+/// ORM query-cache re-exports (ADOPT-019).
+///
+/// Install a [`QueryCacheStore`](orm::QueryCacheStore) at boot with
+/// [`register_query_cache_store`](orm::register_cache_store); builders opt in
+/// with `.cache(ttl)` / `.cache_forever()`, and table writes invalidate cached
+/// queries automatically.
+pub use orm::{
+    bump_table_generation as bump_query_cache_generation, cache_store as query_cache_store,
+    clear_cache_store as clear_query_cache_store, flush_model_cache, query_cache_key,
+    register_cache_store as register_query_cache_store, table_generation, QueryCacheStore,
+};
+
 /// Activity-log re-exports for audit-trail ergonomics (M2).
 pub use activitylog::{
     register as register_activity_log_migration, Activity, ActivityColumnMode, ActivityColumns,

@@ -20,6 +20,7 @@ mod attrs;
 mod field_rules;
 mod model;
 mod model_activity;
+mod model_cacheable;
 mod model_cascade;
 pub(crate) mod model_helpers;
 mod model_primary_key;
@@ -211,9 +212,25 @@ pub fn validate_payload(input: TokenStream) -> TokenStream {
 ///     slug: String,
 /// }
 /// ```
+///
+/// # Cache opt-in
+///
+/// A container-level `#[cacheable]` marks the model as cacheable (ADOPT-019).
+/// Bare `#[cacheable]` caches forever; `#[cacheable(ttl = "300")]` sets a
+/// 300-second default. The flag advertises intent for the model's queries; an
+/// explicit `.cache(...)` on any query opts in regardless.
+///
+/// ```rust,ignore
+/// #[derive(Model)]
+/// #[cacheable(ttl = "300")]
+/// struct Country {
+///     id: Uuid,
+///     name: String,
+/// }
+/// ```
 #[proc_macro_derive(
     Model,
-    attributes(model, logs_activity, sluggable, cascade_soft_deletes)
+    attributes(model, logs_activity, sluggable, cascade_soft_deletes, cacheable)
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

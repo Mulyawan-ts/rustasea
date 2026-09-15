@@ -7,10 +7,12 @@ use std::any::TypeId;
 
 pub use crate::clause::{Lock, OrderDirection, Raw, SqlFragment};
 
+mod cached;
 mod exec;
 mod ext;
 mod global;
 
+pub use cached::CacheMode;
 pub(crate) use exec::json_to_model;
 pub use exec::Executor;
 
@@ -128,12 +130,19 @@ pub struct QueryBuilder {
     eager: Vec<String>,
     /// Declared relation metadata used to resolve `eager` names.
     eager_declared: Vec<crate::model::Relation>,
+    /// Opt-in cache policy (`cache`/`cache_forever`); `None` = always hit the DB.
+    cache_mode: Option<CacheMode>,
 }
 
 impl QueryBuilder {
     /// The table this query targets.
     pub fn table_name(&self) -> &str {
         &self.table
+    }
+
+    /// The attached cache policy, if any (ADOPT-019).
+    pub(crate) fn cache_mode(&self) -> Option<CacheMode> {
+        self.cache_mode
     }
 
     /// Start a query against `table`.
