@@ -139,6 +139,7 @@ Tracked by `GAP-001`, `GAP-010`–`GAP-013`.
 - Real transactions + executor dispatch — `crates/rustasea-orm/src/tx.rs:67` (`begin`), `crates/rustasea-orm/src/execution.rs:325` (`transaction`).
 - Real migrations, seeders, and factory state — custom `Migrator` at `crates/rustasea-orm/src/migration.rs:131`, `:189` (`run`), `:240` (`rollback`), `:279` (`fresh`), `:288` (`seed`); `crates/rustasea-orm/src/factory.rs`.
 - Eager loading + relation serde round-trip — `crates/rustasea-orm/src/eager.rs:18` (`EagerPlan`), `:59` (`eager_load`), `crates/rustasea-orm/src/relations.rs:22`.
+- JSON-embedded relations (ADOPT-020, `staudenmeir/eloquent-json-relations` parity) — `Relation::belongs_to_json`/`has_many_json`/`belongs_to_many_json` with a `JsonSpec` (`crates/rustasea-orm/src/relation.rs`), dialect predicates `where_json_in`/`where_json_contains_any` (`crates/rustasea-orm/src/builder/json.rs`, `crates/rustasea-orm/src/types.rs`), batched eager loaders (`crates/rustasea-orm/src/eager/json.rs`), and a `Blueprint::json_index` expression-index helper (`crates/rustasea-orm/src/schema/emit.rs`).
 - pgvector support (native bind/encode behind the `vector` feature) — `crates/rustasea-orm/src/vector.rs:100` (`to_vector_literal`), `:141` (`has_extension_sql`), `:149` (`vector_param`); feature in `crates/rustasea-orm/Cargo.toml`.
 - Populated `config/database.toml` (driver/url/pool settings).
 

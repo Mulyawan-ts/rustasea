@@ -46,49 +46,11 @@ impl SoftDeletes {
     }
 }
 
-/// Kind of relation between two models.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RelationKind {
-    /// `User has_many posts` — FK `user_id` on the related table.
-    HasMany,
-    /// Inverse of HasMany — FK on this table.
-    BelongsTo,
-    /// Pivot-table relation (scaffolded; full impl M3+).
-    ManyToMany,
-}
-
-/// A declared relation used by eager loading (`with`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Relation {
-    /// Relation name as used in `Model::with("posts")`.
-    pub name: String,
-    /// Related model's table name.
-    pub related_table: String,
-    /// FK column on the owning side (HasMany: related table; BelongsTo: this table).
-    pub foreign_key: String,
-    /// Local key on the parent side.
-    pub local_key: String,
-    /// Relation kind.
-    pub kind: RelationKind,
-    /// Pivot table for `ManyToMany` relations (`None` otherwise).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pivot_table: Option<String>,
-    /// Related-side pivot column for `ManyToMany` relations.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub related_key: Option<String>,
-    /// Composite foreign-key columns (`Some` only for composite relations).
-    ///
-    /// `None` for single-key relations, where [`Relation::foreign_key`] holds
-    /// the sole column. The constructors and key accessors live in
-    /// [`crate::relation`] so this struct stays declarative.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub foreign_keys: Option<Vec<String>>,
-    /// Composite local-key columns (`Some` only for composite relations).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub local_keys: Option<Vec<String>>,
-}
-
+// `Relation`, `RelationKind`, and `JsonSpec` live in [`crate::relation`] (the
+// module owns the builder constructors and their validation); they are
+// re-exported here so `crate::model::{Relation, RelationKind}` paths stay
+// stable for existing callers.
+pub use crate::relation::{JsonSpec, Relation, RelationKind};
 pub use crate::relations::Relations;
 
 /// Base model contract implemented by `#[derive(Model)]` (macro in a later sprint).

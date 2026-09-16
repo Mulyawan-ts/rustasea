@@ -70,7 +70,7 @@ pub use migration::{
 pub use migration_guard::{
     guard_destructive_command, is_production, DestructiveCommandRefused, PRODUCTION,
 };
-pub use model::{Model, Relation, RelationKind, Relations, SoftDeletes, Timestamps};
+pub use model::{JsonSpec, Model, Relation, RelationKind, Relations, SoftDeletes, Timestamps};
 pub use model_ops::{ModelOps, SluggableFind};
 pub use naming::snake_plural;
 pub use profile::{
@@ -84,6 +84,6 @@ pub use scopes::{
 };
 pub use sluggable::{slugify, SlugOptions};
 pub use tx::{Transaction, TransactionError};
-pub use types::{ColumnType, JsonFilter};
+pub use types::{ColumnType, JsonFilter, JsonRelationFilter};
 pub use value::Value;
 pub use vector::{VectorMetric, VectorSimilarity};

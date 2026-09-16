@@ -195,6 +195,103 @@ impl JsonFilter {
     }
 }
 
+/// A JSON-embedded key set used by the `*_json` relation predicates (ADOPT-020).
+///
+/// `path` is the dot-path into the JSON document and `values` are the candidate
+/// keys to match. Two semantics are supported, matching the two eager loaders:
+///
+/// * [`JsonRelationFilter::to_sql`] — **scalar IN**: the value at `path` is a
+///   single key compared against `values` (`BelongsToJson`).
+/// * [`JsonRelationFilter::to_sql_array`] — **array overlap**: the array at
+///   `path` contains any of `values` (`HasManyJson` / `BelongsToManyJson`).
+///
+/// Both emit `$n` placeholders (rewritten to `?` for MySQL by `db/adapt.rs`)
+/// and return the SQL fragment plus the number of bind values it consumes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct JsonRelationFilter {
+    /// Dot-path into the JSON document (e.g. `author.id`).
+    pub path: String,
+    /// Candidate keys matched against the embedded value(s).
+    pub values: Vec<String>,
+}
+
+impl JsonRelationFilter {
+    /// Compile the **scalar** form: match the value at `path` against `values`.
+    ///
+    /// Returns the SQL fragment and the number of bind values it consumes
+    /// (`values.len()`). Each bind site is a `{}` token; the builder substitutes
+    /// the ordered `$n` placeholders. An empty `values` list is the caller's
+    /// concern (the builder degrades it to `1 = 0`); this method still emits
+    /// valid SQL.
+    pub fn to_sql(&self, column: &str, dialect: &str) -> Result<(String, usize)> {
+        let path = escape_path(&self.path);
+        let count = self.values.len();
+        let sql = match dialect {
+            "postgres" => format!("({column} ->> '{path}') IN {}", placeholders(count)),
+            "mysql" => format!(
+                "JSON_UNQUOTE(JSON_EXTRACT({column}, '$.{path}')) IN {}",
+                placeholders(count)
+            ),
+            "sqlite" => format!(
+                "json_valid({column}) AND json_extract({column}, '$.{path}') IN {}",
+                placeholders(count)
+            ),
+            other => return Err(OrmError::UnsupportedDriver(other.to_string())),
+        };
+        Ok((sql, count))
+    }
+
+    /// Compile the **array overlap** form: the array at `path` contains any of
+    /// `values`.
+    ///
+    /// Postgres and SQLite bind one placeholder per value. MySQL binds a single
+    /// JSON-array literal (the values are joined in Rust and bound as
+    /// `CAST({} AS JSON)`), so the returned bind count is `1` even when several
+    /// values are supplied — the caller must bind the joined array accordingly.
+    pub fn to_sql_array(&self, column: &str, dialect: &str) -> Result<(String, usize)> {
+        let path = escape_path(&self.path);
+        match dialect {
+            "postgres" => Ok((
+                format!(
+                    "(({column})::jsonb -> '{path}') ?| {}",
+                    array_literal(self.values.len())
+                ),
+                self.values.len(),
+            )),
+            "mysql" => Ok((
+                format!("JSON_OVERLAPS(JSON_EXTRACT({column}, '$.{path}'), CAST({{}} AS JSON))"),
+                1,
+            )),
+            "sqlite" => Ok((
+                format!(
+                    "json_valid({column}) AND EXISTS (SELECT 1 FROM json_each({column}, '$.{path}') \
+                     WHERE json_each.value IN {})",
+                    placeholders(self.values.len())
+                ),
+                self.values.len(),
+            )),
+            other => Err(OrmError::UnsupportedDriver(other.to_string())),
+        }
+    }
+}
+
+/// Render `({}, {}, …)` with `n` `{}` bind tokens.
+fn placeholders(n: usize) -> String {
+    let list: Vec<&str> = std::iter::repeat_n("{}", n).collect();
+    format!("({})", list.join(", "))
+}
+
+/// Render a Postgres `ARRAY[{}, {}, …]` literal with `n` `{}` bind tokens.
+fn array_literal(n: usize) -> String {
+    let list: Vec<&str> = std::iter::repeat_n("{}", n).collect();
+    format!("ARRAY[{}]", list.join(", "))
+}
+
+/// Escape single quotes in a JSON path so it cannot break out of the literal.
+fn escape_path(path: &str) -> String {
+    path.replace('\'', "''")
+}
+
 /// Schema column type used by Blueprint/migration helpers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -18,6 +18,7 @@ pub use exec::Executor;
 
 mod composite;
 mod eager;
+mod json;
 
 #[cfg(test)]
 mod tests;

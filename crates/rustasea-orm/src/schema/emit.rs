@@ -146,6 +146,30 @@ pub(crate) fn index_statement(table: &str, columns: &[String], unique: bool) -> 
     format!("{prefix} {name} ON {table} ({})", columns.join(", "))
 }
 
+/// Build a dialect-shaped JSON expression index on `column` at `path`.
+///
+/// `ordinal` disambiguates several JSON indexes on the same table/column so
+/// their names never collide. The path is escaped into the SQL string literal
+/// (single quotes doubled) so it cannot break out of the expression.
+pub(crate) fn json_index_statement(
+    table: &str,
+    column: &str,
+    path: &str,
+    ordinal: usize,
+    dialect: Dialect,
+) -> String {
+    let name = format!("{table}_{column}_{ordinal}_json");
+    let escaped = path.replace('\'', "''");
+    let expression = match dialect {
+        Dialect::Sqlite => format!("json_extract({column}, '$.{escaped}')"),
+        Dialect::Postgres => format!("({column} ->> '{escaped}')"),
+        Dialect::MySql => {
+            format!("(CAST(JSON_UNQUOTE(JSON_EXTRACT({column}, '$.{escaped}')) AS CHAR(255)))")
+        }
+    };
+    format!("CREATE INDEX {name} ON {table} ({expression})")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

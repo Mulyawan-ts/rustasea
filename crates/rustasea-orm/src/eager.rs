@@ -13,6 +13,8 @@ use serde_json::{Map, Value as JsonValue};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod json;
+
 /// Separator joining composite key parts into a dedup/grouping key.
 ///
 /// The unit-separator control character cannot appear in a UUID or an ordinary
@@ -82,6 +84,12 @@ pub async fn eager_load<'a>(
             RelationKind::HasMany => load_has_many(rows, executor, relation).await?,
             RelationKind::BelongsTo => load_belongs_to(rows, executor, relation).await?,
             RelationKind::ManyToMany => load_many_to_many(rows, executor, relation).await?,
+            RelationKind::BelongsToJson => {
+                json::load_belongs_to_json(rows, executor, relation).await?
+            }
+            RelationKind::HasManyJson | RelationKind::BelongsToManyJson => {
+                json::load_has_many_json(rows, executor, relation).await?
+            }
         }
     }
     Ok(())
@@ -428,7 +436,7 @@ fn attach_arrays_composite(
 }
 
 /// Insert a payload into the row's `relations` map (empty relation → `[]`).
-fn insert_relation(row: &mut JsonValue, name: &str, payload: JsonValue) {
+pub(crate) fn insert_relation(row: &mut JsonValue, name: &str, payload: JsonValue) {
     let Some(object) = row.as_object_mut() else {
         return;
     };

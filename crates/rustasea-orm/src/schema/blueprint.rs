@@ -53,6 +53,8 @@ pub struct Blueprint {
     unique_indexes: Vec<Vec<String>>,
     /// Table-level plain indexes.
     indexes: Vec<Vec<String>>,
+    /// JSON expression indexes: `(column, path)` pairs (ADOPT-020).
+    json_indexes: Vec<(String, String)>,
 }
 
 impl Blueprint {
@@ -76,6 +78,7 @@ impl Blueprint {
             primary: Vec::new(),
             unique_indexes: Vec::new(),
             indexes: Vec::new(),
+            json_indexes: Vec::new(),
         }
     }
 
@@ -206,6 +209,23 @@ impl Blueprint {
         self
     }
 
+    /// Declare a JSON expression index on `column` at `path` (ADOPT-020).
+    ///
+    /// Renders a dialect-shaped expression index so a `*_json` relation
+    /// predicate can use it:
+    ///
+    /// * SQLite: `json_extract(column, '$.path')`
+    /// * Postgres: `(column ->> 'path')`
+    /// * MySQL: `(CAST(JSON_UNQUOTE(JSON_EXTRACT(column, '$.path')) AS CHAR(255)))`
+    ///
+    /// The column and path are validated when the blueprint is rendered; a blank
+    /// column or path yields [`SchemaError::EmptyColumnName`].
+    pub fn json_index(&mut self, column: &str, path: &str) -> &mut Self {
+        self.json_indexes
+            .push((column.to_string(), path.to_string()));
+        self
+    }
+
     /// Render the blueprint as dialect-specific DDL.
     ///
     /// Validates the dialect, table name, column names, and blueprint shape,
@@ -271,7 +291,7 @@ impl Blueprint {
             self.table,
             definitions.join(", ")
         ));
-        self.emit_indexes(out)?;
+        self.emit_indexes(dialect, out)?;
         Ok(())
     }
 
@@ -281,6 +301,7 @@ impl Blueprint {
             && self.drops.is_empty()
             && self.indexes.is_empty()
             && self.unique_indexes.is_empty()
+            && self.json_indexes.is_empty()
         {
             return Err(SchemaError::EmptyBlueprint {
                 table: self.table.clone(),
@@ -299,7 +320,7 @@ impl Blueprint {
                 self.table, definition
             ));
         }
-        self.emit_indexes(out)?;
+        self.emit_indexes(dialect, out)?;
         Ok(())
     }
 
@@ -311,7 +332,7 @@ impl Blueprint {
     /// [`SchemaError::InvalidIdentifier`] rather than reaching the SQL string.
     /// A table-level `index`/`unique` declaration with no columns is rejected
     /// with [`SchemaError::EmptyIndexColumns`].
-    fn emit_indexes(&self, out: &mut Vec<String>) -> Result<()> {
+    fn emit_indexes(&self, dialect: Dialect, out: &mut Vec<String>) -> Result<()> {
         for column in &self.columns {
             if column.is_unique() {
                 out.push(emit::index_statement(
@@ -334,6 +355,28 @@ impl Blueprint {
         for columns in &self.indexes {
             self.validate_index_columns(columns)?;
             out.push(emit::index_statement(&self.table, columns, false));
+        }
+        self.emit_json_indexes(dialect, out)?;
+        Ok(())
+    }
+
+    /// Emit JSON expression indexes declared via [`Blueprint::json_index`].
+    ///
+    /// Each column is validated as an identifier (the path is escaped into the
+    /// SQL literal) before the dialect-shaped expression index is produced.
+    fn emit_json_indexes(&self, dialect: Dialect, out: &mut Vec<String>) -> Result<()> {
+        for (index, (column, path)) in self.json_indexes.iter().enumerate() {
+            emit::validate_identifier(column, SchemaError::EmptyColumnName)?;
+            if path.trim().is_empty() {
+                return Err(SchemaError::EmptyColumnName.into());
+            }
+            out.push(emit::json_index_statement(
+                &self.table,
+                column,
+                path,
+                index,
+                dialect,
+            ));
         }
         Ok(())
     }
@@ -366,132 +409,4 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::error::OrmError;
-
-    /// Verifies a full blueprint emits SQLite DDL with inline increments and index.
-    #[test]
-    fn create_emits_sqlite_ddl() {
-        let mut blueprint = Blueprint::create("users");
-        blueprint.id();
-        blueprint.string("email", 255).unique();
-        blueprint.string("name", 255).nullable();
-        blueprint.timestamps();
-        let sql = blueprint.to_sql("sqlite").unwrap();
-        assert!(
-            sql.starts_with("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, "),
-            "{sql}"
-        );
-        assert!(sql.contains("email VARCHAR(255) NOT NULL"), "{sql}");
-        assert!(
-            sql.contains("CREATE UNIQUE INDEX users_email_unique ON users (email)"),
-            "{sql}"
-        );
-        assert!(sql.ends_with(';'), "{sql}");
-    }
-
-    /// Verifies the same blueprint renders MySQL with an InnoDB suffix.
-    #[test]
-    fn create_emits_mysql_suffix() {
-        let mut blueprint = Blueprint::create("users");
-        blueprint.id();
-        let sql = blueprint.to_sql("mysql").unwrap();
-        assert!(
-            sql.starts_with(
-                "CREATE TABLE users (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY) ENGINE=InnoDB"
-            ),
-            "{sql}"
-        );
-    }
-
-    /// Verifies a composite primary key renders as a table constraint.
-    #[test]
-    fn composite_primary_key() {
-        let mut blueprint = Blueprint::create("roles");
-        blueprint.integer("user_id");
-        blueprint.integer("role_id");
-        blueprint.primary(["user_id", "role_id"]);
-        let sql = blueprint.to_sql("postgres").unwrap();
-        assert!(sql.contains("PRIMARY KEY (user_id, role_id)"), "{sql}");
-    }
-
-    /// Verifies alter mode emits ADD/DROP COLUMN and CREATE INDEX.
-    #[test]
-    fn alter_emits_statements() {
-        let mut blueprint = Blueprint::alter("users");
-        blueprint.drop_column("legacy");
-        blueprint.string("nickname", 100).nullable();
-        blueprint.index(["nickname"]);
-        let sql = blueprint.to_sql("sqlite").unwrap();
-        assert!(
-            sql.contains("ALTER TABLE users DROP COLUMN legacy"),
-            "{sql}"
-        );
-        assert!(
-            sql.contains("ALTER TABLE users ADD COLUMN nickname VARCHAR(100)"),
-            "{sql}"
-        );
-        assert!(
-            sql.contains("CREATE INDEX users_nickname_index ON users (nickname)"),
-            "{sql}"
-        );
-    }
-
-    /// Verifies an empty blueprint and duplicate columns are typed errors.
-    #[test]
-    fn rejects_empty_and_duplicate() {
-        let empty = Blueprint::create("t");
-        assert!(matches!(
-            empty.to_sql("sqlite"),
-            Err(OrmError::Schema(SchemaError::EmptyBlueprint { .. }))
-        ));
-
-        let mut dup = Blueprint::create("t");
-        dup.string("a", 10);
-        dup.string("a", 20);
-        assert!(matches!(
-            dup.to_sql("sqlite"),
-            Err(OrmError::Schema(SchemaError::DuplicateColumn { .. }))
-        ));
-    }
-
-    /// Verifies an illegal table identifier is rejected before emission.
-    #[test]
-    fn rejects_illegal_table_name() {
-        let mut blueprint = Blueprint::create("bad table");
-        blueprint.id();
-        assert!(matches!(
-            blueprint.to_sql("sqlite"),
-            Err(OrmError::Schema(SchemaError::InvalidIdentifier { .. }))
-        ));
-    }
-
-    /// Verifies table-level index/unique columns are validated and non-empty.
-    #[test]
-    fn rejects_bad_and_empty_index_columns() {
-        let mut injection = Blueprint::create("users");
-        injection.string("email", 120);
-        injection.index(["email); DROP TABLE users; --"]);
-        assert!(matches!(
-            injection.to_sql("sqlite"),
-            Err(OrmError::Schema(SchemaError::InvalidIdentifier { .. }))
-        ));
-
-        let mut unique_injection = Blueprint::create("users");
-        unique_injection.string("email", 120);
-        unique_injection.unique(["email", "bad name"]);
-        assert!(matches!(
-            unique_injection.to_sql("sqlite"),
-            Err(OrmError::Schema(SchemaError::InvalidIdentifier { .. }))
-        ));
-
-        let mut empty = Blueprint::create("users");
-        empty.string("email", 120);
-        empty.index([] as [&str; 0]);
-        assert!(matches!(
-            empty.to_sql("sqlite"),
-            Err(OrmError::Schema(SchemaError::EmptyIndexColumns))
-        ));
-    }
-}
+mod tests;
