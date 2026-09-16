@@ -73,6 +73,12 @@ mod debugbar;
 #[cfg(feature = "queue-dashboard")]
 mod queue_dashboard;
 
+/// Dev-only log viewer surface (`/_logs`, `/_logs/json`) tests (ADOPT-014),
+/// split into a sibling module so `tests.rs` stays under the cap. Gated on the
+/// `log-viewer` feature because the routes/module only exist with it.
+#[cfg(feature = "log-viewer")]
+mod log_viewer;
+
 /// Broadcasting authorization surface (`POST /broadcasting/auth`) tests
 /// (ADOPT-022), split into a sibling module so `tests.rs` stays under the cap.
 /// Gated on the `broadcasting` feature because the route/module only exist with

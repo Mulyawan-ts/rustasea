@@ -31,6 +31,14 @@ pub enum LoggingError {
     #[error("logging channel `{0}` is not defined")]
     UnknownChannel(String),
 
+    /// A channel's backing log file does not exist (and it has no rotated
+    /// sibling to fall back to). Carries the resolved path for the operator.
+    #[error("log file not found: {path}")]
+    LogFileMissing {
+        /// The configured path that could not be resolved to an existing file.
+        path: String,
+    },
+
     /// A `stack` channel references itself, directly or transitively.
     #[error("logging stack `{0}` references itself")]
     CyclicStack(String),

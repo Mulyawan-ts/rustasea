@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RustaSea Log Viewer</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+        margin: 0; padding: 1rem 1.25rem; background: #12151c; color: #d7dae0;
+      }
+      h1 { font-size: 1.05rem; margin: 0 0 0.75rem; color: #e8eaed; }
+      .controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
+      select, input, button {
+        font: inherit; background: #1c212b; color: #d7dae0;
+        border: 1px solid #2c333f; border-radius: 4px; padding: 0.25rem 0.5rem;
+      }
+      input[type="search"] { min-width: 18rem; }
+      button { cursor: pointer; }
+      button.active { background: #2d6cdf; border-color: #2d6cdf; color: #fff; }
+      .meta { color: #8b93a1; margin-bottom: 0.5rem; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border-bottom: 1px solid #232936; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+      th { color: #9aa3b2; font-weight: 600; position: sticky; top: 0; background: #161a22; }
+      td.ts { white-space: nowrap; color: #8b93a1; }
+      td.lvl { white-space: nowrap; font-weight: 600; }
+      .lvl-TRACE { color: #6b7280; }
+      .lvl-DEBUG { color: #7aa2f7; }
+      .lvl-INFO  { color: #9ece6a; }
+      .lvl-WARN  { color: #e0af68; }
+      .lvl-ERROR { color: #f7768e; }
+      td.target { color: #bb9af7; }
+      td.msg { white-space: pre-wrap; word-break: break-word; }
+      .fields { color: #8b93a1; }
+      .empty { color: #8b93a1; padding: 1rem 0; }
+      .error { color: #f7768e; padding: 1rem 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Log Viewer</h1>
+    <div class="controls">
+      <label>Level
+        <select id="level">
+          <option value="">all</option>
+          <option value="trace">trace</option>
+          <option value="debug">debug</option>
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="error">error</option>
+        </select>
+      </label>
+      <input id="grep" type="search" placeholder="search message, target, fields…" />
+      <label>Limit
+        <select id="limit">
+          <option>100</option>
+          <option selected>200</option>
+          <option>500</option>
+          <option>1000</option>
+        </select>
+      </label>
+      <button id="refresh">Refresh</button>
+      <button id="auto">Auto-refresh: off</button>
+    </div>
+    <div class="meta" id="meta"></div>
+    <table>
+      <thead>
+        <tr><th>Timestamp</th><th>Level</th><th>Target</th><th>Message</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty"></div>
+    <div class="error" id="error"></div>
+
+    <script>
+      // The log viewer fetches /_logs/json and renders the returned entries.
+      // All dynamic text is HTML-escaped before insertion to avoid injecting
+      // log content into the DOM.
+      const rowsEl = document.getElementById("rows");
+      const metaEl = document.getElementById("meta");
+      const emptyEl = document.getElementById("empty");
+      const errorEl = document.getElementById("error");
+      let timer = null;
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function query() {
+        const params = new URLSearchParams();
+        const level = document.getElementById("level").value;
+        const grep = document.getElementById("grep").value;
+        const limit = document.getElementById("limit").value;
+        if (level) params.set("level", level);
+        if (grep) params.set("grep", grep);
+        if (limit) params.set("limit", limit);
+        return params.toString();
+      }
+
+      function render(payload) {
+        rowsEl.innerHTML = "";
+        errorEl.textContent = "";
+        if (payload.error) {
+          emptyEl.textContent = "";
+          errorEl.textContent = "Log unavailable: " + payload.error;
+          metaEl.textContent = "";
+          return;
+        }
+        const entries = payload.entries || [];
+        metaEl.textContent =
+          entries.length + " entries" +
+          (payload.skipped ? " (" + payload.skipped + " unparsed lines skipped)" : "") +
+          (payload.file ? " — " + payload.file : "");
+        if (!entries.length) {
+          emptyEl.textContent = "No matching entries.";
+          return;
+        }
+        emptyEl.textContent = "";
+        for (const entry of entries) {
+          const fields = (entry.fields || [])
+            .map(([k, v]) => k + "=" + v)
+            .join(" ");
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            '<td class="ts">' + escapeHtml(entry.timestamp) + "</td>" +
+            '<td class="lvl lvl-' + escapeHtml(entry.level) + '">' + escapeHtml(entry.level) + "</td>" +
+            '<td class="target">' + escapeHtml(entry.target) + "</td>" +
+            '<td class="msg">' + escapeHtml(entry.message) +
+              (fields ? ' <span class="fields">' + escapeHtml(fields) + "</span>" : "") +
+            "</td>";
+          rowsEl.appendChild(tr);
+        }
+      }
+
+      async function refresh() {
+        try {
+          const response = await fetch("/_logs/json?" + query(), {
+            headers: { accept: "application/json" },
+          });
+          if (!response.ok) {
+            render({ error: "HTTP " + response.status });
+            return;
+          }
+          render(await response.json());
+        } catch (err) {
+          render({ error: String(err) });
+        }
+      }
+
+      document.getElementById("refresh").addEventListener("click", refresh);
+      document.getElementById("level").addEventListener("change", refresh);
+      document.getElementById("limit").addEventListener("change", refresh);
+      document.getElementById("grep").addEventListener("input", () => {
+        clearTimeout(timer);
+        timer = setTimeout(refresh, 250);
+      });
+      document.getElementById("auto").addEventListener("click", (event) => {
+        const button = event.currentTarget;
+        if (button.classList.toggle("active")) {
+          timer = setInterval(refresh, 2000);
+          button.textContent = "Auto-refresh: on";
+        } else {
+          clearInterval(timer);
+          timer = null;
+          button.textContent = "Auto-refresh: off";
+        }
+      });
+
+      refresh();
+    </script>
+  </body>
+</html>

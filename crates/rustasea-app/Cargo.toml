@@ -33,6 +33,11 @@ queue-dashboard = ["dep:rustasea-queue-dashboard"]
 # enabled on the broadcast crate (via the facade's `broadcast-pusher` feature)
 # so the handler can sign channel auth.
 broadcasting = ["rustasea/broadcast-pusher"]
+# Dev-only log viewer surface (`/_logs`, `/_logs/json`) — ADOPT-014. Off by
+# default so the standard `cargo run -p rustasea-app` links neither the viewer
+# routes nor the HTML shell; the app already depends on `rustasea-logging`, so
+# no new dependency edge is added. The handlers require `AppState::debug`.
+log-viewer = []
 
 [dependencies]
 # `view` exposes the view layer (`ViewResponse`, `ViewEngine`); the forwarded

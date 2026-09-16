@@ -7,6 +7,7 @@
 pub mod builtins;
 pub mod inspect;
 pub mod langcheck;
+pub mod log_show;
 #[cfg(feature = "mcp")]
 pub mod mcp_serve;
 pub mod openapi;
@@ -49,6 +50,7 @@ pub fn register_all_into(reg: &mut CommandRegistry) {
     reg.register(ops::MigrateFresh);
     reg.register(ops::MigrateRollback);
     reg.register(langcheck::LangCheck);
+    reg.register(log_show::LogShow);
     reg.register(tinker::Tinker);
     #[cfg(feature = "mcp")]
     reg.register(mcp_serve::McpServe);

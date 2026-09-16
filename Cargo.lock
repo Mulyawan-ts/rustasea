@@ -6245,6 +6245,7 @@ dependencies = [
  "rustasea-config",
  "rustasea-foundation",
  "rustasea-i18n",
+ "rustasea-logging",
  "rustasea-macros",
  "rustasea-openapi",
  "rustasea-orm",
@@ -6255,6 +6256,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strsim",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "toml 0.8.23",
@@ -6439,6 +6441,7 @@ dependencies = [
 name = "rustasea-logging"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "rustasea-config",
  "sentry",
  "sentry-panic",

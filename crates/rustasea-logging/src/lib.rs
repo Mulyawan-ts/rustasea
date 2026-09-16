@@ -54,6 +54,9 @@
 pub mod config;
 pub mod error;
 pub mod init;
+/// Log-file reading (ADOPT-014) — parse, filter, resolve and tail on-disk log
+/// files, powering `cargo artisan log:show` and the dev log viewer.
+pub mod reader;
 /// Sentry error-tracking integration (ADOPT-004) — opt-in via the `sentry`
 /// feature, inert until a DSN is configured.
 #[cfg(feature = "sentry")]
@@ -61,10 +64,14 @@ pub mod sentry;
 
 pub use config::{
     ChannelConfig, DeprecationsConfig, Driver, LoggingConfig, DEFAULT_CHANNEL, DEFAULT_DAILY_FILES,
-    DEFAULT_MONTHLY_FILES,
+    DEFAULT_LOG_PATH, DEFAULT_MONTHLY_FILES,
 };
 pub use error::{LoggingError, Result};
 pub use init::{build, init, init_from_config, LoggingGuard};
+pub use reader::{
+    parse_line, parse_lines, read_entries, read_new_entries, resolve_log_file, LogEntry, LogLevel,
+    LogQuery, LogReadResult, TailState, MAX_TAIL_BYTES,
+};
 
 /// Sentry re-exports (ADOPT-004): config parsing, client init, and the
 /// `before_send` secret-scrubbing hook.

@@ -249,6 +249,7 @@ route registration.
 - `cargo xtask migrate` — `xtask/src/migrate.rs` via `xtask/src/main.rs:37`.
 - Real testcontainers-backed fixtures (`GAP-017`) — `crates/rustasea-testing/src/fixtures.rs:49` (`PostgresTestDb`), `:63` (`start`); feature `crates/rustasea-testing/Cargo.toml:10`; integration suite `crates/rustasea/tests/feature/` gated behind the `integration` feature (`crates/rustasea/Cargo.toml:86`) and `#[ignore = "requires docker"]` (`crates/rustasea/tests/feature/route_to_db.rs:81`).
 - Action pattern (ADOPT-028) — `crates/rustasea-action` (`Action` trait + HTTP/queue/CLI/event adapters, `make:action` generator); scaffold auth actions demonstrate the pattern (`crates/rustasea-scaffold/src/templates/app_auth.rs`).
+- Log viewer (ADOPT-014) — `rustasea-logging::reader` (parse/filter/resolve/tail), `cargo artisan log:show` (`crates/rustasea-cli/src/commands/log_show.rs`: `--level`/`--channel`/`--since`/`--grep`/`--limit`/`--follow`/`--json`), and a dev-only `/_logs` surface behind the `log-viewer` feature (`crates/rustasea-app/src/routes/log_viewer.rs`).
 
 **Partial (reason)**
 - Generated controllers leave route registration manual — `crates/rustasea-cli/src/generators/kinds/controller.rs:32` ("Register routes against these handlers in `routes/web.rs`").

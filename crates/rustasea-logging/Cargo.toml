@@ -23,6 +23,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 rustasea-config = { path = "../rustasea-config" }
+# The reader module parses the RFC 3339 UTC timestamps `tracing`'s fmt layer
+# writes, so `chrono` is a core (non-optional) dependency.
+chrono = { workspace = true }
 # Sentry SDK (ADOPT-004). Default features are disabled so the transport is
 # chosen explicitly (`reqwest` + `rustls`); `panic`/`tracing`/`contexts`/
 # `debug-images` supply the integrations wired by `crate::sentry`.

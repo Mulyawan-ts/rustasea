@@ -21,6 +21,10 @@ pub mod docs;
 /// Request-error middleware — dev page + prod JSON envelope (ADOPT-010).
 pub mod errors;
 mod helpers;
+/// Dev-only log viewer surface (`/_logs`, `/_logs/json`) — ADOPT-014, compiled
+/// only with the `log-viewer` feature.
+#[cfg(feature = "log-viewer")]
+pub mod log_viewer;
 /// Queue dashboard surface — metrics history + failed-job management
 /// (ADOPT-021), compiled only with the `queue-dashboard` feature.
 #[cfg(feature = "queue-dashboard")]
@@ -89,6 +93,11 @@ pub fn table() -> RouteTable {
     // additionally require `[queue.dashboard].enabled` and `AppState::debug`.
     #[cfg(feature = "queue-dashboard")]
     queue_dashboard::register(&mut table);
+    // Dev-only log viewer (`/_logs`, `/_logs/json`). Like the debugbar surface
+    // it is compiled only with its feature; the handlers require
+    // `AppState::debug`.
+    #[cfg(feature = "log-viewer")]
+    log_viewer::register(&mut table);
     // Broadcasting authorization surface (`POST /broadcasting/auth`), compiled
     // only with the `broadcasting` feature (ADOPT-022).
     #[cfg(feature = "broadcasting")]

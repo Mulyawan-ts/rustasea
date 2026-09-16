@@ -84,6 +84,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Mail` | — | **Planned** | No mailable / mailer transport. |
 | `Illuminate\Notifications` | `rustasea-queue` (`NotificationGuard`) | **Partial** | Missing-model skip guard only; no channel dispatcher. |
 | `Illuminate\Log` | `tracing` (workspace dependency) | **N-A** | Structured logging is handled by `tracing`, not a Laravel-style `Log` facade. |
+| `opcodesio/log-viewer` | `rustasea-logging` reader + `cargo artisan log:show` + `/_logs` dev viewer | **Partial** | On-disk log reader (`rustasea-logging::reader`: parse/filter/resolve/tail), `log:show` CLI (`--level`/`--since`/`--grep`/`--limit`/`--follow`/`--json`), and a dev-only `/_logs` web surface behind the `log-viewer` feature (ADOPT-014). Rotation-aware file resolution; no per-entry stack-trace grouping or multi-file index. |
 | `Illuminate\Redis` | `rustasea-cache` (`RedisStore`) | **Partial** | Real `deadpool-redis` store behind the opt-in `redis` feature (`GAP-004`; `crates/rustasea-cache/src/redis.rs:155`), built via `from_url`/`from_pool` (`:91`, `:105`); atomic `SET NX` insert-if-absent + Lua compare-and-delete. No general-purpose command/pub-sub surface. |
 | `Illuminate\Process` | — | **N-A** | Process spawning handled by `tokio::process` directly. |
 | `Illuminate\Concurrency` | `tokio` (workspace dependency) | **N-A** | Concurrency is native `tokio`; no `Concurrency` facade. |

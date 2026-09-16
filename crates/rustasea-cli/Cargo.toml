@@ -45,6 +45,9 @@ async-trait = { workspace = true }
 strsim = { workspace = true }
 rustasea-foundation = { path = "../rustasea-foundation" }
 rustasea-config = { path = "../rustasea-config" }
+# `log:show` reads the on-disk log file through the logging facade's reader
+# module (parse/filter/resolve/tail), so the crate is a direct dependency.
+rustasea-logging = { path = "../rustasea-logging" }
 rustasea-queue = { path = "../rustasea-queue" }
 rustasea-schedule = { path = "../rustasea-schedule" }
 rustasea-macros = { path = "../rustasea-macros" }
@@ -76,3 +79,5 @@ rustyline = { workspace = true, optional = true }
 # (feature `mcp`), so the client engine is available to the test crate.
 rustasea-ai = { path = "../rustasea-ai", features = ["mcp"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+# `log:show` tests build fixture log files in throwaway temp directories.
+tempfile = "3"
