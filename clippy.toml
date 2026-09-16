@@ -1,0 +1,21 @@
+# Clippy configuration (ADOPT-030).
+#
+# `msrv` is the workspace minimum supported Rust version per ADR-0001
+# ("jsonwebtoken 10 MSRV bump"): rustc 1.88. Declaring it here lets clippy
+# suppress lints whose suggested rewrite would require a newer compiler, and
+# keeps the MSRV floor enforced alongside `[workspace.package] rust-version`.
+msrv = "1.88"
+
+# Thresholds are set conservatively (at or above the current worst offenders in
+# the workspace) so they do not introduce new failures while still catching
+# genuinely oversized items. Tighten only alongside an intentional refactor.
+
+# Functions with more than this many arguments trigger `too_many_arguments`.
+too-many-arguments-threshold = 10
+
+# Types whose type-complexity score exceeds this trigger `type_complexity`.
+type-complexity-threshold = 300
+
+# Functions whose cognitive complexity exceeds this trigger
+# `cognitive_complexity`.
+cognitive-complexity-threshold = 40

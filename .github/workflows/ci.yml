@@ -1,0 +1,95 @@
+name: CI
+
+# Quality gate for master. Runs the same checks contributors run locally
+# (see the README "Contributing" section): formatting + clippy + crate-DAG
+# cycles via `cargo xtask ci`, the workspace test suite, and the supply-chain
+# gate (cargo-deny + cargo-audit). An extra `msrv` job enforces the 1.88 floor
+# from ADR-0001.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# Least privilege: the workflow only reads repository contents.
+permissions:
+  contents: read
+
+# Cancel superseded runs for the same ref so re-pushes do not stack jobs.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # fmt + clippy (-D warnings) + workspace DAG cycle check.
+  quality:
+    name: Format, lint & cycles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable toolchain (rustfmt + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo xtask ci
+        run: cargo xtask ci
+
+  # Full workspace test suite. The default feature set needs no Docker; the
+  # Docker-backed `integration` feature is exercised separately in a later
+  # milestone (it requires a running daemon).
+  test:
+    name: Test (workspace)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo test
+        run: cargo test --workspace
+
+  # Supply-chain gate: license allow-list, advisory database, banned crates and
+  # source provenance (configuration in deny.toml).
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: cargo deny check
+        run: cargo deny check
+
+  # RustSec advisory scan. Required (not advisory): a known vulnerability must
+  # fail the build. Unpatchable advisories are allow-listed with a documented
+  # reason in deny.toml; cargo-audit reads .cargo/audit.toml when present.
+  audit:
+    name: cargo-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: cargo audit
+        run: cargo audit
+
+  # Enforce the MSRV floor (ADR-0001: rustc 1.88). CI otherwise runs stable;
+  # this job pins 1.88.0 so an accidental use of a newer API fails the build.
+  msrv:
+    name: MSRV (1.88.0)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.88.0
+        uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo check (MSRV)
+        run: cargo check --workspace

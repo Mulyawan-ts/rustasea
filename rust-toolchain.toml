@@ -1,0 +1,12 @@
+# Rust toolchain selection (ADOPT-030).
+#
+# MSRV is 1.88 (ADR-0001); the MSRV floor is enforced via clippy.toml `msrv`
+# and [workspace.package] rust-version. CI runs stable per ADR-0001
+# ("CI toolchain is stable"), so we track `stable` here rather than pinning an
+# exact version: pinning 1.88.0 would force contributors to a full toolchain
+# switch (cold rebuild of this 42-crate workspace) and diverge from the ADR.
+# A dedicated `msrv` CI job checks the 1.88 floor explicitly.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

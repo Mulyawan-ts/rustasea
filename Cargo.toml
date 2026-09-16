@@ -80,7 +80,7 @@ comfy-table = "7"
 # (history directory discovery); the in-memory history is all `tinker` needs.
 rustyline = { version = "18", default-features = false }
 # Test infrastructure (M5)
-testcontainers = "0.23"
+testcontainers = "0.28"
 dotenvy = "0.15"
 rand = "0.8"
 # Fake data generation (ADOPT-012) — locale-aware faker facade over `fake`.
@@ -105,10 +105,11 @@ tracing-appender = "0.2"
 # Excel / CSV import-export (ADOPT-023) — `csv` streams delimited records with
 # serde support (unconditional in the crate); `calamine` reads xlsx/xlsm
 # workbooks and `rust_xlsxwriter` writes them, both behind the crate's opt-in
-# `xlsx` feature. All three declare a rustc MSRV at or below the workspace
-# `rust-version` (1.88).
+# `xlsx` feature. `calamine` 0.36 pulls `quick-xml` 0.41, clearing
+# RUSTSEC-2026-0194/0195 (present in the 0.31 that `calamine` 0.26 pinned). All
+# three declare a rustc MSRV at or below the workspace `rust-version` (1.88).
 csv = "1.3"
-calamine = "0.26"
+calamine = "0.36"
 rust_xlsxwriter = "0.79"
 # Image manipulation (ADOPT-024) — `image` decodes/encodes the raster formats
 # the transform pipeline supports. Default features are disabled and only the

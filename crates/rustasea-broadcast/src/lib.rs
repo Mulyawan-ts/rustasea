@@ -81,9 +81,9 @@ pub fn to_wire(
 mod tests {
     use super::*;
 
-    struct UserCreated {
-        name: String,
-    }
+    // The event's payload is irrelevant to `broadcast_on`, so no fields are
+    // needed here (an unused field would trip `dead_code`).
+    struct UserCreated;
 
     impl ShouldBroadcast for UserCreated {
         fn broadcast_on(&self) -> Channel {
@@ -93,9 +93,7 @@ mod tests {
 
     #[test]
     fn should_broadcast_exposes_channel() {
-        let event = UserCreated {
-            name: "Ada".to_string(),
-        };
+        let event = UserCreated;
         assert_eq!(event.broadcast_on().auth_channel(), "private-chat.1");
     }
 

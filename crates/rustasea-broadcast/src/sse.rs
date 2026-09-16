@@ -151,7 +151,6 @@ mod tests {
 
     #[tokio::test]
     async fn event_stream_response_sets_content_type() {
-        use futures_core::Stream;
         let stream = futures_util::stream::iter(std::iter::empty::<
             std::result::Result<SseEvent, std::io::Error>,
         >());

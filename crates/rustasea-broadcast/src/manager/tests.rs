@@ -6,8 +6,13 @@ use std::sync::Arc;
 use super::{clear, config, gate, manager, set_config, set_manager};
 use super::{BroadcastManager, BroadcastingConfig, DEFAULT_CONNECTION};
 use crate::broadcaster::BroadcastPayload;
-use crate::channel::{AuthDecision, Authorize, Channel, Subscriber};
+use crate::channel::{Channel, Subscriber};
 use crate::error::BroadcastError;
+// `AuthDecision` / `Authorize` are only exercised by the `pusher`-gated test
+// below, so they are imported behind the same feature to avoid unused-import
+// warnings under default features.
+#[cfg(feature = "pusher")]
+use crate::channel::{AuthDecision, Authorize};
 
 /// Serializes tests that read/write the process environment.
 static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -55,6 +60,13 @@ async fn unknown_connection_is_typed_error() {
 /// A default naming an unbuilt driver is `NotConfigured`.
 #[tokio::test]
 async fn missing_default_driver_is_not_configured() {
+    // `..default()` is a no-op under default features (only `default` exists)
+    // but supplies the `pusher`/`redis` fields when those features are on, so
+    // the lint is feature-conditional.
+    #[cfg_attr(
+        not(any(feature = "pusher", feature = "redis")),
+        allow(clippy::needless_update)
+    )]
     let config = BroadcastingConfig {
         default: "ably".to_string(),
         ..BroadcastingConfig::default()

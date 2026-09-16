@@ -1,0 +1,84 @@
+# cargo-deny configuration (ADOPT-030).
+#
+# Enforces the supply-chain gate: security advisories, license allow-list,
+# banned crates / duplicate versions, and source provenance. Run locally with
+# `cargo deny check` (install: `cargo install cargo-deny`); CI runs the same
+# check in .github/workflows/ci.yml.
+
+[graph]
+# Empty `targets` means "analyse every target" (all platforms / cfg combos).
+targets = []
+
+[advisories]
+# Declare the schema generation so future cargo-deny upgrades flag config drift.
+version = 2
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# A yanked crate in the lockfile is never acceptable.
+yanked = "deny"
+# Unmaintained-crate scope (cargo-deny 0.20): "workspace" fails only for
+# unmaintained crates that are direct dependencies of a workspace crate. The
+# two unmaintained crates in the tree (`number_prefix` via `indicatif`,
+# `proc-macro-error2` via `validator_derive`) are transitive and carry no
+# known vulnerability, so they surface without failing the gate. Actual
+# vulnerabilities always fail regardless of this setting.
+unmaintained = "workspace"
+# Documented exceptions. Only genuine, reviewed exceptions belong here, each
+# with an inline reason (see below).
+ignore = [
+    # RUSTSEC-2023-0071 — "Marvin Attack" timing sidechannel in the `rsa`
+    # crate. There is NO patched release (upstream RustCrypto/RSA#626 is still
+    # open as of 2026-09; `patched = []` is intentional). `rsa` is pulled
+    # unconditionally by `jsonwebtoken`'s `rust_crypto` feature (used for its
+    # HMAC/Ed25519/P-256 support), and no feature toggle removes it. The
+    # vulnerable code path is never reached: rustasea-auth signs and verifies
+    # JWTs exclusively with HS256 (HMAC-SHA256) — no RSA algorithm is used
+    # anywhere in the workspace. Accepted risk until upstream ships a fix.
+    { id = "RUSTSEC-2023-0071", reason = "no patched `rsa` release exists; `rsa` is an unavoidable transitive dep of jsonwebtoken's rust_crypto feature and its RSA code path is never used (HS256/HMAC only)" },
+]
+
+[licenses]
+# Require high-confidence license detection before accepting a crate.
+confidence-threshold = 0.9
+# Allow-list of SPDX licenses present in the dependency graph. Every entry is
+# a permissive license; no copyleft-only licenses are permitted. The single
+# OR-expression in the graph (`r-efi`: "MIT OR Apache-2.0 OR LGPL-2.1-or-later")
+# passes because at least one branch (MIT/Apache-2.0) is allowed.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unlicense",
+    "0BSD",
+    "CC0-1.0",
+    "BSL-1.0",
+    "CDLA-Permissive-2.0",
+]
+exceptions = []
+
+[bans]
+# The lock has many crates with multiple semver-incompatible versions
+# (windows-sys x5, hashbrown x4, base64 x3, rand x3, …). These are a natural
+# consequence of the dependency tree, so duplicates warn rather than fail.
+multiple-versions = "warn"
+# Wildcard *registry* requirements (`serde = "*"`) are flagged, but the lint
+# must be a warning here: cargo-deny also treats the workspace's own
+# unversioned `path` dependencies (`rustasea = { path = "../rustasea" }`) as
+# wildcards, and its `allow-wildcard-paths` escape hatch only applies to
+# non-publishable crates (crates.io forbids path deps). This is the standard
+# intra-workspace pattern, so we surface wildcards as warnings rather than
+# failing the gate. Hardening step: add `version` fields to the path deps.
+wildcards = "warn"
+deny = []
+skip = []
+
+[sources]
+# Only crates.io is a trusted source; no unknown registries or git sources.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

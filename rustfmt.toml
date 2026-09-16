@@ -1,0 +1,10 @@
+# Rustfmt configuration (ADOPT-030).
+#
+# These are intentionally the rustfmt defaults, pinned explicitly so the
+# formatting contract is version-controlled and stable across toolchains.
+# `max_width = 100` matches the design-system documentation; the values must
+# not change formatting of the existing tree (they do not — all are defaults).
+
+edition = "2021"
+max_width = 100
+tab_spaces = 4

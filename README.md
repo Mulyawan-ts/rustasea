@@ -503,9 +503,20 @@ gantt
 ```bash
 # local setup
 cargo xtask ci       # fmt + clippy + check-cycles
-cargo xtask migrate  # run migrations
 cargo test --workspace
+cargo deny check     # license + advisory + ban gate (install: cargo install cargo-deny)
+cargo xtask migrate  # run migrations
 ```
+
+CI runs the same gate — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+`quality` (`cargo xtask ci`), `test` (`cargo test --workspace`), `deny`
+(`cargo deny check`), `audit` (`cargo audit`), and an `msrv` job that checks the
+workspace builds on the 1.88 floor (ADR-0001). **Formatting violations fail the
+build**: run `cargo fmt --all` before pushing, or `cargo xtask fmt` to check.
+The lint configuration lives in [`clippy.toml`](clippy.toml) /
+[`rustfmt.toml`](rustfmt.toml); the supply-chain policy (allowed licenses,
+advisory exceptions) lives in [`deny.toml`](deny.toml) and
+[`.cargo/audit.toml`](.cargo/audit.toml).
 
 The full xtask surface is `ci`, `fmt`, `clippy`, `check-cycles` (real workspace
 DAG cycle detection — `xtask/src/cycles.rs:32`), and `migrate`
