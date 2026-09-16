@@ -83,6 +83,17 @@ rustyline = { version = "18", default-features = false }
 testcontainers = "0.28"
 dotenvy = "0.15"
 rand = "0.8"
+# Browser testing harness (ADOPT-029) — `fantoccini` drives a WebDriver
+# (chromedriver/geckodriver) session. Its default `native-tls` feature pulls
+# `openssl`; the workspace enables `rustls-tls` instead so the build links no
+# system TLS. Declares MSRV 1.67, below the workspace `rust-version` (1.88).
+fantoccini = { version = "0.22", default-features = false, features = ["rustls-tls"] }
+# rustls provider pin for the browser harness. `fantoccini` (via hyper-rustls)
+# enables rustls' `aws-lc-rs` while `testcontainers` (via bollard) enables
+# `ring`; with both compiled in, rustls 0.23 cannot auto-select a process
+# default and panics when the connector is built. The harness installs `ring`
+# explicitly (`ensure_crypto_provider`). Only activated behind `browser`.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 # Fake data generation (ADOPT-012) — locale-aware faker facade over `fake`.
 # `derive` keeps upstream `#[derive(Dummy)]` ergonomics available; `chrono` and
 # `uuid` enable the `DateTimeBetween` / `UUIDv4` fakers the `Faker` facade

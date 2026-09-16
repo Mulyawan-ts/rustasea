@@ -28,6 +28,7 @@ fn options(name: &str, force: bool) -> MakeOptions {
         force,
         resource: false,
         with_migration: false,
+        browser: false,
     }
 }
 

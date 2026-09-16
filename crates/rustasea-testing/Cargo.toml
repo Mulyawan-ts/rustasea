@@ -23,6 +23,12 @@ http = ["dep:axum", "dep:tower", "dep:http-body-util", "dep:serde_json"]
 # optional `tracing` dep backs the explicit unsupported-locale fallback warning
 # and is only pulled in by this feature.
 faker = ["dep:fake", "dep:tracing"]
+# Browser testing harness (ADOPT-029) — drives a real WebDriver session
+# (`chromedriver`/`geckodriver`) through `fantoccini`, plus an ephemeral-port
+# axum server helper. Opt-in so the default test build never links the WebDriver
+# tree (pay-for-what-you-use, NFR-Sca-02). `tokio` is an unconditional
+# dependency, so it is not re-listed here.
+browser = ["dep:fantoccini", "dep:axum", "dep:rustls"]
 
 [dependencies]
 tokio = { workspace = true }
@@ -53,3 +59,5 @@ rustasea-auth = { path = "../rustasea-auth", optional = true }
 axum = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 http-body-util = { version = "0.1", optional = true }
+fantoccini = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }

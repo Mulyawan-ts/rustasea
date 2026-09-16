@@ -340,7 +340,7 @@ impl RustaseaBackend {
             "kind": kind_label,
             "name": name,
             "template": kind.command(),
-            "path": generators::planned_path(kind, &name),
+            "path": generators::planned_path(kind, &name, false),
             "writes": false,
             "note": "Dry-run plan only; no files were written."
         }))

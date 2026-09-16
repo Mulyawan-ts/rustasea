@@ -176,6 +176,11 @@ full = [
 # Real Docker-backed feature tests (testcontainers + Postgres). Off by default
 # so the default `cargo test` never requires Docker.
 integration = ["rustasea-testing/postgres", "rustasea-orm/postgres"]
+# Browser (WebDriver) e2e harness (ADOPT-029). Forwards to the testing crate's
+# `browser` feature so `rustasea::testing::browser` is available; off by default
+# because it links a WebDriver client and needs a live chromedriver/geckodriver
+# (NFR-Sca-02).
+browser = ["rustasea-testing/browser"]
 
 [dev-dependencies]
 serde = { workspace = true, features = ["derive"] }

@@ -11,10 +11,15 @@
 //! Feature `auth` adds reusable session-guard helpers (`login_as`,
 //! `assert_authenticated`, `assert_guest`) and the Fortify feature gate
 //! (`fortify_feature_enabled`); feature `http` adds [`request_json`], a
-//! tower-oneshot JSON client for `axum::Router` feature tests.
+//! tower-oneshot JSON client for `axum::Router` feature tests. Feature
+//! `browser` adds [`browser::Browser`], a WebDriver-driven harness with
+//! Dusk-style fluent helpers, and [`browser::ServerHandle`] to serve the app
+//! under test on an ephemeral port.
 
 #[cfg(feature = "auth")]
 pub mod auth;
+#[cfg(feature = "browser")]
+pub mod browser;
 #[cfg(feature = "containers")]
 pub mod containers;
 pub mod error;
@@ -35,6 +40,8 @@ pub mod test_case;
 pub use auth::{
     assert_authenticated, assert_guest, fortify_feature_enabled, login_as, FortifyFeature,
 };
+#[cfg(feature = "browser")]
+pub use browser::{Browser, BrowserError, BrowserResult, ServerHandle};
 #[cfg(feature = "containers")]
 pub use containers::{
     postgres_container, redis_container, teardown_all, ContainerError, ContainerHandle,

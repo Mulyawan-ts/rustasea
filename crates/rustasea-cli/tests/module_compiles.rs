@@ -72,6 +72,7 @@ fn check_module() -> Result<(), String> {
         force: false,
         resource: false,
         with_migration: false,
+        browser: false,
     };
     generate(Kind::Module, &app_dir, &options).map_err(|e| format!("generate module: {e}"))?;
     write_workspace_root(&app_dir);

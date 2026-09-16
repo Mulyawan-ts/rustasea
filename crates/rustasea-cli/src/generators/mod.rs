@@ -113,6 +113,9 @@ pub struct MakeOptions {
     pub resource: bool,
     /// `make:model` — also scaffold `database/migrations/*_create_<table>_table.rs`.
     pub with_migration: bool,
+    /// `make:test` — emit a WebDriver browser e2e test (`tests/browser/`) instead
+    /// of the default `TestCase` feature test (`tests/feature/`).
+    pub browser: bool,
 }
 
 /// Run a generator for `kind`, writing all files under `root`.
@@ -244,13 +247,13 @@ pub fn kind_usage(kind: Kind) -> &'static str {
         Kind::Request => "make:request {name} [--force]",
         Kind::Model => "make:model {name} [-m] [--force]",
         Kind::Migration => "make:migration {name} [--force]",
+        Kind::Test => "make:test {name} [--force] [--browser]",
         Kind::Provider
         | Kind::Command
         | Kind::Job
         | Kind::Event
         | Kind::Listener
         | Kind::Observer
-        | Kind::Test
         | Kind::Seeder
         | Kind::Agent
         | Kind::Tool
@@ -275,8 +278,11 @@ pub fn into_cli(kind: &str, name: &str, err: GeneratorError) -> CliError {
 ///
 /// Mirrors the path each generator template uses, so `make:plan` can report the
 /// intended target without touching the filesystem. The migration prefix is
-/// rendered as a stable placeholder because the real one is timestamped.
-pub fn planned_path(kind: Kind, name: &str) -> String {
+/// rendered as a stable placeholder because the real one is timestamped. For
+/// `Kind::Test`, `browser` selects the `tests/browser/` path; when `false` the
+/// default `tests/feature/` path is reported (the MCP `make:plan` tool has no
+/// browser flag, so it always reports the feature path).
+pub fn planned_path(kind: Kind, name: &str, browser: bool) -> String {
     match kind {
         Kind::Controller => format!("app/http/controllers/{}.rs", Generator::snake(name)),
         Kind::Middleware => format!("app/http/middleware/{}.rs", Generator::snake(name)),
@@ -288,6 +294,7 @@ pub fn planned_path(kind: Kind, name: &str) -> String {
         Kind::Event => format!("app/events/{}.rs", Generator::snake(name)),
         Kind::Listener => format!("app/listeners/{}.rs", Generator::snake(name)),
         Kind::Observer => format!("app/observers/{}.rs", Generator::snake(name)),
+        Kind::Test if browser => format!("tests/browser/{}.rs", Generator::snake(name)),
         Kind::Test => format!("tests/feature/{}.rs", Generator::snake(name)),
         Kind::Seeder => format!("database/seeders/{}.rs", Generator::snake(name)),
         Kind::Migration => format!(

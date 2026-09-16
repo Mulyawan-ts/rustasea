@@ -60,7 +60,8 @@ impl Command for List {
 /// Shared `make:*` run logic.
 ///
 /// The first positional arg is the PascalCase scaffold name. Flags are read
-/// position-independently: `--force`, `--resource`, `-m`/`--migration`.
+/// position-independently: `--force`, `--resource`, `-m`/`--migration`,
+/// `--browser` (`make:test` only).
 async fn run_make(kind: Kind, args: Vec<String>, io: &mut Io) -> CliResult<()> {
     let name = args
         .first()
@@ -70,6 +71,7 @@ async fn run_make(kind: Kind, args: Vec<String>, io: &mut Io) -> CliResult<()> {
     let force = args.iter().any(|a| a == "--force" || a == "-f");
     let resource = args.iter().any(|a| a == "--resource" || a == "-r");
     let with_migration = args.iter().any(|a| a == "-m" || a == "--migration");
+    let browser = args.iter().any(|a| a == "--browser");
 
     if name.is_empty() {
         let detail = if kind == Kind::Migration {
@@ -88,6 +90,7 @@ async fn run_make(kind: Kind, args: Vec<String>, io: &mut Io) -> CliResult<()> {
         force,
         resource,
         with_migration,
+        browser,
     };
     let root = crate::error::project_root(&std::env::current_dir()?)?;
     match generators::generate(kind, &root, &opts) {
@@ -211,8 +214,8 @@ make_command!(
     MakeTest,
     Test,
     "make:test",
-    "Make a new feature test",
-    "make:test {name} [--force]"
+    "Make a new feature test (or a browser e2e test with --browser)",
+    "make:test {name} [--force] [--browser]"
 );
 make_command!(
     MakeSeeder,
@@ -272,6 +275,7 @@ pub async fn scaffold_into(
             force,
             resource: false,
             with_migration: false,
+            browser: false,
         },
     )
 }

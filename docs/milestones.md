@@ -253,6 +253,7 @@ route registration.
 - Real testcontainers-backed fixtures (`GAP-017`) — `crates/rustasea-testing/src/fixtures.rs:49` (`PostgresTestDb`), `:63` (`start`); feature `crates/rustasea-testing/Cargo.toml:10`; integration suite `crates/rustasea/tests/feature/` gated behind the `integration` feature (`crates/rustasea/Cargo.toml:86`) and `#[ignore = "requires docker"]` (`crates/rustasea/tests/feature/route_to_db.rs:81`).
 - Action pattern (ADOPT-028) — `crates/rustasea-action` (`Action` trait + HTTP/queue/CLI/event adapters, `make:action` generator); scaffold auth actions demonstrate the pattern (`crates/rustasea-scaffold/src/templates/app_auth.rs`).
 - Log viewer (ADOPT-014) — `rustasea-logging::reader` (parse/filter/resolve/tail), `cargo artisan log:show` (`crates/rustasea-cli/src/commands/log_show.rs`: `--level`/`--channel`/`--since`/`--grep`/`--limit`/`--follow`/`--json`), and a dev-only `/_logs` surface behind the `log-viewer` feature (`crates/rustasea-app/src/routes/log_viewer.rs`).
+- Browser (WebDriver) e2e harness (ADOPT-029) — `crates/rustasea-testing/src/browser/` (`Browser`, `ServerHandle`, `BrowserError`; feature `browser`, `fantoccini` + `rustls`): Dusk-style `visit`/`fill`/`click`/`select`/`check`/`press`/`wait_for`/`assert_see` helpers, an ephemeral axum server, and failure screenshots. Auto-skips when `WEBDRIVER_URL` is unreachable; live tests are `#[ignore]`d (`crates/rustasea-testing/tests/browser_e2e.rs`); `make:test --browser` emits `tests/browser/<slug>.rs` (`crates/rustasea-cli/src/generators/kinds/test.rs`); umbrella feature `browser` (`crates/rustasea/Cargo.toml`).
 
 **Partial (reason)**
 - Generated controllers leave route registration manual — `crates/rustasea-cli/src/generators/kinds/controller.rs:32` ("Register routes against these handlers in `routes/web.rs`").
@@ -262,7 +263,7 @@ route registration.
 **Missing**
 - Generator-to-route-registration automation.
 
-**Evidence:** `crates/rustasea-cli/src/commands/mod.rs:17-31`; `crates/rustasea-cli/src/commands/builtins.rs`; `crates/cargo-rustasea/src/main.rs:46-103`; `xtask/src/{main.rs:23-37,cycles.rs:32,migrate.rs}`; `crates/rustasea-testing/src/fixtures.rs:49`; `crates/rustasea/tests/feature/`; module registry + CLI gates `crates/rustasea-modules/tests/{registry,manifest}.rs`, `crates/rustasea-cli/tests/{make_module,module_compiles}.rs`, `crates/rustasea-scaffold/tests/modular.rs`; tasks `GAP-016`–`GAP-018`, `ADOPT-027`.
+**Evidence:** `crates/rustasea-cli/src/commands/mod.rs:17-31`; `crates/rustasea-cli/src/commands/builtins.rs`; `crates/cargo-rustasea/src/main.rs:46-103`; `xtask/src/{main.rs:23-37,cycles.rs:32,migrate.rs}`; `crates/rustasea-testing/src/fixtures.rs:49`; `crates/rustasea/tests/feature/`; module registry + CLI gates `crates/rustasea-modules/tests/{registry,manifest}.rs`, `crates/rustasea-cli/tests/{make_module,module_compiles}.rs`, `crates/rustasea-scaffold/tests/modular.rs`; tasks `GAP-016`–`GAP-018`, `ADOPT-027`, `ADOPT-029`.
 
 **Next actions**
 - Automate route registration in generated controllers (or a route-table generator).
