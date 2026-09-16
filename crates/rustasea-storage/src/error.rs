@@ -35,6 +35,15 @@ pub enum StorageError {
     #[error("store unavailable: {0}")]
     StoreUnavailable(String),
 
+    /// An SFTP connection could not be established, authenticated, pinned, or
+    /// was lost and could not be recovered within the retry budget.
+    ///
+    /// Emitted by the `sftp` disk for connect/auth/host-key failures and for
+    /// retry exhaustion; missing remote files still surface as
+    /// [`StorageError::NotFound`].
+    #[error("sftp connection failed: {0}")]
+    ConnectionFailed(String),
+
     /// The storage configuration is malformed or references a missing disk.
     #[error("invalid storage config: {0}")]
     Config(String),

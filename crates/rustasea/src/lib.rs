@@ -180,6 +180,14 @@ pub use storage::{
     LocalDisk, ObjectDisk, ReadThrough, Storage, StorageConfig, StorageError, StorageManager,
 };
 
+/// Live SFTP disk (ADOPT-025); requires the `storage-sftp` feature.
+#[cfg(feature = "storage-sftp")]
+pub use storage::SftpDisk;
+
+/// SFTP disk configuration (ADOPT-025); always available so the facade can parse
+/// an `sftp` disk even when the driver is off.
+pub use storage::SftpDiskConfig;
+
 /// Search re-exports for vector ergonomics (M6).
 pub use search::{
     MemoryVectorStore, Similarity as VectorSimilarity, Str, VectorDocument, VectorIndex,

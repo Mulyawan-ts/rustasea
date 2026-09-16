@@ -7,7 +7,8 @@
 #
 # Cloud drivers are opt-in: enable the matching crate feature
 # (`rustasea-storage/{aws,gcp,azure}`) before referencing `s3`, `gcs`, or
-# `azure` disks.
+# `azure` disks. The `sftp` driver is likewise opt-in
+# (`rustasea-storage/sftp`, or `storage-sftp` on the `rustasea` facade crate).
 
 [storage]
 default = "local"
@@ -76,3 +77,22 @@ report = false
 # container = "app"
 # visibility = "public"
 # # access_key = "..."
+
+# --- SFTP disk example (enable `rustasea-storage/sftp` / `storage-sftp`) -----
+#
+# [storage.disks.sftp]
+# driver = "sftp"
+# host = "files.example.com"
+# port = 22
+# username = "deploy"
+# # Prefer the environment (`SFTP_PASSWORD`) or a secret manager over inline
+# # credentials. The password is redacted from debug output.
+# # password = "..."
+# # Prefer key auth when available (`SFTP_PRIVATE_KEY` overrides this).
+# # private_key_path = "/etc/rustasea/id_ed25519"
+# root = "/srv/upload"
+# # Per-request timeout in seconds (default 30).
+# timeout = 30
+# # Optional SHA-256 host-key pin (`SHA256:<base64>`); a mismatch aborts the
+# # connection. When absent the host key is accepted (trust on first use).
+# # host_key = "SHA256:...."

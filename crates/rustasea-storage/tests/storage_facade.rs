@@ -330,3 +330,60 @@ container = "example"
     let config = StorageFacadeConfig::from_toml(toml).unwrap();
     assert_eq!(config.disks.len(), 4);
 }
+
+/// A minimal `sftp` disk document (host + username only).
+const SFTP_DISK: &str = r#"
+[storage]
+default = "remote"
+
+[storage.disks.remote]
+driver = "sftp"
+host = "files.example.com"
+username = "deploy"
+root = "/srv/upload"
+"#;
+
+#[cfg(not(feature = "sftp"))]
+#[test]
+fn sftp_driver_requires_its_feature() {
+    let err = StorageManager::from_toml(SFTP_DISK)
+        .err()
+        .expect("config must be rejected without the sftp feature");
+    assert!(
+        matches!(err, StorageError::StoreUnavailable(_)),
+        "got {err:?}"
+    );
+    assert!(
+        err.to_string().contains("sftp"),
+        "error must name the `sftp` feature: {err}"
+    );
+}
+
+#[cfg(feature = "sftp")]
+#[test]
+fn sftp_disk_builds_lazily_and_confines_paths() {
+    let manager = StorageManager::from_toml(SFTP_DISK).expect("sftp config must build");
+    let disk = manager.disk("remote").expect("disk must be registered");
+    assert_eq!(disk.label(), "sftp:files.example.com");
+    // Lexical confinement happens without a network round-trip.
+    assert!(disk.path("a/b.txt").is_ok());
+    let err = disk.path("../etc/passwd").unwrap_err();
+    assert!(matches!(err, StorageError::PathTraversal(_)), "got {err:?}");
+}
+
+#[cfg(feature = "sftp")]
+#[test]
+fn sftp_disk_requires_host_and_username() {
+    let toml = r#"
+[storage]
+default = "remote"
+
+[storage.disks.remote]
+driver = "sftp"
+host = "files.example.com"
+"#;
+    let err = StorageManager::from_toml(toml)
+        .err()
+        .expect("a username is required");
+    assert!(matches!(err, StorageError::Config(_)), "got {err:?}");
+}

@@ -9,6 +9,7 @@ pub mod error;
 pub mod facade;
 pub mod manager;
 pub mod path;
+pub mod sftp;
 pub mod storage;
 
 pub use crate::disk::{DiskKind, LocalDisk, ReadThrough, ReadThroughDisk};
@@ -19,7 +20,11 @@ pub use crate::facade::{
 };
 pub use crate::manager::{ManagedDisk, ObjectDisk, StorageConfig, StorageManager};
 pub use crate::path::{confine_path, PathOutcome};
+pub use crate::sftp::SftpDiskConfig;
 pub use crate::storage::Storage;
+
+#[cfg(feature = "sftp")]
+pub use crate::sftp::SftpDisk;
 
 /// Copy-back policy for read-through storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

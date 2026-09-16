@@ -13,6 +13,14 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 toml = "0.8"
+# Pure-Rust SSH client for the opt-in `sftp` disk (ADOPT-025). Default features
+# are disabled and `ring` (already in the lock via `rustls`) is selected as the
+# crypto backend so no C/OpenSSL toolchain is required; `rsa` keeps RSA host
+# keys and RSA private keys usable. `russh-sftp` speaks the SFTP subsystem over
+# a caller-supplied stream (no direct `russh` dependency), pairing with the
+# `russh` 0.62 line.
+russh = { version = "0.62", optional = true, default-features = false, features = ["ring", "rsa"] }
+russh-sftp = { version = "2.4", optional = true }
 
 [features]
 default = []
@@ -20,3 +28,10 @@ default = []
 aws = ["object_store/aws"]
 gcp = ["object_store/gcp"]
 azure = ["object_store/azure"]
+# SFTP disk driver (pure-Rust `russh` + `russh-sftp`).
+sftp = ["dep:russh", "dep:russh-sftp"]
+
+[dev-dependencies]
+# Docker-backed SFTP integration tests (`tests/sftp_container.rs`), run only
+# with `--features sftp -- --ignored`.
+testcontainers = { workspace = true }

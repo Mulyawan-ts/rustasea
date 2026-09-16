@@ -140,6 +140,10 @@ broadcast-redis = ["rustasea-broadcast/redis"]
 # Broadcast Pusher HTTP driver (ADOPT-022). Forwards to `rustasea-broadcast`'s
 # `pusher` feature so the Pusher protocol + client-auth surface is available.
 broadcast-pusher = ["rustasea-broadcast/pusher"]
+# SFTP storage disk (ADOPT-025). Forwards to `rustasea-storage`'s `sftp` feature
+# so `rustasea::storage` exposes the pure-Rust `russh`-backed SFTP disk; off by
+# default (pay-for-what-you-use, NFR-Sca-02).
+storage-sftp = ["rustasea-storage/sftp"]
 # Locale-aware fake-data generation (ADOPT-012). Forwards to the testing crate's
 # opt-in `faker` feature so `rustasea::testing::faker` is available; off by
 # default (pay-for-what-you-use, NFR-Sca-02).

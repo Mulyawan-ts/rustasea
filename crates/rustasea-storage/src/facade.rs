@@ -72,6 +72,8 @@ pub enum DiskDefinition {
     Gcs(GcsDiskConfig),
     /// Azure Blob container (requires the `azure` feature).
     Azure(AzureDiskConfig),
+    /// Remote SFTP server (requires the `sftp` feature).
+    Sftp(crate::sftp::SftpDiskConfig),
 }
 
 impl DiskDefinition {
@@ -82,6 +84,7 @@ impl DiskDefinition {
             DiskDefinition::S3(config) => build_s3(config, name),
             DiskDefinition::Gcs(config) => build_gcs(config, name),
             DiskDefinition::Azure(config) => build_azure(config, name),
+            DiskDefinition::Sftp(config) => build_sftp(config, name),
         }
     }
 
@@ -92,6 +95,7 @@ impl DiskDefinition {
             DiskDefinition::S3(config) => &config.settings,
             DiskDefinition::Gcs(config) => &config.settings,
             DiskDefinition::Azure(config) => &config.settings,
+            DiskDefinition::Sftp(config) => &config.settings,
         }
     }
 }
@@ -317,5 +321,28 @@ fn build_azure(config: &AzureDiskConfig, name: &str) -> Result<Arc<dyn ManagedDi
 fn build_azure(_config: &AzureDiskConfig, name: &str) -> Result<Arc<dyn ManagedDisk>> {
     Err(StorageError::StoreUnavailable(format!(
         "disk {name}: the `azure` driver requires the `azure` feature"
+    )))
+}
+
+/// Build an SFTP-backed disk (feature enabled).
+///
+/// The `SFTP_*` environment overlay is applied, the config validated, and the
+/// disk constructed lazily (it connects on first operation) so building a
+/// manager never blocks on the network.
+#[cfg(feature = "sftp")]
+fn build_sftp(config: &crate::sftp::SftpDiskConfig, name: &str) -> Result<Arc<dyn ManagedDisk>> {
+    let mut config = config.clone();
+    config.apply_env();
+    if let Err(error) = config.validate() {
+        return Err(StorageError::Config(format!("disk {name}: {error}")));
+    }
+    Ok(Arc::new(crate::sftp::SftpDisk::new(config)))
+}
+
+/// Reject SFTP disks when the `sftp` feature is disabled.
+#[cfg(not(feature = "sftp"))]
+fn build_sftp(_config: &crate::sftp::SftpDiskConfig, name: &str) -> Result<Arc<dyn ManagedDisk>> {
+    Err(StorageError::StoreUnavailable(format!(
+        "disk {name}: the `sftp` driver requires the `sftp` feature"
     )))
 }

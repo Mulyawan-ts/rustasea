@@ -208,6 +208,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Contracts\Filesystem\Factory` | `rustasea-storage::StorageManager` | **Partial** | Manager + disks real; driver matrix smaller. |
 | `Illuminate\Contracts\Filesystem\Cloud` | `rustasea-storage::ObjectDisk` | **Partial** | `object_store`-backed disk real; visibility/temporary-URL surface thinner. |
 | `Illuminate\Filesystem\FilesystemAdapter` | `rustasea-storage::{LocalDisk, ObjectDisk}` | **Partial** | Disk adapters real; adapter method breadth smaller. |
+| `league/flysystem-sftp-v3` | `rustasea-storage::SftpDisk` (feature `sftp`) | **Partial** | Pure-Rust `russh` + `russh-sftp` disk: `put`/`get`/`exists`/`delete` + `list`, path confinement, SHA-256 host-key pin, bounded reconnect + retry (ADOPT-025); driver behind the `sftp` feature. |
 | `Illuminate\Contracts\Broadcasting\ShouldBroadcast` | `rustasea-broadcast::ShouldBroadcast` | **Adopted** | Broadcast marker implemented. |
 | `Illuminate\Contracts\Broadcasting\Broadcaster` | `rustasea-broadcast::Broadcaster` (`BroadcastHub`, `PusherBroadcaster`, `RedisBroadcaster`) | **Partial** | In-process hub + Pusher HTTP + Redis Pub/Sub broadcasters real (ADOPT-022); Ably absent. |
 | `Illuminate\Contracts\Broadcasting\Factory` | `rustasea-broadcast::BroadcastManager` | **Partial** | Named connections + `[broadcasting]` config + env bridge real (ADOPT-022); thinner than Laravel's factory. |

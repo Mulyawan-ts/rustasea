@@ -283,6 +283,7 @@ to a deterministic stub, and the in-process AI provider is kept for tests.
 - Broadcasting: WebSocket (`axum/ws`, feature-gated default) + SSE + `ShouldBroadcast` — `crates/rustasea-broadcast/Cargo.toml:20`, `:22`; `crates/rustasea-broadcast/src/lib.rs:35`.
 - Filesystem on real `object_store` (0.14.1) with cloud features — `crates/rustasea-storage/Cargo.toml:10`, `:20-22`; `crates/rustasea-storage/src/manager.rs:56` (`StorageManager`), `:127` (`get` read-through), `:144` (`put`), `:171` (`ObjectDisk`).
 - Storage config facade (`GAP-020`) — `config/storage.toml` (`[storage] default = "local"`), `crates/rustasea-storage/src/facade.rs:36` (`StorageFacadeConfig::from_toml`), `:168` (`StorageManager::from_toml`).
+- SFTP storage disk (ADOPT-025) — `crates/rustasea-storage/src/sftp/` (pure-Rust `russh`/`russh-sftp`, feature `sftp`): `put`/`get`/`exists`/`delete` + `list`, `SFTP_*` env overlay, path confinement, SHA-256 host-key pin, single bounded reconnect; `DiskDefinition::Sftp` (`crates/rustasea-storage/src/facade.rs:76`) and the facade re-export (`crates/rustasea/Cargo.toml:146`).
 - Excel/CSV import-export (ADOPT-023) — `crates/rustasea-excel` (streaming import + validation report, chunked export, queued job, signed links).
 - Image manipulation (ADOPT-024) — `crates/rustasea-image` (fluent pipeline, EXIF orient, storage round-trip, queued transforms).
 - JSON:API resources with correct content type — `crates/rustasea-jsonapi/src/wire.rs:7`.
