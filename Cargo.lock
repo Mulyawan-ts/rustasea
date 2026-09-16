@@ -6836,6 +6836,7 @@ dependencies = [
  "rustasea-livewire",
  "rustasea-logging",
  "rustasea-macros",
+ "rustasea-modules",
  "rustasea-mongo",
  "rustasea-openapi",
  "rustasea-orm",
@@ -7034,6 +7035,7 @@ dependencies = [
  "rustasea-i18n",
  "rustasea-logging",
  "rustasea-macros",
+ "rustasea-modules",
  "rustasea-openapi",
  "rustasea-orm",
  "rustasea-queue",
@@ -7043,6 +7045,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strsim",
+ "syn 2.0.119",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
@@ -7284,6 +7287,23 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "rustasea-modules"
+version = "0.1.0"
+dependencies = [
+ "axum 0.7.9",
+ "rustasea-foundation",
+ "rustasea-orm",
+ "rustasea-router",
+ "serde",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "toml 0.8.23",
+ "toml_edit 0.22.27",
+ "tower",
 ]
 
 [[package]]

@@ -1,0 +1,29 @@
+[package]
+name = "rustasea-modules"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Modular application support (ADOPT-027) — module manifest, deterministic registry, and the runtime Module contract (nwidart/laravel-modules parity)."
+
+[dependencies]
+# The `Module` trait and the manifest reader derive/deserialize TOML.
+serde = { workspace = true, features = ["derive"] }
+# Typed crate errors.
+thiserror = { workspace = true }
+# Reading `rustasea.toml` / `config/modules.toml` into typed manifest structs.
+toml = { version = "0.8" }
+# Format-preserving writes for `module:enable` / `module:disable`, so the rest
+# of the user's `rustasea.toml` (comments, ordering) survives a toggle.
+toml_edit = { version = "0.22" }
+# The `Module` trait contributes routes onto the introspectable route table.
+rustasea-router = { path = "../rustasea-router" }
+# The `Module` trait contributes migrations into a `Migrator`.
+rustasea-orm = { path = "../rustasea-orm" }
+# The `Module` trait contributes service providers into the boot DAG.
+rustasea-foundation = { path = "../rustasea-foundation" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["macros", "rt"] }
+axum = { workspace = true }
+tower = { workspace = true, features = ["util"] }

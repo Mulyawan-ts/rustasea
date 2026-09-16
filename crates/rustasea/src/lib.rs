@@ -399,3 +399,14 @@ pub use rustasea_action as action;
 /// build never links the RSA/PEM signing stack (NFR-Sca-02).
 #[cfg(feature = "google")]
 pub use rustasea_google as google;
+
+/// Modular application support re-export (ADOPT-027) — only with the `modules`
+/// feature.
+///
+/// [`Module`](rustasea_modules::Module) is the contract a `make:module` crate
+/// implements, and [`ModuleRegistry`](rustasea_modules::ModuleRegistry) mounts
+/// the enabled modules' routes, providers, and migrations in deterministic
+/// order from the `[modules]` manifest table. Opt-in so the core build never
+/// links the registry (NFR-Sca-02).
+#[cfg(feature = "modules")]
+pub use rustasea_modules as modules;

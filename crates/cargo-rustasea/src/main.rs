@@ -58,6 +58,10 @@ struct NewArgs {
     /// Skip `git init` in the generated application directory.
     #[arg(long)]
     no_git: bool,
+
+    /// Generate the modular layout: a `modules/*` workspace for `make:module`.
+    #[arg(long)]
+    modular: bool,
 }
 
 /// CLI-facing mirror of [`StarterKitVariant`] so clap can validate the value.
@@ -120,7 +124,9 @@ fn run(cli: Cli) -> Result<(), String> {
 /// Scaffold a new application from parsed arguments.
 fn new_app(args: NewArgs) -> Result<(), String> {
     let (target, app_name) = resolve_target(&args.app).map_err(|err| err.to_string())?;
-    let scaffold = Scaffold::new(app_name, args.variant.into()).with_force(args.force);
+    let scaffold = Scaffold::new(app_name, args.variant.into())
+        .with_force(args.force)
+        .with_modular(args.modular);
     let generated = scaffold.generate(&target).map_err(|err| err.to_string())?;
 
     println!("Created {} files in {}", generated.len(), target.display());

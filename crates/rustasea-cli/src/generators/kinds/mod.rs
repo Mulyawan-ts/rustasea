@@ -20,6 +20,7 @@ pub mod listener;
 pub mod middleware;
 pub mod migration;
 pub mod model;
+pub mod module;
 pub mod observer;
 pub mod provider;
 pub mod request;

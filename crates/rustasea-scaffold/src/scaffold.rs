@@ -31,6 +31,7 @@ pub struct Scaffold {
     app_name: String,
     variant: StarterKitVariant,
     force: bool,
+    modular: bool,
 }
 
 impl Scaffold {
@@ -40,6 +41,7 @@ impl Scaffold {
             app_name: app_name.into(),
             variant,
             force: false,
+            modular: false,
         }
     }
 
@@ -47,6 +49,17 @@ impl Scaffold {
     /// [`ScaffoldError::AlreadyExists`].
     pub fn with_force(mut self, force: bool) -> Self {
         self.force = force;
+        self
+    }
+
+    /// Generate the modular application layout (ADOPT-027).
+    ///
+    /// The application becomes a workspace whose `modules/*` members are the
+    /// crates produced by `cargo artisan make:module`, and the umbrella's
+    /// `modules` feature is enabled. Off by default so existing projects are
+    /// unaffected.
+    pub fn with_modular(mut self, modular: bool) -> Self {
+        self.modular = modular;
         self
     }
 
@@ -62,13 +75,17 @@ impl Scaffold {
     pub fn render(&self) -> ScaffoldResult<Vec<RenderedFile>> {
         let name = AppName::parse(&self.app_name)?;
         let vars = Placeholders::new(&name, self.variant);
-        let files = templates::entries(self.variant)
+        let mut files: Vec<RenderedFile> = templates::entries(self.variant)
             .into_iter()
             .map(|(path, template)| RenderedFile {
                 path: path.to_string(),
                 contents: templates::render(template, &vars),
-            });
-        Ok(files.collect())
+            })
+            .collect();
+        if self.modular {
+            into_modular_layout(&mut files);
+        }
+        Ok(files)
     }
 
     /// Write the full application tree under `path`.
@@ -108,6 +125,23 @@ impl Scaffold {
         }
         Ok(generated)
     }
+}
+
+/// Switch a rendered application tree to the modular layout (ADOPT-027).
+///
+/// Rewrites the package manifest and adds the `modules/` marker so the tree is
+/// immediately ready for `cargo artisan make:module`. `templates::entries`
+/// always yields a `Cargo.toml`, so the rewrite is applied on every run.
+fn into_modular_layout(files: &mut Vec<RenderedFile>) {
+    for file in files.iter_mut() {
+        if file.path == templates::CARGO_MANIFEST_PATH {
+            file.contents = templates::apply_modular_layout(&file.contents);
+        }
+    }
+    files.push(RenderedFile {
+        path: templates::MODULES_MARKER_PATH.to_string(),
+        contents: templates::MODULES_MARKER.to_string(),
+    });
 }
 
 /// Resolve the application root for a CLI-supplied name/path.

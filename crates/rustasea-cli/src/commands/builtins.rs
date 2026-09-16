@@ -249,6 +249,13 @@ make_command!(
     "Make a new action class",
     "make:action {name} [--force]"
 );
+make_command!(
+    MakeModule,
+    Module,
+    "make:module",
+    "Make a new application module",
+    "make:module {name} [--force]"
+);
 
 /// Convenience used by tests to scaffold into a temp root.
 pub async fn scaffold_into(

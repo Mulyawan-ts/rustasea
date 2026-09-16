@@ -61,6 +61,43 @@ pub fn render(template: &str, vars: &Placeholders<'_>) -> String {
         .replace("@@variant@@", vars.variant)
 }
 
+/// Application-relative path of the generated package manifest.
+pub const CARGO_MANIFEST_PATH: &str = "Cargo.toml";
+
+/// Application-relative path of the modular-layout marker file.
+pub const MODULES_MARKER_PATH: &str = "modules/.gitkeep";
+
+/// Marker keeping an (initially empty) `modules/` directory in version control.
+pub const MODULES_MARKER: &str =
+    "# Module crates live under `modules/<name>/`; run\n# `cargo artisan make:module <Name>` to create one.\n";
+
+/// Rustasea dependency prefix shared by every generated manifest.
+const RUSTASEA_FEATURES_PREFIX: &str = r#"rustasea = { version = "0.1", features = ["#;
+
+/// Workspace stanza appended by `cargo rustasea new --modular` (ADOPT-027).
+///
+/// The application becomes the workspace root and every `modules/*` crate is a
+/// member, so `make:module` output compiles with the application.
+const MODULAR_WORKSPACE: &str = r#"
+# Modular application layout (ADOPT-027): module crates under `modules/*` are
+# workspace members built together with the application.
+[workspace]
+members = ["modules/*"]
+resolver = "2"
+"#;
+
+/// Rewrite a rendered `Cargo.toml` into the modular application layout.
+///
+/// Enables the umbrella `modules` feature and appends the workspace stanza that
+/// admits `modules/*` crates as members. Non-modular generation never calls
+/// this, so the default manifest is byte-identical to previous releases.
+pub fn apply_modular_layout(cargo: &str) -> String {
+    let replacement = format!("{RUSTASEA_FEATURES_PREFIX}\"modules\", ");
+    let mut out = cargo.replacen(RUSTASEA_FEATURES_PREFIX, &replacement, 1);
+    out.push_str(MODULAR_WORKSPACE);
+    out
+}
+
 /// All template entries for `variant`, in deterministic write order.
 ///
 /// Shared core templates come first, then the variant-specific `resources/`

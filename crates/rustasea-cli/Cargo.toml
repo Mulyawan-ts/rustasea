@@ -52,6 +52,10 @@ rustasea-queue = { path = "../rustasea-queue" }
 rustasea-schedule = { path = "../rustasea-schedule" }
 rustasea-macros = { path = "../rustasea-macros" }
 rustasea-orm = { path = "../rustasea-orm" }
+# `make:module` scaffolds a workspace module crate and `module:*` commands read
+# the module manifest / directory scan (ADOPT-027), so the crate is a direct
+# dependency of the CLI core.
+rustasea-modules = { path = "../rustasea-modules" }
 # `route:list` reads the application route table (`RouteEntry`); optional so the
 # router/axum tree is only linked with the `cli` feature.
 rustasea-router = { path = "../rustasea-router", optional = true }
@@ -81,3 +85,6 @@ rustasea-ai = { path = "../rustasea-ai", features = ["mcp"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 # `log:show` tests build fixture log files in throwaway temp directories.
 tempfile = "3"
+# `make:module` tests parse the generated Rust with `syn` so "compiles" is
+# checked by an independent oracle rather than a substring match.
+syn = { workspace = true }

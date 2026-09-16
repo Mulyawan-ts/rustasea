@@ -234,16 +234,18 @@ tracks failed jobs in memory, and declarative job metadata is not consumed.
 **Goal recap:** First-class CLI, code generation, and a Laravel-like testing
 story.
 
-**Status: Partial** — the CLI and 16 `make:*` generators are real (including
-`make:middleware`/`make:request`/`make:action`), `cargo rustasea new --variant` scaffolds real
-starter kits, `xtask` has real cycle detection plus `migrate`, and the testing
+**Status: Partial** — the CLI and 17 `make:*` generators are real (including
+`make:middleware`/`make:request`/`make:action`/`make:module`), `cargo rustasea new
+--variant` scaffolds real starter kits (and `--modular` a module-ready workspace),
+`xtask` has real cycle detection plus `migrate`, and the testing
 stack uses real `testcontainers` with a Docker-gated feature suite. Remaining:
 the integration suite is opt-in, and generated controllers still require manual
 route registration.
 
 **Done**
 - `cargo artisan` CLI with command registry — `crates/rustasea-cli/src/registry.rs`, `crates/rustasea-cli/src/lib.rs`.
-- 16 `make:*` generators: controller, middleware, request, model, provider, command, job, event, listener, observer, test, seeder, migration, agent, tool, action — registrations `crates/rustasea-cli/src/commands/mod.rs:17-31`; kinds `crates/rustasea-cli/src/generators/kinds/{middleware,request}.rs:17` (`GAP-016`).
+- 17 `make:*` generators: controller, middleware, request, model, provider, command, job, event, listener, observer, test, seeder, migration, agent, tool, action, module — registrations `crates/rustasea-cli/src/commands/mod.rs:17-31`; kinds `crates/rustasea-cli/src/generators/kinds/{middleware,request}.rs:17` (`GAP-016`).
+- Modular application support (ADOPT-027) — `crates/rustasea-modules` (`Module` trait + deterministic `ModuleRegistry` mounting the enabled modules' routes/providers/migrations, `ModuleManifest` `[modules]` enabled/disabled table); `make:module` generates `modules/<name>/` (`crates/rustasea-cli/src/generators/kinds/module.rs`); `module:list`/`module:enable`/`module:disable` (`crates/rustasea-cli/src/commands/modules.rs`); `cargo rustasea new --modular` emits the `modules/*` workspace (`crates/rustasea-scaffold/src/templates/mod.rs`); umbrella feature `modules` (`crates/rustasea/Cargo.toml:79`).
 - Typed command args/flags and prompt/table helpers.
 - Project scaffolder `cargo rustasea new <app> --variant {blade|react|vue|livewire}` — `crates/cargo-rustasea/src/main.rs:46`, `:64-74`; starter kits `crates/rustasea-scaffold/src/variant.rs:13`; `cargo artisan` remains a legacy alias via `normalize_args` (`:103`).
 - Real `xtask` cycle detection (`GAP-018`) — `xtask/src/cycles.rs:32` (`run()`, DFS over `cargo metadata`); task dispatch `xtask/src/main.rs:23` (`ci`), `:24` (`fmt`), `:25` (`clippy`), `:36` (`check-cycles`), `:37` (`migrate`).
@@ -260,7 +262,7 @@ route registration.
 **Missing**
 - Generator-to-route-registration automation.
 
-**Evidence:** `crates/rustasea-cli/src/commands/mod.rs:17-31`; `crates/rustasea-cli/src/commands/builtins.rs`; `crates/cargo-rustasea/src/main.rs:46-103`; `xtask/src/{main.rs:23-37,cycles.rs:32,migrate.rs}`; `crates/rustasea-testing/src/fixtures.rs:49`; `crates/rustasea/tests/feature/`; tasks `GAP-016`–`GAP-018`.
+**Evidence:** `crates/rustasea-cli/src/commands/mod.rs:17-31`; `crates/rustasea-cli/src/commands/builtins.rs`; `crates/cargo-rustasea/src/main.rs:46-103`; `xtask/src/{main.rs:23-37,cycles.rs:32,migrate.rs}`; `crates/rustasea-testing/src/fixtures.rs:49`; `crates/rustasea/tests/feature/`; module registry + CLI gates `crates/rustasea-modules/tests/{registry,manifest}.rs`, `crates/rustasea-cli/tests/{make_module,module_compiles}.rs`, `crates/rustasea-scaffold/tests/modular.rs`; tasks `GAP-016`–`GAP-018`, `ADOPT-027`.
 
 **Next actions**
 - Automate route registration in generated controllers (or a route-table generator).

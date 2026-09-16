@@ -31,6 +31,8 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | 5 | https://api.laravel.com/docs/13.x/doc-index.html | Master A–Z symbol index (page is 8.7 MB; fetched raw and grepped for cross-verification, see §7) |
 
 > Laravel's first-party **AI SDK** (`laravel/ai`) is a separate Composer package and is **not** part of the `api.laravel.com/docs/13.x` core namespace set; its Rust counterpart (`rustasea-ai`) is therefore covered as an advanced surface, not as an `Illuminate\*` row.
+>
+> Third-party Composer packages with a RustaSea counterpart (`nwidart/laravel-modules`, `league/flysystem-sftp-v3`) are listed as rows in Table B instead of the `Illuminate\*` namespace tables.
 
 ## 4. Status Legend
 
@@ -210,6 +212,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Contracts\Filesystem\Cloud` | `rustasea-storage::ObjectDisk` | **Partial** | `object_store`-backed disk real; visibility/temporary-URL surface thinner. |
 | `Illuminate\Filesystem\FilesystemAdapter` | `rustasea-storage::{LocalDisk, ObjectDisk}` | **Partial** | Disk adapters real; adapter method breadth smaller. |
 | `league/flysystem-sftp-v3` | `rustasea-storage::SftpDisk` (feature `sftp`) | **Partial** | Pure-Rust `russh` + `russh-sftp` disk: `put`/`get`/`exists`/`delete` + `list`, path confinement, SHA-256 host-key pin, bounded reconnect + retry (ADOPT-025); driver behind the `sftp` feature. |
+| `nwidart/laravel-modules` (+ `wikimedia/composer-merge-plugin`) | `rustasea-modules` (`Module`, `ModuleRegistry`, `ModuleManifest`) + `make:module` / `module:list` / `module:enable` / `module:disable` | **Adopted** | `Module` trait plus a deterministic registry that mounts the enabled modules' routes, providers, and migrations; `[modules]` enabled/disabled manifest table; `make:module` generates a workspace crate and `cargo rustasea new --modular` wires `modules/*` as members (ADOPT-027). Composer auto-discovery is replaced by the Cargo workspace member glob. |
 | `Illuminate\Contracts\Broadcasting\ShouldBroadcast` | `rustasea-broadcast::ShouldBroadcast` | **Adopted** | Broadcast marker implemented. |
 | `Illuminate\Contracts\Broadcasting\Broadcaster` | `rustasea-broadcast::Broadcaster` (`BroadcastHub`, `PusherBroadcaster`, `RedisBroadcaster`) | **Partial** | In-process hub + Pusher HTTP + Redis Pub/Sub broadcasters real (ADOPT-022); Ably absent. |
 | `Illuminate\Contracts\Broadcasting\Factory` | `rustasea-broadcast::BroadcastManager` | **Partial** | Named connections + `[broadcasting]` config + env bridge real (ADOPT-022); thinner than Laravel's factory. |

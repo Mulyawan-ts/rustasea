@@ -10,6 +10,7 @@ pub mod langcheck;
 pub mod log_show;
 #[cfg(feature = "mcp")]
 pub mod mcp_serve;
+pub mod modules;
 pub mod openapi;
 pub mod ops;
 pub mod queue;
@@ -36,6 +37,10 @@ pub fn register_all_into(reg: &mut CommandRegistry) {
     reg.register(builtins::MakeAgent);
     reg.register(builtins::MakeTool);
     reg.register(builtins::MakeAction);
+    reg.register(builtins::MakeModule);
+    reg.register(modules::ModuleList);
+    reg.register(modules::ModuleEnable);
+    reg.register(modules::ModuleDisable);
     reg.register(inspect::RouteList);
     reg.register(inspect::ShowModel);
     reg.register(openapi::OpenApiGenerate);
