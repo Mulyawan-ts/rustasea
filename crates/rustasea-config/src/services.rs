@@ -18,10 +18,17 @@
 //! | `[services.ses].secret` | `AWS_SECRET_ACCESS_KEY` |
 //! | `[services.slack.notifications].bot_user_oauth_token` | `SLACK_BOT_USER_OAUTH_TOKEN` |
 //! | `[services.slack.notifications].channel` | `SLACK_BOT_USER_DEFAULT_CHANNEL` |
+//! | `[services.google].credentials_path` | `GOOGLE_APPLICATION_CREDENTIALS` |
+//! | `[services.google].credentials_json` | `GOOGLE_CREDENTIALS_JSON` |
 //!
 //! The loader's own overlay can also set nested values with the `__`
 //! separator (for example `SERVICES__POSTMARK__KEY`), since it lowercases
 //! environment keys and splits them on `__`.
+//!
+//! `[services.google]` holds a service-account credential (path or inline
+//! JSON), the OAuth `scopes` to request, and an optional impersonation
+//! `subject` for domain-wide delegation. When both credential sources are set,
+//! the inline JSON wins over the file path.
 //!
 //! An empty string is treated as "unset" (`None`), and a missing
 //! `[services.*]` block is fine (every accessor returns `None`). A malformed
@@ -81,6 +88,37 @@ pub struct SlackNotifications {
     pub channel: String,
 }
 
+/// Google service-account credentials (`[services.google]`).
+///
+/// `credentials_json` embeds the private key, so this type derives no `Debug`;
+/// the manual implementation below redacts the inline JSON.
+#[derive(Clone, PartialEq, Eq, Default)]
+pub struct GoogleCredentials {
+    /// Filesystem path to the service-account JSON key.
+    pub credentials_path: Option<String>,
+    /// Inline service-account JSON; wins over `credentials_path` when both set.
+    pub credentials_json: Option<String>,
+    /// OAuth scopes requested in the signed assertion.
+    pub scopes: Vec<String>,
+    /// Impersonated user for domain-wide delegation, when set.
+    pub subject: Option<String>,
+}
+
+impl fmt::Debug for GoogleCredentials {
+    /// Render the block with the inline JSON masked.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GoogleCredentials")
+            .field("credentials_path", &self.credentials_path)
+            .field(
+                "credentials_json",
+                &self.credentials_json.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("scopes", &self.scopes)
+            .field("subject", &self.subject)
+            .finish()
+    }
+}
+
 /// Typed `[services]` credentials.
 ///
 /// Every field is optional: a blank or missing value is stored as `None`. Use
@@ -96,6 +134,8 @@ pub struct ServicesConfig {
     ses: Option<SesCredentials>,
     /// Slack notification credentials.
     slack: Option<SlackNotifications>,
+    /// Google service-account credentials.
+    google: Option<GoogleCredentials>,
 }
 
 impl ServicesConfig {
@@ -123,6 +163,13 @@ impl ServicesConfig {
     #[must_use]
     pub fn slack_notifications(&self) -> Option<SlackNotifications> {
         self.slack.clone()
+    }
+
+    /// The Google service-account credentials, or `None` when the block is
+    /// absent or entirely blank.
+    #[must_use]
+    pub fn google_credentials(&self) -> Option<GoogleCredentials> {
+        self.google.clone()
     }
 
     /// Deserialize `[services]` from a layered [`ConfigLoader`].
@@ -168,6 +215,7 @@ impl ServicesConfig {
                 .flatten(),
             ses: parse_ses(&services)?,
             slack: parse_slack(&services)?,
+            google: parse_google(&services)?,
         })
     }
 
@@ -210,6 +258,17 @@ impl ServicesConfig {
                 slack.channel = channel;
             }
         }
+
+        if let Some(path) = env_non_empty("GOOGLE_APPLICATION_CREDENTIALS") {
+            self.google
+                .get_or_insert_with(GoogleCredentials::default)
+                .credentials_path = Some(path);
+        }
+        if let Some(json) = env_non_empty("GOOGLE_CREDENTIALS_JSON") {
+            self.google
+                .get_or_insert_with(GoogleCredentials::default)
+                .credentials_json = Some(json);
+        }
     }
 
     /// Drop composite blocks that carry no value, so accessors return `None`
@@ -223,6 +282,15 @@ impl ServicesConfig {
         if let Some(slack) = &self.slack {
             if slack.bot_user_oauth_token.is_empty() && slack.channel.is_empty() {
                 self.slack = None;
+            }
+        }
+        if let Some(google) = &self.google {
+            if google.credentials_path.is_none()
+                && google.credentials_json.is_none()
+                && google.scopes.is_empty()
+                && google.subject.is_none()
+            {
+                self.google = None;
             }
         }
     }
@@ -270,6 +338,75 @@ fn parse_slack(
         bot_user_oauth_token,
         channel,
     }))
+}
+
+/// Parse the `[services.google]` block.
+fn parse_google(
+    services: &Map<String, Value>,
+) -> Result<Option<GoogleCredentials>, ServicesConfigError> {
+    let Some(table) = sub_table(services, "google")? else {
+        return Ok(None);
+    };
+    Ok(Some(GoogleCredentials {
+        credentials_path: string_field(
+            table,
+            "credentials_path",
+            "services.google.credentials_path",
+        )?,
+        credentials_json: string_field(
+            table,
+            "credentials_json",
+            "services.google.credentials_json",
+        )?,
+        scopes: string_list_field(table, "scopes", "services.google.scopes")?.unwrap_or_default(),
+        subject: string_field(table, "subject", "services.google.subject")?,
+    }))
+}
+
+/// Read a string list leaf (TOML array, or a space/comma-separated string).
+///
+/// A bare string is accepted so a loader overlay such as
+/// `SERVICES__GOOGLE__SCOPES="scope-a scope-b"` can set the list; blank
+/// entries are dropped.
+fn string_list_field(
+    table: &Map<String, Value>,
+    key: &str,
+    path: &str,
+) -> Result<Option<Vec<String>>, ServicesConfigError> {
+    match table.get(key) {
+        None => Ok(None),
+        Some(value) => match &value.kind {
+            ValueKind::Array(values) => {
+                let mut items = Vec::with_capacity(values.len());
+                for value in values {
+                    match &value.kind {
+                        ValueKind::String(text) => items.extend(non_empty(text)),
+                        other => {
+                            return Err(ServicesConfigError::Invalid(format!(
+                                "`{path}` must be an array of strings, found {}",
+                                kind_label(other)
+                            )));
+                        }
+                    }
+                }
+                Ok(Some(items))
+            }
+            ValueKind::String(text) => Ok(Some(split_list(text))),
+            ValueKind::Nil => Ok(None),
+            other => Err(ServicesConfigError::Invalid(format!(
+                "`{path}` must be an array of strings or a string, found {}",
+                kind_label(other)
+            ))),
+        },
+    }
+}
+
+/// Split a whitespace/comma-separated string, dropping blank entries.
+fn split_list(value: &str) -> Vec<String> {
+    value
+        .split(|character: char| character.is_whitespace() || character == ',')
+        .filter_map(non_empty)
+        .collect()
 }
 
 /// Fetch a nested table, distinguishing "absent" from "wrong type".

@@ -73,6 +73,10 @@ rustasea-image = { path = "../rustasea-image", optional = true }
 # Action pattern (ADOPT-028). Opt-in so the core build never links the action
 # adapters; consumers re-export it as `action` via the matching feature.
 rustasea-action = { path = "../rustasea-action", optional = true }
+# Google service-account auth (ADOPT-026). Opt-in so the core build never links
+# the RSA/PEM signing stack; consumers re-export it as `google` via the matching
+# feature.
+rustasea-google = { path = "../rustasea-google", optional = true }
 
 [features]
 default = []
@@ -133,6 +137,9 @@ image = ["dep:rustasea-image"]
 # Action pattern (ADOPT-028). Opt-in so the core build never links the action
 # adapters; consumers re-export the crate as `action`.
 action = ["dep:rustasea-action"]
+# Google service-account auth (ADOPT-026). Opt-in so the core build never links
+# the RSA/PEM signing stack; consumers re-export the crate as `google`.
+google = ["dep:rustasea-google"]
 # Broadcast Redis fan-out driver (ADOPT-022). Forwards to `rustasea-broadcast`'s
 # `redis` feature so `rustasea::broadcast` exposes the cross-process Pub/Sub
 # driver; off by default (pay-for-what-you-use, NFR-Sca-02).

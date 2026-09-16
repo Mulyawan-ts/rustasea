@@ -4241,12 +4241,14 @@ dependencies = [
  "js-sys",
  "p256 0.13.2",
  "p384 0.13.1",
+ "pem",
  "rand 0.8.8",
  "rsa 0.9.10",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "signature 2.2.0",
+ "simple_asn1",
  "zeroize",
 ]
 
@@ -5645,6 +5647,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pem"
+version = "3.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d30c53c26bc5b31a98cd02d20f25a7c8567146caf63ed593a9d87b2775291be"
+dependencies = [
+ "base64 0.22.1",
+ "serde_core",
+]
+
+[[package]]
 name = "pem-rfc7468"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6813,6 +6825,7 @@ dependencies = [
  "rustasea-events",
  "rustasea-excel",
  "rustasea-foundation",
+ "rustasea-google",
  "rustasea-http",
  "rustasea-i18n",
  "rustasea-image",
@@ -7102,6 +7115,23 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+]
+
+[[package]]
+name = "rustasea-google"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "jsonwebtoken",
+ "rand 0.8.8",
+ "reqwest 0.12.28",
+ "rsa 0.9.10",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -8235,6 +8265,18 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
+name = "simple_asn1"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d585997b0ac10be3c5ee635f1bab02d512760d14b7c468801ac8a01d9ae5f1d"
+dependencies = [
+ "num-bigint",
+ "num-traits",
+ "thiserror 2.0.20",
+ "time",
+]
 
 [[package]]
 name = "siphasher"

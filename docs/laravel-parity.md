@@ -190,6 +190,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Contracts\Validation\DataAwareRule` / `ValidatorAwareRule` | `rustasea-validation::Rules` | **Partial** | Data-aware validation exists; aware-rule contracts folded into `Rules`. |
 | `Illuminate\Validation\Concerns\ValidatesAttributes` (trait) | `rustasea-validation::rules` | **Partial** | Core rules implemented; full Laravel rule catalogue not ported. |
 | `Illuminate\Contracts\Session\Session` | `rustasea-auth::SessionPolicy` | **Partial** | Policy/hardening real; store-backed session pending. |
+| `google/auth` (`Google\Auth\Credentials\ServiceAccountCredentials`) | `rustasea-google` (`ServiceAccount`, `GoogleAuthClient`, `AssertionClaims`, `AccessToken`) | **Adopted** | Service-account JSON parse/validate, RS256 JWT assertion, token exchange + cached `AccessToken` (single-flight, 80% lifetime refresh); `GoogleCredentials` block in `config/services.toml`, feature `google` (ADOPT-026). |
 
 ### Support / Console / Filesystem / Advanced
 

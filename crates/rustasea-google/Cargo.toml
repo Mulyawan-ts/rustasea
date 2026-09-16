@@ -1,0 +1,35 @@
+[package]
+name = "rustasea-google"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "RustaSea Google — service-account auth and cached OAuth2 access tokens (google/auth parity)"
+
+[dependencies]
+# Object-safe transport/clock traits: the client holds `Arc<dyn _>` seams so
+# tests can swap the network and the wall clock.
+async-trait = { workspace = true }
+chrono = { workspace = true }
+# RS256 assertion signing (`EncodingKey::from_rsa_pem`); the workspace pins the
+# `rust_crypto` backend with default features off, so `use_pem` must be opted
+# into here to decode the PEM private key. Scoped to this crate: a downstream
+# build without the umbrella's `google` feature never links the PEM decoder.
+jsonwebtoken = { workspace = true, features = ["use_pem"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# `tokio::sync::Mutex` backs the single-flight token cache.
+tokio = { workspace = true }
+tracing = { workspace = true }
+# Token-endpoint transport. `rustls-tls` keeps the HTTPS stack pure-Rust;
+# `json` decodes the token/error bodies. The crate is a hard dependency of this
+# crate (there is no feature gate) because service-account auth is useless
+# without a token exchange.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[dev-dependencies]
+# Test-only RSA key generation for the signing/exchange assertions. Both are
+# already in the workspace lock via `jsonwebtoken` (rsa 0.9.10).
+rand = { workspace = true }
+rsa = "0.9"
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

@@ -286,6 +286,7 @@ to a deterministic stub, and the in-process AI provider is kept for tests.
 - SFTP storage disk (ADOPT-025) — `crates/rustasea-storage/src/sftp/` (pure-Rust `russh`/`russh-sftp`, feature `sftp`): `put`/`get`/`exists`/`delete` + `list`, `SFTP_*` env overlay, path confinement, SHA-256 host-key pin, single bounded reconnect; `DiskDefinition::Sftp` (`crates/rustasea-storage/src/facade.rs:76`) and the facade re-export (`crates/rustasea/Cargo.toml:146`).
 - Excel/CSV import-export (ADOPT-023) — `crates/rustasea-excel` (streaming import + validation report, chunked export, queued job, signed links).
 - Image manipulation (ADOPT-024) — `crates/rustasea-image` (fluent pipeline, EXIF orient, storage round-trip, queued transforms).
+- Google service-account auth (ADOPT-026) — `crates/rustasea-google`: service-account JSON parse/validate, RS256 JWT assertion, token exchange + cached access token (single-flight refresh at 80% lifetime); `GoogleCredentials` block in `config/services.toml` (`crates/rustasea-config/src/services.rs`); umbrella feature `google`.
 - JSON:API resources with correct content type — `crates/rustasea-jsonapi/src/wire.rs:7`.
 - Mail & notifications (`GAP-020`) — `crates/rustasea-mail/`: `Mailable` (`mailable.rs:11`), `Mailer`/`ArrayMailer`/`LogMailer` (`mailer.rs:12`, `:22`, `:73`), `SmtpMailer` (feature `smtp`, `smtp.rs:14`), `QueuedNotification` dispatched through the queue (`notification.rs:41`).
 - View layer — `rustasea-view` with askama (default) + minijinja (`runtime-templates`) — `crates/rustasea-view/Cargo.toml:14`, `:17`, `:22`; `crates/rustasea-view/src/askama_engine.rs:35`.
@@ -307,7 +308,7 @@ to a deterministic stub, and the in-process AI provider is kept for tests.
 - Gemini/Bedrock adapters.
 - Real embedding-model integration (provider-backed `to_embeddings`).
 
-**Evidence:** `crates/rustasea-broadcast/{Cargo.toml,src/lib.rs}`; `crates/rustasea-storage/{Cargo.toml,src/manager.rs:56-171,src/facade.rs}`; `config/storage.toml`; `crates/rustasea-jsonapi/src/wire.rs:7`; `crates/rustasea-mail/`; `crates/rustasea-view/`; `crates/rustasea-ai/src/{providers,queue.rs,mcp,adapters.rs}`; `crates/rustasea-search/{src/pgvector.rs,src/embeddings.rs}`; tasks `GAP-012`, `GAP-014`, `GAP-015`, `GAP-020`.
+**Evidence:** `crates/rustasea-broadcast/{Cargo.toml,src/lib.rs}`; `crates/rustasea-storage/{Cargo.toml,src/manager.rs:56-171,src/facade.rs}`; `config/storage.toml`; `crates/rustasea-jsonapi/src/wire.rs:7`; `crates/rustasea-mail/`; `crates/rustasea-view/`; `crates/rustasea-ai/src/{providers,queue.rs,mcp,adapters.rs}`; `crates/rustasea-search/{src/pgvector.rs,src/embeddings.rs}`; `crates/rustasea-google/`; `crates/rustasea-config/src/services.rs`; tasks `GAP-012`, `GAP-014`, `GAP-015`, `GAP-020`, `ADOPT-026`.
 
 **Next actions**
 - Add Gemini/Bedrock adapters behind the existing provider abstraction.

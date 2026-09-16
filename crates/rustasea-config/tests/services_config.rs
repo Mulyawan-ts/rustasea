@@ -12,21 +12,23 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use rustasea_config::{
-    ConfigLoader, ServicesConfig, ServicesConfigError, SesCredentials, SlackNotifications,
-    DEFAULT_SES_REGION,
+    ConfigLoader, GoogleCredentials, ServicesConfig, ServicesConfigError, SesCredentials,
+    SlackNotifications, DEFAULT_SES_REGION,
 };
 
 /// Serializes tests that read or write process-global environment variables.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 /// Environment variables consulted by `ServicesConfig::from_loader`.
-const SERVICE_ENV_KEYS: [&str; 6] = [
+const SERVICE_ENV_KEYS: [&str; 8] = [
     "POSTMARK_API_KEY",
     "RESEND_API_KEY",
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",
     "SLACK_BOT_USER_OAUTH_TOKEN",
     "SLACK_BOT_USER_DEFAULT_CHANNEL",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "GOOGLE_CREDENTIALS_JSON",
 ];
 
 /// Unique temporary directory removed when dropped.
@@ -98,9 +100,18 @@ region = "eu-west-1"
 [services.slack.notifications]
 bot_user_oauth_token = "xoxb-token"
 channel = "#alerts"
+
+[services.google]
+credentials_path = "/etc/google/sa.json"
+credentials_json = "{\"type\":\"service_account\"}"
+scopes = [
+    "https://www.googleapis.com/auth/cloud-platform",
+    "https://www.googleapis.com/auth/drive.readonly",
+]
+subject = "admin@example.com"
 "##;
 
-/// All four service blocks parse into their typed accessors.
+/// All five service blocks parse into their typed accessors.
 #[test]
 fn full_toml_parses_into_typed_accessors() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -128,6 +139,18 @@ fn full_toml_parses_into_typed_accessors() {
             channel: "#alerts".to_string(),
         })
     );
+    assert_eq!(
+        config.google_credentials(),
+        Some(GoogleCredentials {
+            credentials_path: Some("/etc/google/sa.json".to_string()),
+            credentials_json: Some("{\"type\":\"service_account\"}".to_string()),
+            scopes: vec![
+                "https://www.googleapis.com/auth/cloud-platform".to_string(),
+                "https://www.googleapis.com/auth/drive.readonly".to_string(),
+            ],
+            subject: Some("admin@example.com".to_string()),
+        })
+    );
 }
 
 /// Blank placeholders are treated as unset.
@@ -150,6 +173,11 @@ region = ""
 [services.slack.notifications]
 bot_user_oauth_token = ""
 channel = ""
+[services.google]
+credentials_path = ""
+credentials_json = ""
+scopes = []
+subject = ""
 "#,
     );
     let loader = ConfigLoader::load_from_dir(dir.path()).expect("load config");
@@ -160,6 +188,7 @@ channel = ""
     assert_eq!(config.resend_key(), None);
     assert_eq!(config.ses_credentials(), None);
     assert_eq!(config.slack_notifications(), None);
+    assert_eq!(config.google_credentials(), None);
 }
 
 /// A missing `[services]` section is tolerated and yields all `None`.
@@ -289,4 +318,101 @@ fn shipped_services_toml_parses_with_empty_placeholders() {
     assert_eq!(config.resend_key(), None);
     assert_eq!(config.ses_credentials(), None);
     assert_eq!(config.slack_notifications(), None);
+    assert_eq!(config.google_credentials(), None);
+}
+
+/// The Google block accepts a whitespace/comma-separated scope string, so a
+/// loader overlay such as `SERVICES__GOOGLE__SCOPES` can set the list.
+#[test]
+fn google_scopes_accept_separated_string() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear_service_env();
+    let dir = TempConfigDir::new();
+    dir.write(
+        "services.toml",
+        r#"
+[services.google]
+scopes = "scope-a, scope-b  scope-c"
+"#,
+    );
+    let loader = ConfigLoader::load_from_dir(dir.path()).expect("load config");
+
+    let google = ServicesConfig::from_loader(&loader)
+        .expect("parse google block")
+        .google_credentials()
+        .expect("google credentials present");
+    assert_eq!(google.scopes, vec!["scope-a", "scope-b", "scope-c"]);
+    assert_eq!(google.credentials_path, None);
+}
+
+/// The documented Google environment variables supply credentials with no file.
+#[test]
+fn google_env_supplies_credentials_without_file() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear_service_env();
+    std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", "/env/sa.json");
+    std::env::set_var("GOOGLE_CREDENTIALS_JSON", "{\"type\":\"service_account\"}");
+
+    let dir = TempConfigDir::new();
+    let loader = ConfigLoader::load_from_dir(dir.path()).expect("load empty config");
+    let config = ServicesConfig::from_loader(&loader).expect("parse with env only");
+
+    clear_service_env();
+    assert_eq!(
+        config.google_credentials(),
+        Some(GoogleCredentials {
+            credentials_path: Some("/env/sa.json".to_string()),
+            credentials_json: Some("{\"type\":\"service_account\"}".to_string()),
+            scopes: Vec::new(),
+            subject: None,
+        })
+    );
+}
+
+/// A number where the scope list is expected is a typed error naming the key.
+#[test]
+fn google_malformed_scopes_is_typed_error() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear_service_env();
+    let dir = TempConfigDir::new();
+    dir.write("services.toml", "[services.google]\nscopes = 5\n");
+    let loader = ConfigLoader::load_from_dir(dir.path()).expect("load config");
+
+    let error = ServicesConfig::from_loader(&loader).expect_err("number for scopes must fail");
+    match error {
+        ServicesConfigError::Invalid(message) => {
+            assert!(message.contains("services.google.scopes"), "got: {message}");
+        }
+    }
+}
+
+/// A non-string entry inside the scope array is a typed error.
+#[test]
+fn google_non_string_scope_entry_is_typed_error() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear_service_env();
+    let dir = TempConfigDir::new();
+    dir.write("services.toml", "[services.google]\nscopes = [\"ok\", 7]\n");
+    let loader = ConfigLoader::load_from_dir(dir.path()).expect("load config");
+
+    let error = ServicesConfig::from_loader(&loader).expect_err("number entry must fail");
+    assert!(matches!(error, ServicesConfigError::Invalid(_)));
+}
+
+/// `Debug` masks the inline service-account JSON (it embeds the private key).
+#[test]
+fn google_debug_redacts_inline_json() {
+    let credentials = GoogleCredentials {
+        credentials_path: Some("/etc/google/sa.json".to_string()),
+        credentials_json: Some("{\"private_key\":\"super-secret\"}".to_string()),
+        scopes: vec!["scope-a".to_string()],
+        subject: None,
+    };
+    let rendered = format!("{credentials:?}");
+    assert!(
+        !rendered.contains("super-secret"),
+        "json leaked: {rendered}"
+    );
+    assert!(rendered.contains("[REDACTED]"));
+    assert!(rendered.contains("/etc/google/sa.json"));
 }

@@ -40,3 +40,20 @@ region = "us-east-1"
 bot_user_oauth_token = ""
 # Default Slack channel. env: SLACK_BOT_USER_DEFAULT_CHANNEL
 channel = ""
+
+# Google service-account credentials (ADOPT-026, `google/auth` parity).
+# Uncomment and fill in to enable service-account auth. Prefer the environment:
+#   credentials_path -> GOOGLE_APPLICATION_CREDENTIALS
+#   credentials_json -> GOOGLE_CREDENTIALS_JSON
+# Never commit `credentials_json`: it embeds the account's private key.
+# When both sources are set, the inline JSON wins over the file path.
+#
+# [services.google]
+# # Filesystem path to the service-account JSON key.
+# credentials_path = ""
+# # Inline service-account JSON (embeds the private key).
+# credentials_json = ""
+# # OAuth scopes to request, e.g. ["https://www.googleapis.com/auth/cloud-platform"].
+# scopes = []
+# # Impersonated user for domain-wide delegation (optional).
+# subject = ""

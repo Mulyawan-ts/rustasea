@@ -388,3 +388,14 @@ pub use rustasea_image as image;
 /// core build never links the action adapters (NFR-Sca-02).
 #[cfg(feature = "action")]
 pub use rustasea_action as action;
+
+/// Google service-account auth re-export (ADOPT-026) — only with the `google`
+/// feature.
+///
+/// [`GoogleAuthClient`](rustasea_google::GoogleAuthClient) signs an RS256
+/// assertion with a [`ServiceAccount`](rustasea_google::ServiceAccount) key,
+/// exchanges it for a cached [`AccessToken`](rustasea_google::AccessToken), and
+/// refreshes it at 80% of its lifetime (single-flight). Opt-in so the core
+/// build never links the RSA/PEM signing stack (NFR-Sca-02).
+#[cfg(feature = "google")]
+pub use rustasea_google as google;
