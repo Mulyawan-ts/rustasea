@@ -11,10 +11,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 # Default compile-time template engine (MSRV 1.88, matching the workspace).
-askama = "0.16"
+askama = { workspace = true }
 # Opt-in runtime template engine; `loader` is required for `path_loader` and is
 # NOT part of minijinja's default feature set.
-minijinja = { version = "2", optional = true, features = ["loader"] }
+minijinja = { workspace = true, optional = true }
 
 [features]
 default = []

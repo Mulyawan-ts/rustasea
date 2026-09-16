@@ -27,4 +27,4 @@ chrono = { workspace = true, features = ["serde"] }
 async-trait = { workspace = true }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync"] }
+tokio = { workspace = true }

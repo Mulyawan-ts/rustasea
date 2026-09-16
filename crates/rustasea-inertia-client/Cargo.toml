@@ -9,7 +9,7 @@ description = "RustaSea Inertia WASM client — Page parsing, generated componen
 # Protocol-only: the server crate's axum glue is feature-gated off so this
 # crate stays WASM-safe.
 rustasea-inertia = { path = "../rustasea-inertia", default-features = false }
-http = "1"
+http = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

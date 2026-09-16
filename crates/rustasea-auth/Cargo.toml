@@ -36,7 +36,7 @@ rustasea-cache = { path = "../rustasea-cache" }
 time = "0.3"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros", "time"] }
+tokio = { workspace = true }
 subtle = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 rustasea-macros = { path = "../rustasea-macros" }

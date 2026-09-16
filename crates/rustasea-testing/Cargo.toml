@@ -52,12 +52,12 @@ dotenvy = { workspace = true, optional = true }
 # (RUSTSEC-2025-0111 / CVE-2025-62518); 0.28 requires astral-tokio-tar >=0.6.1,
 # clearing RUSTSEC-2026-0066/0112/0113/0145. Declares MSRV 1.88, matching the
 # workspace `rust-version` (ADR-0001).
-testcontainers = { version = "0.28", optional = true }
+testcontainers = { workspace = true, optional = true }
 fake = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 rustasea-auth = { path = "../rustasea-auth", optional = true }
 axum = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
-http-body-util = { version = "0.1", optional = true }
+http-body-util = { workspace = true, optional = true }
 fantoccini = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }

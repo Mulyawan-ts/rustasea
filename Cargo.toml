@@ -128,3 +128,47 @@ rust_xlsxwriter = "0.79"
 # drops the `rayon` thread-pool and the avif/exr/etc. codec tree. Declares an
 # MSRV at or below the workspace `rust-version` (1.88).
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif", "bmp", "tiff"] }
+# Platform crates consolidated by ADOPT-031. Every key below is the single
+# source of truth for its version: members reference it with `workspace = true`,
+# and `cargo xtask deps:check` fails when a member reintroduces an inline
+# version for any of them.
+http = "1"
+# Only `toml` is read (`ConfigLoader` discovers `config/*.toml` only) and the
+# loader never calls `Environment::convert_case`, so the format/convert-case
+# default features are dropped.
+config = { version = "0.14", default-features = false, features = ["toml"] }
+toml = "0.8"
+toml_edit = "0.22"
+# `fs` is `object_store`'s sole default feature and backs the local disk driver;
+# cloud backends stay opt-in per consumer (`rustasea-storage` forwards its
+# `aws`/`gcp`/`azure` features to the matching `object_store` features).
+object_store = { version = "0.14", default-features = false, features = ["fs"] }
+# Driver pinned to bson 3 (`bson-3`) so a single BSON version is shared by the
+# driver and `rustasea-mongo`; `compat-3-3-0` is the driver's own forward-
+# compatibility compile check.
+mongodb = { version = "3.9", default-features = false, features = ["compat-3-3-0", "bson-3", "rustls-tls", "dns-resolver"] }
+bson = "3.1"
+pgvector = { version = "0.4", default-features = false }
+percent-encoding = "2"
+# Shared HTTP client. `json` is the common baseline; consumers add their extra
+# features additively (`rustasea-ai`: stream + rustls-tls, `rustasea-google`:
+# rustls-tls) while keeping default features off.
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+askama = "0.16"
+# Default features stay enabled: runtime templates use `extends`/`include`/
+# `block`, which minijinja gates behind its `multi_template`/`macros`/`builtins`
+# defaults. `loader` adds `path_loader`, which is not in the default set.
+minijinja = { version = "2", features = ["loader"] }
+lettre = { version = "0.11.23", default-features = false, features = ["smtp-transport", "tokio1-rustls-tls", "builder"] }
+# Shared Sentry SDK baseline: request transport, rustls, and the integrations
+# both the HTTP request-context middleware and the logging layer wire.
+# `rustasea-logging` adds `tracing` additively.
+sentry = { version = "0.49", default-features = false, features = ["reqwest", "rustls", "backtrace", "panic", "contexts", "debug-images"] }
+tempfile = "3"
+chrono-tz = "0.10"
+http-body-util = "0.1"
+# Pure-Rust SSH client for the opt-in SFTP disk (ADOPT-025). `ring` (already in
+# the lock via `rustls`) is the crypto backend and `rsa` keeps RSA host/private
+# keys usable; `russh-sftp` speaks the subsystem over a caller-supplied stream.
+russh = { version = "0.62", default-features = false, features = ["ring", "rsa"] }
+russh-sftp = "2.4"

@@ -29,17 +29,9 @@ chrono = { workspace = true }
 # Sentry SDK (ADOPT-004). Default features are disabled so the transport is
 # chosen explicitly (`reqwest` + `rustls`); `panic`/`tracing`/`contexts`/
 # `debug-images` supply the integrations wired by `crate::sentry`.
-sentry = { version = "0.49", default-features = false, features = [
-    "reqwest",
-    "rustls",
-    "backtrace",
-    "panic",
-    "tracing",
-    "contexts",
-    "debug-images",
-], optional = true }
+sentry = { workspace = true, features = ["tracing"], optional = true }
 sentry-tracing = { version = "0.49", optional = true }
 sentry-panic = { version = "0.49", optional = true }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }

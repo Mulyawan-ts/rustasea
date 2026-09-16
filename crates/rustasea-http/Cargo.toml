@@ -13,26 +13,19 @@ default = []
 sentry = ["dep:sentry"]
 
 [dependencies]
-axum = { version = "0.7" }
-tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "trace", "catch-panic"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "1"
-tokio = { version = "1", features = ["rt", "macros", "time"] }
-reqwest = { version = "0.12", default-features = false, features = ["json"] }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["catch-panic"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
 rustasea-router = { path = "../rustasea-router" }
 # Sentry SDK (ADOPT-004). Default features are disabled; the middleware only
 # needs the core client + protocol types. The `panic`/`contexts`/`debug-images`
 # integrations match `rustasea-logging`'s client so the two stay in lockstep.
-sentry = { version = "0.49", default-features = false, features = [
-    "reqwest",
-    "rustls",
-    "backtrace",
-    "panic",
-    "contexts",
-    "debug-images",
-], optional = true }
+sentry = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "net"] }

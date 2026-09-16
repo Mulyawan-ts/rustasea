@@ -7,5 +7,5 @@ description = "RustaSea timezone — IANA validation, user-timezone resolution c
 
 [dependencies]
 chrono = { workspace = true }
-chrono-tz = "0.10"
+chrono-tz = { workspace = true }
 thiserror = { workspace = true }

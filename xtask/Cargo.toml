@@ -13,6 +13,9 @@ path = "src/main.rs"
 # `check-cycles` parses `cargo metadata` JSON directly (no extra external crate
 # beyond the workspace-locked `serde_json`).
 serde_json = { workspace = true }
+# `deps:check` parses the root and member `Cargo.toml` manifests with
+# span-preserving TOML so an inline version can be reported at its exact line.
+toml_edit = { workspace = true }
 # `migrate` reuses the ORM migrator/pool bootstrap and the layered config source
 # the CLI `migrate` command uses (crates/rustasea-cli/src/commands/ops.rs:312-429).
 rustasea-orm = { path = "../crates/rustasea-orm" }

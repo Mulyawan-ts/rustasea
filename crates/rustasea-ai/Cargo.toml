@@ -7,12 +7,12 @@ description = "RustaSea AI SDK — provider-agnostic AiProvider trait, Agent/Too
 
 [dependencies]
 async-trait = { workspace = true }
-futures-core = "0.3"
-futures-util = { version = "0.3", default-features = false }
+futures-core = { workspace = true }
+futures-util = { workspace = true }
 # Shared async HTTP client for the real provider adapters (`providers` module).
 # Declared directly (not via a per-provider SDK) to keep the dependency graph
 # lean (NFR-Sca-02); `rustls-tls` reuses the TLS stack already in the lockfile.
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+reqwest = { workspace = true, features = ["stream", "rustls-tls"] }
 rustasea-queue = { path = "../rustasea-queue", optional = true }
 rustasea-search = { path = "../rustasea-search", optional = true }
 rustasea-storage = { path = "../rustasea-storage", optional = true }

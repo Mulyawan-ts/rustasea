@@ -8,7 +8,7 @@ description = "RustaSea Inertia server — Page<T> envelope, X-Inertia header co
 [dependencies]
 # The `http` types (HeaderMap/Method/Uri) are WASM-safe and shared with the
 # client crate, so the protocol surface stays dependency-light.
-http = "1"
+http = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 # Axum glue (IntoResponse, extractor, middleware) is optional so the client can

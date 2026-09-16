@@ -6,7 +6,7 @@ license.workspace = true
 description = "RustaSea JSON:API — JsonApiResource, sparse fieldsets, inclusion, links, vnd.api+json"
 
 [dependencies]
-http = "1"
+http = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

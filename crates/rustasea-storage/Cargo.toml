@@ -7,20 +7,20 @@ description = "RustaSea storage — read-through disk Storage, path confinement,
 
 [dependencies]
 async-trait = { workspace = true }
-object_store = "0.14.1"
+object_store = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-toml = "0.8"
+toml = { workspace = true }
 # Pure-Rust SSH client for the opt-in `sftp` disk (ADOPT-025). Default features
 # are disabled and `ring` (already in the lock via `rustls`) is selected as the
 # crypto backend so no C/OpenSSL toolchain is required; `rsa` keeps RSA host
 # keys and RSA private keys usable. `russh-sftp` speaks the SFTP subsystem over
 # a caller-supplied stream (no direct `russh` dependency), pairing with the
 # `russh` 0.62 line.
-russh = { version = "0.62", optional = true, default-features = false, features = ["ring", "rsa"] }
-russh-sftp = { version = "2.4", optional = true }
+russh = { workspace = true, optional = true }
+russh-sftp = { workspace = true, optional = true }
 
 [features]
 default = []

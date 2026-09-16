@@ -23,7 +23,7 @@ rustasea-config = { path = "../rustasea-config" }
 # `pusher` driver (ADOPT-022): HTTP transport + HMAC-SHA256 request signing and
 # the MD5 body digest the Pusher HTTP API requires. Optional so the core build
 # links neither the HTTP client nor the crypto stack (NFR-Sca-02).
-reqwest = { version = "0.12", default-features = false, features = ["json"], optional = true }
+reqwest = { workspace = true, optional = true }
 hmac = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }

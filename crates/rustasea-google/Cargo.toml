@@ -25,7 +25,7 @@ tracing = { workspace = true }
 # `json` decodes the token/error bodies. The crate is a hard dependency of this
 # crate (there is no feature gate) because service-account auth is useless
 # without a token exchange.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { workspace = true, features = ["rustls-tls"] }
 
 [dev-dependencies]
 # Test-only RSA key generation for the signing/exchange assertions. Both are

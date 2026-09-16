@@ -12,7 +12,7 @@ rustasea-inertia-client = { path = "../rustasea-inertia-client" }
 # Protocol types/constants shared with the client; the axum glue stays off so
 # this crate remains WASM-safe.
 rustasea-inertia = { path = "../rustasea-inertia", default-features = false }
-http = "1"
+http = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 

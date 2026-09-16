@@ -17,5 +17,5 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 
 [dev-dependencies]
-askama = "0.16"
+askama = { workspace = true }
 tower = { workspace = true, features = ["util"] }

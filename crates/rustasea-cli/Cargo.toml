@@ -69,7 +69,7 @@ rustasea-i18n = { path = "../rustasea-i18n", optional = true }
 # a build without the `mcp` feature never links the AI tree.
 rustasea-ai = { path = "../rustasea-ai", optional = true }
 # TOML parsing for `mcp:serve` config resources (`config/*.toml` → redacted JSON).
-toml = { version = "0.8", optional = true }
+toml = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 dialoguer = { workspace = true, optional = true }
 indicatif = { workspace = true, optional = true }
@@ -84,7 +84,7 @@ rustyline = { workspace = true, optional = true }
 rustasea-ai = { path = "../rustasea-ai", features = ["mcp"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 # `log:show` tests build fixture log files in throwaway temp directories.
-tempfile = "3"
+tempfile = { workspace = true }
 # `make:module` tests parse the generated Rust with `syn` so "compiles" is
 # checked by an independent oracle rather than a substring match.
 syn = { workspace = true }
