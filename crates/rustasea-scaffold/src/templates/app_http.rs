@@ -13,6 +13,7 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
     let mut files = vec![
         ("app/http/mod.rs", HTTP_MOD),
         ("app/http/controllers/mod.rs", CONTROLLERS_MOD),
+        ("app/http/controllers/controller.rs", CONTROLLERS_BASE),
         ("app/http/controllers/auth_controller.rs", AUTH_CONTROLLER),
         (
             "app/http/controllers/dashboard_controller.rs",
@@ -88,8 +89,31 @@ pub mod requests;
 const CONTROLLERS_MOD: &str = r##"//! HTTP controllers.
 
 pub mod auth_controller;
+pub mod controller;
 pub mod dashboard_controller;
 pub mod settings;
+"##;
+
+/// Application base controller — the shared extension point every scaffold
+/// controller implements.
+///
+/// Mirrors Hypervel 0.4's `app/Http/Controllers/Controller.php`: it re-exports
+/// the framework base [`Controller`](rustasea::http::Controller) trait so the
+/// generated controllers import their response helpers from one app-local path.
+/// Application authors extend this module with their own shared helpers.
+const CONTROLLERS_BASE: &str = r##"//! Base controller for the application.
+//!
+//! This is the RustaSea analogue of Hypervel 0.4's
+//! `app/Http/Controllers/Controller.php`. Every scaffolded controller implements
+//! the re-exported [`Controller`](rustasea::http::Controller) trait to inherit
+//! the framework response helpers (`json`, `json_status`, `validation_error`,
+//! `redirect`, `see_other`) from one app-local import path.
+//!
+//! Add shared application helpers here (authorization gates, response shaping,
+//! or common extractors) so they are available to every controller through this
+//! single extension point.
+
+pub use rustasea::http::Controller;
 "##;
 
 const AUTH_CONTROLLER: &str = r##"//! Login, registration, logout, and password-reset handlers.
@@ -99,39 +123,48 @@ const AUTH_CONTROLLER: &str = r##"//! Login, registration, logout, and password-
 
 use axum::response::Response;
 
-/// GET /login — show the login screen.
-pub async fn show_login() -> Response {
-    todo!("render the login screen for this variant")
-}
+use crate::app::http::controllers::controller::Controller;
 
-/// POST /login — authenticate and start the session.
-pub async fn login() -> Response {
-    todo!("authenticate, rotate the session id, and redirect")
-}
+/// Handles authentication screens and submissions.
+pub struct AuthController;
 
-/// POST /logout — destroy the session and redirect home.
-pub async fn logout() -> Response {
-    todo!("destroy the session and redirect to /")
-}
+impl Controller for AuthController {}
 
-/// GET /register — show the registration screen.
-pub async fn show_register() -> Response {
-    todo!("render the registration screen for this variant")
-}
+impl AuthController {
+    /// GET /login — show the login screen.
+    pub async fn show_login() -> Response {
+        todo!("render the login screen for this variant")
+    }
 
-/// POST /register — create the account and authenticate.
-pub async fn register() -> Response {
-    todo!("create the user, log in, and redirect")
-}
+    /// POST /login — authenticate and start the session.
+    pub async fn login() -> Response {
+        todo!("authenticate, rotate the session id, and redirect")
+    }
 
-/// GET /confirm-password — show the password-confirmation screen.
-pub async fn show_confirm_password() -> Response {
-    todo!("render the confirm-password screen for this variant")
-}
+    /// POST /logout — destroy the session and redirect home.
+    pub async fn logout() -> Response {
+        todo!("destroy the session and redirect to /")
+    }
 
-/// POST /confirm-password — re-confirm the current password.
-pub async fn confirm_password() -> Response {
-    todo!("verify the current password and mark it confirmed for the session")
+    /// GET /register — show the registration screen.
+    pub async fn show_register() -> Response {
+        todo!("render the registration screen for this variant")
+    }
+
+    /// POST /register — create the account and authenticate.
+    pub async fn register() -> Response {
+        todo!("create the user, log in, and redirect")
+    }
+
+    /// GET /confirm-password — show the password-confirmation screen.
+    pub async fn show_confirm_password() -> Response {
+        todo!("render the confirm-password screen for this variant")
+    }
+
+    /// POST /confirm-password — re-confirm the current password.
+    pub async fn confirm_password() -> Response {
+        todo!("verify the current password and mark it confirmed for the session")
+    }
 }
 "##;
 
@@ -142,9 +175,18 @@ const DASHBOARD_CONTROLLER_VIEW: &str = r##"//! Dashboard handler for server-ren
 
 use axum::response::Response;
 
-/// GET /dashboard — render the authenticated dashboard view.
-pub async fn index() -> Response {
-    todo!("render resources/views/dashboard.html with shared props")
+use crate::app::http::controllers::controller::Controller;
+
+/// Handles the authenticated dashboard screen.
+pub struct DashboardController;
+
+impl Controller for DashboardController {}
+
+impl DashboardController {
+    /// GET /dashboard — render the authenticated dashboard view.
+    pub async fn index() -> Response {
+        todo!("render resources/views/dashboard.html with shared props")
+    }
 }
 "##;
 
@@ -155,9 +197,18 @@ const DASHBOARD_CONTROLLER_INERTIA: &str = r##"//! Dashboard handler for Inertia
 
 use axum::response::Response;
 
-/// GET /dashboard — render the `dashboard` Inertia component.
-pub async fn index() -> Response {
-    todo!("render the dashboard Inertia page with shared props")
+use crate::app::http::controllers::controller::Controller;
+
+/// Handles the authenticated dashboard screen.
+pub struct DashboardController;
+
+impl Controller for DashboardController {}
+
+impl DashboardController {
+    /// GET /dashboard — render the `dashboard` Inertia component.
+    pub async fn index() -> Response {
+        todo!("render the dashboard Inertia page with shared props")
+    }
 }
 "##;
 
@@ -172,14 +223,23 @@ const PROFILE_CONTROLLER: &str = r##"//! Profile settings handlers.
 
 use axum::response::Response;
 
-/// GET /settings/profile — show the profile form.
-pub async fn edit() -> Response {
-    todo!("render the profile settings screen")
-}
+use crate::app::http::controllers::controller::Controller;
 
-/// PATCH /settings/profile — persist profile changes.
-pub async fn update() -> Response {
-    todo!("validate ProfileUpdateRequest and persist the user")
+/// Handles the profile settings screen and updates.
+pub struct ProfileController;
+
+impl Controller for ProfileController {}
+
+impl ProfileController {
+    /// GET /settings/profile — show the profile form.
+    pub async fn edit() -> Response {
+        todo!("render the profile settings screen")
+    }
+
+    /// PATCH /settings/profile — persist profile changes.
+    pub async fn update() -> Response {
+        todo!("validate ProfileUpdateRequest and persist the user")
+    }
 }
 "##;
 
@@ -187,14 +247,23 @@ const PASSWORD_CONTROLLER: &str = r##"//! Password settings handlers.
 
 use axum::response::Response;
 
-/// GET /settings/password — show the password form.
-pub async fn edit() -> Response {
-    todo!("render the password settings screen")
-}
+use crate::app::http::controllers::controller::Controller;
 
-/// PUT /settings/password — rotate the password.
-pub async fn update() -> Response {
-    todo!("validate PasswordUpdateRequest, re-hash, and persist")
+/// Handles the password settings screen and rotation.
+pub struct PasswordController;
+
+impl Controller for PasswordController {}
+
+impl PasswordController {
+    /// GET /settings/password — show the password form.
+    pub async fn edit() -> Response {
+        todo!("render the password settings screen")
+    }
+
+    /// PUT /settings/password — rotate the password.
+    pub async fn update() -> Response {
+        todo!("validate PasswordUpdateRequest, re-hash, and persist")
+    }
 }
 "##;
 
@@ -206,9 +275,18 @@ const SECURITY_CONTROLLER: &str = r##"//! Security settings handlers.
 
 use axum::response::Response;
 
-/// GET /settings/security — show the security screen.
-pub async fn edit() -> Response {
-    todo!("render the security settings screen")
+use crate::app::http::controllers::controller::Controller;
+
+/// Handles the security settings screen.
+pub struct SecurityController;
+
+impl Controller for SecurityController {}
+
+impl SecurityController {
+    /// GET /settings/security — show the security screen.
+    pub async fn edit() -> Response {
+        todo!("render the security settings screen")
+    }
 }
 "##;
 

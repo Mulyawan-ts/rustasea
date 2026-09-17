@@ -93,7 +93,7 @@ const WEB: &str = r##"//! Web routes — the public landing page and the authent
 
 use rustasea::router::Router;
 
-use crate::app::http::controllers::dashboard_controller;
+use crate::app::http::controllers::dashboard_controller::DashboardController;
 
 /// Register the web route table.
 pub fn register(table: &mut Router) {
@@ -102,7 +102,7 @@ pub fn register(table: &mut Router) {
     table.group(|group| {
         group.middleware("auth").middleware("verified");
         group
-            .get_action("/dashboard", dashboard_controller::index)
+            .get_action("/dashboard", DashboardController::index)
             .named("dashboard");
     });
 }
@@ -121,30 +121,30 @@ const AUTH: &str = r##"//! Auth routes — login, registration, logout, and pass
 
 use rustasea::router::Router;
 
-use crate::app::http::controllers::auth_controller;
+use crate::app::http::controllers::auth_controller::AuthController;
 
 /// Register the auth route table.
 pub fn register(table: &mut Router) {
     table
-        .get_action("/login", auth_controller::show_login)
+        .get_action("/login", AuthController::show_login)
         .named("login");
     table
-        .post_action("/login", auth_controller::login)
+        .post_action("/login", AuthController::login)
         .named("login");
     table
-        .post_action("/logout", auth_controller::logout)
+        .post_action("/logout", AuthController::logout)
         .named("logout");
     table
-        .get_action("/register", auth_controller::show_register)
+        .get_action("/register", AuthController::show_register)
         .named("register");
     table
-        .post_action("/register", auth_controller::register)
+        .post_action("/register", AuthController::register)
         .named("register");
     table
-        .get_action("/confirm-password", auth_controller::show_confirm_password)
+        .get_action("/confirm-password", AuthController::show_confirm_password)
         .named("password.confirm");
     table
-        .post_action("/confirm-password", auth_controller::confirm_password)
+        .post_action("/confirm-password", AuthController::confirm_password)
         .named("password.confirm");
 }
 "##;
@@ -157,9 +157,9 @@ const SETTINGS: &str = r##"//! Settings routes — profile, password, and securi
 
 use rustasea::router::Router;
 
-use crate::app::http::controllers::settings::{
-    password_controller, profile_controller, security_controller,
-};
+use crate::app::http::controllers::settings::password_controller::PasswordController;
+use crate::app::http::controllers::settings::profile_controller::ProfileController;
+use crate::app::http::controllers::settings::security_controller::SecurityController;
 
 /// Register the settings route table.
 pub fn register(table: &mut Router) {
@@ -172,16 +172,16 @@ pub fn register(table: &mut Router) {
             .named("settings");
 
         group
-            .get_action("/settings/profile", profile_controller::edit)
+            .get_action("/settings/profile", ProfileController::edit)
             .named("profile.edit");
         group
-            .patch_action("/settings/profile", profile_controller::update)
+            .patch_action("/settings/profile", ProfileController::update)
             .named("profile.edit");
         group
-            .get_action("/settings/password", password_controller::edit)
+            .get_action("/settings/password", PasswordController::edit)
             .named("password.edit");
         group
-            .put_action("/settings/password", password_controller::update)
+            .put_action("/settings/password", PasswordController::update)
             .named("password.edit");
 
         // The security screen is the most sensitive: it requires a verified
@@ -189,7 +189,7 @@ pub fn register(table: &mut Router) {
         group.group(|security| {
             security.middleware("verified").middleware("password.confirm");
             security
-                .get_action("/settings/security", security_controller::edit)
+                .get_action("/settings/security", SecurityController::edit)
                 .named("security.edit");
         });
     });

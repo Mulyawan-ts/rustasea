@@ -152,9 +152,9 @@ fn generated_route_tables_use_the_router_dsl() {
         // FIX-RTE-01 regression: the password PUT route must bind to the real
         // controller action, never an unresolved `password_update` identifier.
         assert!(
-            settings.contains(".put_action(\"/settings/password\", password_controller::update)"),
+            settings.contains(".put_action(\"/settings/password\", PasswordController::update)"),
             "routes/settings.rs must bind PUT /settings/password to \
-             password_controller::update ({variant})"
+             PasswordController::update ({variant})"
         );
         assert!(
             !settings.contains("password_update,"),

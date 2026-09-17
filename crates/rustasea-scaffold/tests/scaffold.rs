@@ -26,6 +26,7 @@ const REQUIRED_CORE: &[&str] = &[
     "app/actions/auth/prepare_authenticated_session.rs",
     "app/concerns/password_validation_rules.rs",
     "app/concerns/profile_validation_rules.rs",
+    "app/http/controllers/controller.rs",
     "app/http/controllers/auth_controller.rs",
     "app/http/controllers/dashboard_controller.rs",
     "app/http/controllers/settings/profile_controller.rs",
@@ -372,10 +373,7 @@ fn every_variant_emits_all_twelve_configs() {
             .filter(|file| file.path.starts_with("config/") && file.path.ends_with(".toml"))
             .count();
         let expected = if variant.uses_inertia() { 13 } else { 12 };
-        assert_eq!(
-            config_count, expected,
-            "unexpected config count for {variant}"
-        );
+        assert_eq!(config_count, expected, "bad config count ({variant})");
     }
 }
 
