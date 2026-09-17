@@ -315,6 +315,8 @@ No code blocks. Interfaces are described in terms of traits/structs/attributes a
   | Generator | Output path | Template content |
   |-----------|-------------|------------------|
   | `make:controller` | `app/http/controllers/{name}.rs` | Controller struct with `index`/`store`/`show`/`update`/`destroy` if `--resource` |
+  | `make:middleware` | `app/http/middleware/{name}.rs` | axum `from_fn` function middleware with `handle(request, next)` |
+  | `make:request` | `app/http/requests/{name}.rs` | `Validatable` form request + `FormRequest<{Name}>` extractor alias |
   | `make:model` | `app/models/{name}.rs` | `#[derive(Model)]` struct + `Factory` + migration if `-m` |
   | `make:provider` | `app/providers/{name}.rs` | `ServiceProvider` impl with `register`/`boot` |
   | `make:command` | `app/console/commands/{name}.rs` | `Command` with `signature` + `handle` + `#[usage]` |
@@ -324,8 +326,14 @@ No code blocks. Interfaces are described in terms of traits/structs/attributes a
   | `make:observer` | `app/observers/{name}.rs` | Observer on model lifecycle |
   | `make:test` | `tests/feature/{name}_test.rs` | `TestCase` harness + factory usage |
   | `make:seeder` | `database/seeders/{name}.rs` | `Seeder::run` |
+  | `make:migration` | `database/migrations/{timestamp}_{name}.rs` | `Migration` impl with `up`/`down` and timestamp-prefixed name |
   | `make:agent` | `app/ai/agents/{name}.rs` | `Agent` scaffold (M6) |
   | `make:tool` | `app/ai/tools/{name}.rs` | `Tool` impl scaffold (M6) |
+  | `make:action` | `app/actions/{name}.rs` | `Action` impl with typed `Input`/`Output`/`Error` + `handle` |
+  | `make:module` | `modules/{name}/` (Cargo crate) | `Module` crate: `Cargo.toml`, `src/lib.rs`, `src/routes.rs`, `src/providers/`, `config/{name}.toml`, `migrations/` (ADOPT-027) |
+
+  The canonical generator set is `enum Kind` at `crates/rustasea-cli/src/generators/mod.rs:19-54` (17 variants); the table above mirrors that enum order and the exact emitted paths in `crates/rustasea-cli/src/generators/kinds/`.
+
 - **Outputs:** Generated `.rs` files that are `rustfmt` + `clippy -D warnings` clean
 - **NFRs:** NFR-Usa-03, NFR-Per-04
 - **Errors:** `GeneratorError::AlreadyExists { path }` without `--force`

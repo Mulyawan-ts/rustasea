@@ -30,8 +30,10 @@ Every flow below lists **Node Table** and **Edge Table** with consistent IDs, pl
 cargo rustasea [Public — no running app required]
 ├── new <app>                         [Public]  scaffold new workspace  (FR-005 / FS-M0-01)
 ├── list [--json] [--all]             [Public]  enumerate commands      (FR-500)
-├── make:*                            [Public]  generators              (FR-501)
+├── make:*                            [Public]  17 generators       (FR-501)
 │   ├── make:controller <Name> [--resource] [--force]
+│   ├── make:middleware <Name> [--force]
+│   ├── make:request <Name> [--force]
 │   ├── make:model <Name> [-m] [--force]
 │   ├── make:provider <Name> [--force]
 │   ├── make:command <Name> [--force]
@@ -43,7 +45,9 @@ cargo rustasea [Public — no running app required]
 │   ├── make:seeder <Name> [--force]
 │   ├── make:migration <name>                (FS-M2-05)
 │   ├── make:agent <Name> [--force]         (M6, FR-608)
-│   └── make:tool <Name> [--force]          (M6, FR-608)
+│   ├── make:tool <Name> [--force]          (M6, FR-608)
+│   ├── make:action <Name> [--force]        (ADOPT-028)
+│   └── make:module <Name> [--force]        (ADOPT-027)
 ├── migrate [--fresh] [--seed] [--json]     [Requires DB — FR-208]
 ├── route:list [--json]                     [Requires app — FR-103]
 ├── show:model <Name> [--json]             [Requires app — FR-109]
@@ -68,21 +72,13 @@ flowchart TB
 
     ROOT --> NEW["new <app><br/>scaffold workspace"]
     ROOT --> LIST["list --json --all<br/>enumerate commands"]
-    ROOT --> MAKE["make:* generators<br/>12 generators"]
+    ROOT --> MAKE["make:* generators<br/>17 generators"]
 
-    MAKE --> MKC["make:controller"]
-    MAKE --> MKM["make:model -m"]
-    MAKE --> MKP["make:provider"]
-    MAKE --> MKCMD["make:command"]
-    MAKE --> MKJOB["make:job"]
-    MAKE --> MKEVT["make:event"]
-    MAKE --> MKLIS["make:listener"]
-    MAKE --> MKOBS["make:observer"]
-    MAKE --> MKTST["make:test"]
-    MAKE --> MKSEED["make:seeder"]
-    MAKE --> MKMIG["make:migration"]
-    MAKE --> MKAGENT["make:agent (M6)"]
-    MAKE --> MKTOOL["make:tool (M6)"]
+    MAKE --> MKHTTP["make:controller, middleware, request"]
+    MAKE --> MKDATA["make:model, migration, seeder, test"]
+    MAKE --> MKASYNC["make:provider, command, job, event, listener, observer"]
+    MAKE --> MKAI["make:agent, tool (M6)"]
+    MAKE --> MKADOPT["make:action, module (ADOPT-027/028)"]
 
     ROOT --> MIG["migrate / migrate:fresh"]
     ROOT --> ROUTE["route:list --json"]
@@ -217,7 +213,7 @@ stateDiagram-v2
 ```mermaid
 flowchart TB
     START(["cargo rustasea make:<kind> <Name> [--flags]"])
-    START --> PARSE{{"Parse kind + Name<br/>kind ∈ 12 generators<br/>Name PascalCase?"}}
+    START --> PARSE{{"Parse kind + Name<br/>kind ∈ 17 generators<br/>Name PascalCase?"}}
     PARSE -- "unknown kind" --> ERR_KIND["stderr: unknown generator 'make:foo'<br/>did you mean 'make:tool'?<br/>exit 1"]
     PARSE -- "invalid Name" --> ERR_NAME["stderr: invalid name 'foo_bar'<br/>hint: use PascalCase e.g. UserController<br/>exit 1"]
     PARSE -- valid --> RESOLVE["Resolve output path<br/>per generator table"]
@@ -238,6 +234,8 @@ flowchart TB
 | Generator | Arg `<Name>` example | Output path | Extra with flags | Template notes |
 |-----------|----------------------|-------------|------------------|----------------|
 | `make:controller` | `UserController` | `app/http/controllers/user_controller.rs` | `--resource` adds `index`/`store`/`show`/`update`/`destroy` methods + route comments | Imports `AppState`; `#[middleware]` scaffold comment |
+| `make:middleware` | `EnsureTokenIsValid` | `app/http/middleware/ensure_token_is_valid.rs` | - | `axum::middleware::from_fn` function with `handle(request, next)` |
+| `make:request` | `StorePostRequest` | `app/http/requests/store_post_request.rs` | - | `Validatable` impl + `FormRequest<{Name}>` extractor alias |
 | `make:model` | `Post` | `app/models/post.rs` | `-m` also creates `database/migrations/YYYY_MM_DD_HHMMSS_create_posts_table.rs` | `#[derive(Model)]` + timestamps + soft_delete default; `Factory` impl if `--factory` |
 | `make:provider` | `BillingProvider` | `app/providers/billing_provider.rs` | — | `impl ServiceProvider { register, boot }` + registration hint for `bootstrap/providers.rs` |
 | `make:command` | `SendEmails` | `app/console/commands/send_emails.rs` | — | `#[command]` + `signature` + `handle` + `#[usage]`/`#[help]` attributes |
@@ -250,6 +248,8 @@ flowchart TB
 | `make:migration` | `create_users_table` | `database/migrations/YYYY_MM_DD_HHMMSS_create_users_table.rs` | name drives `up`/`down` stub | `up` creates table; `down` drops; snake_case input required |
 | `make:agent` | `SupportAgent` | `app/ai/agents/support_agent.rs` | M6 only — requires `ai` feature | `impl Agent { tools, middleware, sub_agents }` scaffold |
 | `make:tool` | `SearchDocs` | `app/ai/tools/search_docs.rs` | M6 only | `impl Tool { name, schema, call }` + `JsonSchema` example |
+| `make:action` | `PublishPost` | `app/actions/publish_post.rs` | - | `Action` impl with typed `Input`/`Output`/`Error` + `handle` (ADOPT-028) |
+| `make:module` | `Billing` | `modules/billing/` (Cargo crate) | - | `Module` crate: `Cargo.toml`, `src/lib.rs`, `src/routes.rs`, `src/providers/`, `config/{name}.toml`, `migrations/` (ADOPT-027) |
 
 | ID | From | To | Trigger | Label |
 |----|------|----|---------|-------|
@@ -464,7 +464,7 @@ error[E<CODE>]: <title>
 
 | Gate | Status | Evidence |
 |------|--------|----------|
-| Every `make:*` generator (12 incl. `make:migration`) has a documented flow + output path | ✅ | §4.2 table |
+| Every `make:*` generator (17; canonical `enum Kind` at `crates/rustasea-cli/src/generators/mod.rs:19-54`) has a documented flow + output path | ✅ | §4.2 table |
 | Every `route:list`/`show:model`/`queue:*`/`schedule:*`/`migrate` command has a flow | ✅ | §4.3–§4.6 |
 | Node/Edge IDs consistent across tables | ✅ | Each flow has aligned N/E/ERR tables |
 | Decision branching is mutually exclusive (validation → exists → generate, etc.) | ✅ | Exclusive `if/else` per decision node |

@@ -14,7 +14,7 @@
 ## 1. Module Introduction
 
 ### 1.1 Brief Description
-The DX loop: `cargo rustasea` CLI via `clap`  derive + `cargo xtask` with `list` command (`#[usage]`/`#[help]`/`#[hidden]`), `make:*` generators (`controller`/`model`/`provider`/`command`/`job`/`event`/`listener`/`observer`/`test`/`seeder`/`agent`/`tool`) producing `rustfmt`+`clippy -D warnings` clean code, interactive prompts (`ask`/`secret`/`confirm`/`choice`/`multiSelect`) + output helpers (`table`/`progressBar`/`spinner`) via `dialoguer`/`indicatif`/`comfy-table`, `Shutdownable` on long workers, programmatic `Artisan::call(cmd, args)` in-process invocation, declarative `#[middleware]`/`#[authorize]`/`#[tries]`/`#[backoff]`/`#[timeout]`/`#[failOnTimeout]`/`#[withoutBroadcasting]` bundle, and `TestCase` harness (per-package `.env.testing` + isolated DB/cache via `testcontainers` + `sqlx::test`, teardown after suite, `Str` factory reset, paginator `bootstrap-3` view).
+The DX loop: `cargo rustasea` CLI via `clap`  derive + `cargo xtask` with `list` command (`#[usage]`/`#[help]`/`#[hidden]`), `make:*` generators (`controller`/`middleware`/`request`/`model`/`provider`/`command`/`job`/`event`/`listener`/`observer`/`test`/`seeder`/`migration`/`agent`/`tool`/`action`/`module`; 17 kinds, canonical `enum Kind` at `crates/rustasea-cli/src/generators/mod.rs:19-54`) producing `rustfmt`+`clippy -D warnings` clean code, interactive prompts (`ask`/`secret`/`confirm`/`choice`/`multiSelect`) + output helpers (`table`/`progressBar`/`spinner`) via `dialoguer`/`indicatif`/`comfy-table`, `Shutdownable` on long workers, programmatic `Artisan::call(cmd, args)` in-process invocation, declarative `#[middleware]`/`#[authorize]`/`#[tries]`/`#[backoff]`/`#[timeout]`/`#[failOnTimeout]`/`#[withoutBroadcasting]` bundle, and `TestCase` harness (per-package `.env.testing` + isolated DB/cache via `testcontainers` + `sqlx::test`, teardown after suite, `Str` factory reset, paginator `bootstrap-3` view).
 
 ### 1.2 Position & Role
 - **Type:** DX + test infrastructure. Scaffolds every domain (BC-0..BC-4, BC-6).
@@ -26,7 +26,7 @@ The DX loop: `cargo rustasea` CLI via `clap`  derive + `cargo xtask` with `list`
 | Feature | Description | Detail |
 |---------|-------------|--------|
 | CLI | `cargo rustasea list [--json] [--all]`, typed `Args`/`Flags`, prompts `ask`/`secret`/`confirm`/`choice`/`multiSelect`, helpers `table`/`progressBar`/`spinner`, `Shutdownable` | [cli.md](cli.md) |
-| Generators | `make:controller`/`model`/`provider`/`command`/`job`/`event`/`listener`/`observer`/`test`/`seeder`/`agent`/`tool`, `--resource`, `-m`, `AlreadyExists`/`--force`, `rustfmt`/`clippy` clean | [generators.md](generators.md) |
+| Generators | `make:controller`/`middleware`/`request`/`model`/`provider`/`command`/`job`/`event`/`listener`/`observer`/`test`/`seeder`/`migration`/`agent`/`tool`/`action`/`module` (17 kinds), `--resource`, `-m`, `AlreadyExists`/`--force`, `rustfmt`/`clippy` clean | [generators.md](generators.md) |
 | Testing Harness | `TestCase`, `testcontainers` per-worker PG/Redis, `.env.testing` overlay, `Str` reset, `Artisan::call`, paginator views | [testing-harness.md](testing-harness.md) |
 
 ## 3. High-Level Architecture

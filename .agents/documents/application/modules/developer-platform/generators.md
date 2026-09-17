@@ -4,7 +4,7 @@
 > **Stories:** US-M5-02 (make:* rustfmt/clippy clean), US-M5-03 (declarative attributes) · **BDD:** `@generators`, `@attributes`
 
 ## 1. Feature Overview
-- **Brief Description:** `cargo rustasea make:controller UserController [--resource]` → `app/http/controllers/user_controller.rs` (with `index`/`store`/`show`/`update`/`destroy` if `--resource`), `make:model Post -m` → `app/models/post.rs` with `#[derive(Model)]` + `Factory` + migration if `-m`, `make:provider/provider`/`command`/`job`/`event`/`listener`/`observer`/`test`/`seeder`/`agent`/`tool`, each template `rustfmt`+`clippy -- -D warnings` clean (NFR-Usa-03), `GeneratorError::AlreadyExists { path }` without `--force`, declarative attributes `#[tries(3)]`/`#[backoff(10)]`/`#[timeout(30)]`/`#[failOnTimeout]`/`#[withoutBroadcasting]`/`#[middleware]`/`#[authorize]`/`#[usage]`/`#[help]`/`#[hidden]`/`#[repairToolCalls]` (FSD FS-M5-03).
+- **Brief Description:** `cargo rustasea make:controller UserController [--resource]` → `app/http/controllers/user_controller.rs` (with `index`/`store`/`show`/`update`/`destroy` if `--resource`), `make:model Post -m` → `app/models/post.rs` with `#[derive(Model)]` + `Factory` + migration if `-m`, and `make:middleware`/`request`/`provider`/`command`/`job`/`event`/`listener`/`observer`/`test`/`seeder`/`migration`/`agent`/`tool`/`action`/`module` (17 kinds total, canonical `enum Kind` at `crates/rustasea-cli/src/generators/mod.rs:19-54`), each template `rustfmt`+`clippy -- -D warnings` clean (NFR-Usa-03), `GeneratorError::AlreadyExists { path }` without `--force`, declarative attributes `#[tries(3)]`/`#[backoff(10)]`/`#[timeout(30)]`/`#[failOnTimeout]`/`#[withoutBroadcasting]`/`#[middleware]`/`#[authorize]`/`#[usage]`/`#[help]`/`#[hidden]`/`#[repairToolCalls]` (FSD FS-M5-03).
 - **Role in Module:** Scaffolds every domain (BC-0..BC-4, BC-6) — the only writer into `app/` besides the developer.
 
 ## 2. User Stories
@@ -74,7 +74,7 @@ erDiagram
 // CLI (per generator)
 // cargo rustasea make:controller UserController [--resource]
 // cargo rustasea make:model Post -m  [--force]
-// + make:provider/command/job/event/listener/observer/test/seeder/agent/tool
+// + make:middleware/request/provider/command/job/event/listener/observer/test/seeder/migration/agent/tool/action/module
 enum GeneratorError { AlreadyExists { path: String } }
 // Attributes expanded from rustasea-macros
 // #[tries(3)] #[backoff(10)] #[timeout(30)] #[failOnTimeout] #[withoutBroadcasting]
