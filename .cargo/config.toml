@@ -2,7 +2,7 @@
 rustc-wrapper = "/home/vheins/.cargo/bin/sccache"
 
 [env]
-SCCACHE_CACHE_SIZE = "2G"
+SCCACHE_CACHE_SIZE = "5G"
 CARGO_INCREMENTAL = "0"
 
 # Convenience alias so the documented `cargo xtask <task>` surface works without

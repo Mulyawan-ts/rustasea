@@ -132,6 +132,8 @@ cargo test -p rustasea --features integration -- --ignored
    | `msrv` | `cargo check --workspace` on Rust 1.88.0 |
 
    Formatting violations fail the build: run `cargo fmt --all` before pushing.
+
+   CI uses [sccache](https://github.com/mozilla/sccache) (`mozilla-actions/sccache-action`) to cache Rust compilation across the `quality`, `test`, and `msrv` jobs.
 4. Address review feedback with new commits; avoid rewriting shared history.
 
 ## Coding standards

@@ -22,18 +22,26 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Route rustc through sccache and store the cache in the GitHub Actions
+  # cache. Set workflow-wide: the compile-free `deny`/`audit` jobs never
+  # invoke rustc, so the wrapper is inert there (no sccache binary installed).
+  RUSTC_WRAPPER: sccache
+  SCCACHE_GHA_ENABLED: "true"
 
 jobs:
   # fmt + clippy (-D warnings) + workspace DAG cycle check.
   quality:
     name: Format, lint & cycles
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Install stable toolchain (rustfmt + clippy)
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.11
       - uses: Swatinem/rust-cache@v2
       - name: cargo xtask ci
         run: cargo xtask ci
@@ -44,10 +52,13 @@ jobs:
   test:
     name: Test (workspace)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.11
       - uses: Swatinem/rust-cache@v2
       - name: cargo test
         run: cargo test --workspace
@@ -57,6 +68,7 @@ jobs:
   deny:
     name: cargo-deny
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Install cargo-deny
@@ -72,6 +84,7 @@ jobs:
   audit:
     name: cargo-audit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Install cargo-audit
@@ -86,10 +99,13 @@ jobs:
   msrv:
     name: MSRV (1.88.0)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust 1.88.0
         uses: dtolnay/rust-toolchain@1.88.0
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.11
       - uses: Swatinem/rust-cache@v2
       - name: cargo check (MSRV)
         run: cargo check --workspace
