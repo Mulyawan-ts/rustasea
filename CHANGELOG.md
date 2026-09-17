@@ -53,6 +53,18 @@ Per the same section, each tag is expected to pass `cargo xtask ci` and
 
 ### Added
 
+- 2026-09-17 - Base `Controller` trait with shared JSON/validation/redirect
+  helpers and the `redirect`/`see_other` free functions (Hypervel parity)
+  (`feat(http): [TASK-091] add base Controller trait and redirect helpers
+  (Hypervel parity)`).
+- 2026-09-17 - App scaffold emits the `app/http/controllers/controller.rs` base
+  controller and struct controllers implementing it (Hypervel parity)
+  (`feat(scaffold): [TASK-092] emit app base controller and struct controllers
+  (Hypervel parity)`).
+- 2026-09-17 - `make:controller` now generates base-controller-conforming
+  structs (`impl Controller for <Name> {}`) for both plain and `--resource`
+  output (Hypervel parity) (`feat(cli): [TASK-093] generate
+  base-controller-conforming make:controller output (Hypervel parity)`).
 - 2026-09-17 - Interactive auth and settings forms for the Inertia React/Vue and
   Blade starter kits (`feat(ui): [UI-AUTH-001] interactive auth and settings
   forms for Inertia React/Vue and Blade`).

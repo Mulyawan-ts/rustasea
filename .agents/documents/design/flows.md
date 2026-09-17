@@ -137,7 +137,7 @@ flowchart TB
 | CONFIG | `config/` | `new` | TOML files typed via `serde`; env overlay at runtime; missing file = defaults (non-fatal) — see FR-001 |
 | ROUTES | `routes/web.rs` | `new` | Route definitions; domain routes before non-domain (FR-102) |
 | DB | `database/` | `make:migration` / `make:seeder` | `YYYY_MM_DD_HHMMSS_name.rs` with `up`/`down`; `migrations` table tracks state |
-| APP/HTTP | `app/http/controllers/` | `make:controller` | `snake_case` file, `PascalCase` struct; `--resource` adds 7 CRUD methods |
+| APP/HTTP | `app/http/controllers/` | `make:controller` | `snake_case` file, `PascalCase` struct implementing the base `Controller` trait; `--resource` adds 7 CRUD methods |
 | APP/MODELS | `app/models/` | `make:model` | `snake_case` file; struct `PascalCase`; table `snake_plural` default; `Factory` sibling generated when requested |
 | APP/JOBS etc. | `app/jobs/`, `app/events/`, `app/listeners/` | `make:job` / `make:event` / `make:listener` | Typed payloads `Job<T>` — no `any` |
 | APP/AI | `app/ai/agents/`, `app/ai/tools/` | `make:agent` / `make:tool` | M6; behind `ai` feature flag |
@@ -233,7 +233,7 @@ flowchart TB
 
 | Generator | Arg `<Name>` example | Output path | Extra with flags | Template notes |
 |-----------|----------------------|-------------|------------------|----------------|
-| `make:controller` | `UserController` | `app/http/controllers/user_controller.rs` | `--resource` adds `index`/`store`/`show`/`update`/`destroy` methods + route comments | Imports `AppState`; `#[middleware]` scaffold comment |
+| `make:controller` | `UserController` | `app/http/controllers/user_controller.rs` | `--resource` adds `index`/`store`/`show`/`update`/`destroy` methods + route comments | Struct + `impl Controller`; imports `rustasea::http::{Controller, JsonResponse}` |
 | `make:middleware` | `EnsureTokenIsValid` | `app/http/middleware/ensure_token_is_valid.rs` | - | `axum::middleware::from_fn` function with `handle(request, next)` |
 | `make:request` | `StorePostRequest` | `app/http/requests/store_post_request.rs` | - | `Validatable` impl + `FormRequest<{Name}>` extractor alias |
 | `make:model` | `Post` | `app/models/post.rs` | `-m` also creates `database/migrations/YYYY_MM_DD_HHMMSS_create_posts_table.rs` | `#[derive(Model)]` + timestamps + soft_delete default; `Factory` impl if `--factory` |

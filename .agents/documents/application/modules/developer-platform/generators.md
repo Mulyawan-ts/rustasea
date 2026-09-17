@@ -4,7 +4,7 @@
 > **Stories:** US-M5-02 (make:* rustfmt/clippy clean), US-M5-03 (declarative attributes) · **BDD:** `@generators`, `@attributes`
 
 ## 1. Feature Overview
-- **Brief Description:** `cargo rustasea make:controller UserController [--resource]` → `app/http/controllers/user_controller.rs` (with `index`/`store`/`show`/`update`/`destroy` if `--resource`), `make:model Post -m` → `app/models/post.rs` with `#[derive(Model)]` + `Factory` + migration if `-m`, and `make:middleware`/`request`/`provider`/`command`/`job`/`event`/`listener`/`observer`/`test`/`seeder`/`migration`/`agent`/`tool`/`action`/`module` (17 kinds total, canonical `enum Kind` at `crates/rustasea-cli/src/generators/mod.rs:19-54`), each template `rustfmt`+`clippy -- -D warnings` clean (NFR-Usa-03), `GeneratorError::AlreadyExists { path }` without `--force`, declarative attributes `#[tries(3)]`/`#[backoff(10)]`/`#[timeout(30)]`/`#[failOnTimeout]`/`#[withoutBroadcasting]`/`#[middleware]`/`#[authorize]`/`#[usage]`/`#[help]`/`#[hidden]`/`#[repairToolCalls]` (FSD FS-M5-03).
+- **Brief Description:** `cargo rustasea make:controller UserController [--resource]` → `app/http/controllers/user_controller.rs` (a struct implementing the base `rustasea::http::Controller` trait, with `index`/`store`/`show`/`update`/`destroy` if `--resource`), `make:model Post -m` → `app/models/post.rs` with `#[derive(Model)]` + `Factory` + migration if `-m`, and `make:middleware`/`request`/`provider`/`command`/`job`/`event`/`listener`/`observer`/`test`/`seeder`/`migration`/`agent`/`tool`/`action`/`module` (17 kinds total, canonical `enum Kind` at `crates/rustasea-cli/src/generators/mod.rs:19-54`), each template `rustfmt`+`clippy -- -D warnings` clean (NFR-Usa-03), `GeneratorError::AlreadyExists { path }` without `--force`, declarative attributes `#[tries(3)]`/`#[backoff(10)]`/`#[timeout(30)]`/`#[failOnTimeout]`/`#[withoutBroadcasting]`/`#[middleware]`/`#[authorize]`/`#[usage]`/`#[help]`/`#[hidden]`/`#[repairToolCalls]` (FSD FS-M5-03).
 - **Role in Module:** Scaffolds every domain (BC-0..BC-4, BC-6) — the only writer into `app/` besides the developer.
 
 ## 2. User Stories
@@ -12,7 +12,7 @@
 ### US-M5-02 — make:* generators produce rustfmt/clippy-clean code
 **Sebagai** Rust developer **Saya ingin** `make:*` for controller/model/.../agent/tool **Sehingga** usable without edits
 
-**AC:** `make:controller UserController` → `app/http/controllers/user_controller.rs` exists and passes `rustfmt --check` + `clippy -- -D warnings`; `make:model Post -m` → `app/models/post.rs` (`#[derive(Model)]`) + `database/migrations/*_create_posts_table.rs`; existing `app/models/post.rs` → second `make:model Post` without `--force` → `AlreadyExists{path}`; outline over `job`/`event`/`listener` → `app/jobs/send_email.rs` etc. exist and lint-clean.
+**AC:** `make:controller UserController` → `app/http/controllers/user_controller.rs` exists (a struct implementing the base `rustasea::http::Controller` trait) and passes `rustfmt --check` + `clippy -- -D warnings`; `make:model Post -m` → `app/models/post.rs` (`#[derive(Model)]`) + `database/migrations/*_create_posts_table.rs`; existing `app/models/post.rs` → second `make:model Post` without `--force` → `AlreadyExists{path}`; outline over `job`/`event`/`listener` → `app/jobs/send_email.rs` etc. exist and lint-clean.
 
 ### US-M5-03 — Declarative attributes bundle
 **Sebagai** Rust developer **Saya ingin** `#[tries]`/`#[backoff]`/… **Sehingga** retry/policy declared once
@@ -32,7 +32,7 @@ sequenceDiagram
     participant Macro as rustasea-macros attrs
 
     Dev->>CLI: make:controller UserController --resource
-    CLI->>FS: write app/http/controllers/user_controller.rs (index/store/...)
+    CLI->>FS: write app/http/controllers/user_controller.rs (struct + impl Controller; index/store/...)
     CLI->>Fmt: rustfmt --check + clippy -D warnings
     Fmt-->>CLI: clean
     Dev->>CLI: make:model Post -m

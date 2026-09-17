@@ -1,7 +1,10 @@
 //! `make:controller` template — app/http/controllers/<snake>.rs.
 //!
 //! Plain scaffolding yields a `handle` skeleton; `--resource` adds the seven
-//! REST methods (index/create/store/show/edit/update/destroy). Handlers return
+//! REST methods (index/create/store/show/edit/update/destroy). Every generated
+//! controller is a struct implementing the framework base
+//! `rustasea::http::Controller` trait (Hypervel parity, TASK-093), so the shared
+//! response helpers are inherited from one extension point. Handlers return
 //! `rustasea::http::JsonResponse`, the umbrella's JSON response helper —
 //! the `http` module does not re-export axum's `Json`/`IntoResponse`, so
 //! generated files must not reference those paths.
@@ -32,10 +35,12 @@ fn plain_source(name: &str) -> String {
 //! Register routes against these handlers in `routes/web.rs`; add `--resource`
 //! on `make:controller` to scaffold the full REST method set.
 
-use rustasea::http::JsonResponse;
+use rustasea::http::{{Controller, JsonResponse}};
 
 /// Handles {kind} HTTP requests.
 pub struct {name};
+
+impl Controller for {name} {{}}
 
 impl {name} {{
     /// Respond to the primary route for this controller.
@@ -56,10 +61,12 @@ fn resource_source(name: &str) -> String {
 //!
 //! Full REST method set produced by `make:controller {name} --resource`.
 
-use rustasea::http::JsonResponse;
+use rustasea::http::{{Controller, JsonResponse}};
 
 /// Handles {kind} resource HTTP requests.
 pub struct {name};
+
+impl Controller for {name} {{}}
 
 impl {name} {{
     /// GET /{kind} — list rows.

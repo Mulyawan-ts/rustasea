@@ -163,6 +163,16 @@ fn class_generators_write_real_sources() {
             case.marker,
             source
         );
+        if case.kind == Kind::Controller {
+            assert!(
+                source.contains("use rustasea::http::{Controller, JsonResponse};"),
+                "controller source must import the base Controller trait: {source}"
+            );
+            assert!(
+                source.contains(&format!("impl Controller for {} {{}}", case.name)),
+                "controller source must implement the base Controller trait: {source}"
+            );
+        }
         assert!(
             source.len() > 120,
             "{:?} source looks like a stub ({} bytes)",
