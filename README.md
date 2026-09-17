@@ -126,7 +126,7 @@ Milestones are **dependency-ordered**: each builds only on predecessors. No circ
 | **Success Criteria** | Define `Route::get("/users", [UserController, "index"])` equivalent in Rust, hit it with `cargo test` HTTP assertions, see it in `route:list` with middleware and binding fields. Domain catch-all routes do not shadow non-domain routes. |
 | **Laravel 13 features** | #18 HTTP Client & Process, #19 domain-route priority, #20 `route:list` binding fields. |
 
-> **Status (2026-09-17):** Partial. The router DSL and controller dispatch are real, and `route:list` renders the live 6-column route table (Method, URI, Name, Action, Middleware, Binding) published by the application at boot through the process-wide `RouteSource` closure (`crates/rustasea-cli/src/routes.rs:19`, `:33`; `crates/rustasea-app/src/bootstrap/app.rs:57`; read back at `crates/rustasea-cli/src/commands/inspect.rs:44`). The HTTP idle timeout is still declared but unenforced (`crates/rustasea-http/src/lib.rs:241`, `:364`).
+> **Status (2026-09-17):** Partial. The router DSL and controller dispatch are real, and `route:list` renders the live 6-column route table (Method, URI, Name, Action, Middleware, Binding) published by the application at boot through the process-wide `RouteSource` closure (`crates/rustasea-cli/src/routes.rs:19`, `:33`; `crates/rustasea-app/src/bootstrap/app.rs:57`; read back at `crates/rustasea-cli/src/commands/inspect.rs:44`). The HTTP client idle (inter-chunk) timeout is enforced for streamed bodies (`crates/rustasea-http/src/idle.rs:23`, wired in `crates/rustasea-http/src/lib.rs:448`); URL generation and implicit route-model binding remain open.
 
 ### M2 — ORM & Database
 

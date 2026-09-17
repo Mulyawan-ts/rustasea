@@ -6,6 +6,9 @@ pub mod error;
 /// Panic catching + dev panic-location capture (ADOPT-010).
 pub mod panic;
 
+/// Idle (inter-chunk) timeout enforcement for buffered client responses.
+mod idle;
+
 /// Sentry request-context middleware (ADOPT-004) — opt-in via the `sentry`
 /// feature; a no-op while no Sentry client is bound.
 #[cfg(feature = "sentry")]
@@ -350,7 +353,22 @@ impl HttpClient {
         self
     }
 
-    /// Set the idle (inter-byte) timeout.
+    /// Set the idle (inter-chunk) timeout.
+    ///
+    /// When set, the response body is read chunk by chunk in
+    /// [`send`](Self::send) / [`send_with`](Self::send_with) and each gap
+    /// between consecutive chunks is bounded by this budget. A stall longer
+    /// than the budget aborts the send with [`HttpError::Timeout`] carrying
+    /// [`TimeoutKind::Idle`]. The timer resets on every received chunk, so a
+    /// slow but steady stream is not penalised. When unset the response is
+    /// returned untouched with zero added overhead.
+    ///
+    /// ```rust
+    /// # use std::time::Duration;
+    /// use rustasea_http::HttpClient;
+    /// let client = HttpClient::new().idle_timeout(Duration::from_secs(5));
+    /// # let _ = client;
+    /// ```
     pub fn idle_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.idle_timeout = Some(timeout);
         self
@@ -393,7 +411,9 @@ impl HttpClient {
     /// Send a prepared reqwest request through this client's policy.
     ///
     /// Applies the configured total timeout, then evaluates the `throw`
-    /// predicate — a `true` match becomes [`HttpError::Status`].
+    /// predicate: a `true` match becomes [`HttpError::Status`]. When an idle
+    /// timeout is configured the response body is additionally drained under
+    /// [`TimeoutKind::Idle`] enforcement.
     pub async fn send(
         &self,
         request: reqwest::RequestBuilder,
@@ -422,7 +442,13 @@ impl HttpClient {
                 });
             }
         }
-        Ok(response)
+        // Enforce the idle (inter-chunk) timeout by draining the body when a
+        // budget is configured. The plain path returns the response untouched
+        // so callers that never set an idle timeout pay nothing.
+        match self.idle_timeout {
+            Some(idle) => idle::buffer_with_idle_timeout(response, idle).await,
+            None => Ok(response),
+        }
     }
 
     /// Convenience: perform a GET request with this client's policy.
@@ -445,10 +471,10 @@ impl Default for HttpClient {
 /// Classify a reqwest transport error into a typed error.
 ///
 /// Connection-phase failures map to [`TimeoutKind::Connect`] and total-budget
-/// expiry to [`TimeoutKind::Total`]. Idle (inter-byte) timeout enforcement
-/// requires a body-stream watcher and lands with the M3 pass; the builder
-/// already carries the idle budget so call sites are stable.
-fn map_timeout(error: reqwest::Error) -> HttpError {
+/// expiry to [`TimeoutKind::Total`]. Idle (inter-chunk) timeout enforcement
+/// lives in [`crate::idle`]: the body is drained under a per-chunk deadline
+/// and a stall surfaces as [`HttpError::Timeout`] with [`TimeoutKind::Idle`].
+pub(crate) fn map_timeout(error: reqwest::Error) -> HttpError {
     if error.is_connect() {
         HttpError::Timeout {
             kind: TimeoutKind::Connect,

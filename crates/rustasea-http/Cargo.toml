@@ -20,6 +20,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+# `http` types back the idle-timeout response rebuild (`src/idle.rs`): a
+# `reqwest::Response` round-trips through `http::Response` so the buffered body
+# can be re-attached while preserving status/version/headers/extensions.
+http = { workspace = true }
 reqwest = { workspace = true }
 rustasea-router = { path = "../rustasea-router" }
 # Sentry SDK (ADOPT-004). Default features are disabled; the middleware only

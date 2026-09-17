@@ -41,7 +41,7 @@ section records the reason.
 | Milestone | Goal | Status | Headline evidence |
 |---|---|---|---|
 | **M0** | Bootstrap & Core | **Partial** | Container, provider DAG, and config auto-discovery real (`crates/rustasea-foundation/src/lib.rs:275`, `:296`; `crates/rustasea-config/src/lib.rs:89`); bootstrap registries populated (`bootstrap/providers.rs:35`, `bootstrap/commands.rs:12`) but `AppServiceProvider` stays a no-op (`bootstrap/providers.rs:17`) and the config loader is not mounted in app boot |
-| **M1** | Routing & HTTP | **Partial** | Router DSL + controller dispatch real (`crates/rustasea-router/src/dispatch.rs:23`, `:62`); `route:list` renders the live 6-column table published at boot via `RouteSource` (`crates/rustasea-cli/src/routes.rs:19`, `:33`; `crates/rustasea-app/src/bootstrap/app.rs:57`; `crates/rustasea-cli/src/commands/inspect.rs:44`); `show:model` now parses `app/models/{snake}.rs` with `syn` for source-level metadata (`crates/rustasea-cli/src/model_inspect.rs:123`, `:217`; `crates/rustasea-cli/src/commands/inspect.rs:129`) and the idle timeout is declared but unenforced (`crates/rustasea-http/src/lib.rs:364`) |
+| **M1** | Routing & HTTP | **Partial** | Router DSL + controller dispatch real (`crates/rustasea-router/src/dispatch.rs:23`, `:62`); `route:list` renders the live 6-column table published at boot via `RouteSource` (`crates/rustasea-cli/src/routes.rs:19`, `:33`; `crates/rustasea-app/src/bootstrap/app.rs:57`; `crates/rustasea-cli/src/commands/inspect.rs:44`); `show:model` now parses `app/models/{snake}.rs` with `syn` for source-level metadata (`crates/rustasea-cli/src/model_inspect.rs:123`, `:217`; `crates/rustasea-cli/src/commands/inspect.rs:129`) and the HTTP client idle (inter-chunk) timeout is now enforced for streamed bodies (`crates/rustasea-http/src/idle.rs:23`, wired in `crates/rustasea-http/src/lib.rs:448`) |
 | **M2** | ORM & Database | **Done** | Real sqlx pool + async execution (`crates/rustasea-orm/src/db.rs:24`, `db/exec.rs:72`); model CRUD (`model_ops.rs:28`), transactions (`tx.rs:67`), custom `Migrator` (`migration.rs:131`, `:189`), eager loading (`eager.rs:59`), pgvector (`vector.rs:100`); `raw`/`raw_sql` remain display-only fragments (`execution.rs:239`, `:247`) |
 | **M3** | Auth, Middleware & Validation | **Partial** | JWT/CSRF/throttle/validation real; session guard now real via `tower-sessions` (`crates/rustasea-auth/src/session.rs:99`, `impl Guard` `:291`, login `:296`, parse `:352`, refresh `:380`, logout `:408`); declarative attributes are consumed at runtime through `MiddlewareRegistry` (`crates/rustasea-router/src/metadata.rs:237`, `dispatch.rs:109`) and `AuthorizeRegistry` (`crates/rustasea-router/src/authorize.rs:216`, `dispatch.rs:135`); remaining: in-memory default session store and fail-closed static user lookup (see section) |
 | **M4** | Queue, Cache, Scheduling & Events | **Partial** | Database/Redis queue drivers + worker + persistent failed jobs real (`crates/rustasea-queue/src/driver/database.rs:36`, `driver/worker.rs:75`); `queue:work`/`queue:failed`/`queue:retry` CLI real (`crates/rustasea-cli/src/commands/queue.rs:18`, `ops.rs:21`, `:72`); Redis cache store real behind the `redis` feature (`crates/rustasea-cache/src/redis.rs:155`); async listeners enqueue (`crates/rustasea-events/src/dispatcher.rs:82`); declarative job attributes bind through `JobPolicy` at registration (`crates/rustasea-queue/src/policy.rs:21`, `driver/worker.rs:66`); remaining: `SyncDriver` in-memory failed jobs (`crates/rustasea-queue/src/driver.rs:171`) |
@@ -94,8 +94,9 @@ ergonomics, and an HTTP client.
 **Status: Partial**: the router DSL, real controller dispatch (GAP-002), and the
 HTTP client `throw` semantics are implemented, and `route:list` now renders the
 live application route table. `show:model` now performs real source-level model
-introspection. Remaining: live DB column types are not yet reflected and
-idle-timeout enforcement is not wired.
+introspection. The HTTP client idle (inter-chunk) timeout is enforced for
+streamed bodies (GAP-030). Remaining: live DB column types are not yet
+reflected.
 
 **Done**
 - Router DSL: `get`/`post`/`put`/`delete`/`patch`/`options`/`any`, `group`, prefix/name/domain/resource — `crates/rustasea-router/src/router.rs:46` (`prefix`), `:61` (`domain`), `:73` (`get`), `:288` (`group`), `:317` (`resource`).
@@ -104,19 +105,18 @@ idle-timeout enforcement is not wired.
 - `route:list` renders the live 6-column table (Method, URI, Name, Action, Middleware, Binding). The application publishes a `RouteSource` closure at boot (`crates/rustasea-app/src/bootstrap/app.rs:57`), stored process-wide (`crates/rustasea-cli/src/routes.rs:19` `RouteSource`, `:33` `set_route_source`, `:52` `routes`) and read back by the command (`crates/rustasea-cli/src/commands/inspect.rs:44`, rendered at `:49-67`). Covered by `crates/rustasea-cli/src/commands/inspect.rs:182-274` and `crates/rustasea-app/src/bootstrap/app.rs:347-356`.
 - `show:model` introspects `app/models/{snake}.rs` with `syn`: the struct name, resolved table (`#[model(table)]` override, hand-written `table_name()`, else `snake_plural`), attributes (name/type/nullable), declared casts, soft-delete/timestamps flags, and best-effort relations from the `relations()` body; `--json` emits the `model-inspector` contract shape. Both the `#[derive(Model)]` style and the hand-written `impl Model` emitted by `make:model` / the app scaffold are recognised. Parser in `crates/rustasea-cli/src/model_inspect.rs:123` (`inspect_source`), `:217` (`inspect_model`), hand-written `impl` metadata in `crates/rustasea-cli/src/model_inspect/impl_model.rs:37` (`model_impl_target`), `:55` (`parse_impl_model`), relation-token scanning in `crates/rustasea-cli/src/model_inspect/relations.rs:14` (`scan_tokens`); command in `crates/rustasea-cli/src/commands/inspect.rs:129` (`run`), `:152` (`render_model`), `:164` (`render_human`).
 - HTTP client `throw` / `try_throw` callbacks and typed `HttpError` — `crates/rustasea-http/src/lib.rs:286`, `:298`, `:207`.
+- HTTP client idle (inter-chunk) timeout enforced for streamed bodies: when `idle_timeout` is set, the response body is drained chunk by chunk under a per-chunk `tokio::time::timeout`, aborting with `HttpError::Timeout { kind: TimeoutKind::Idle }` on a stall longer than the budget; the plain path returns the response untouched (`crates/rustasea-http/src/idle.rs:23`, `buffer_with_idle_timeout`), wired in `crates/rustasea-http/src/lib.rs:448`; tests in `crates/rustasea-http/tests/idle_timeout.rs`.
 - Runnable app serves real handlers from `routes/web.rs` (welcome page rendered through `rustasea::view::MinijinjaEngine`).
 
 **Partial (reason)**
 - `show:model` reports declared source metadata only; live DB column types/constraints are not queried (the console has no pool handle).
-- HTTP idle (inter-byte) timeout is declared but not enforced — `crates/rustasea-http/src/lib.rs:241`, `:364-366`.
 
 **Missing**
 - Live database column introspection for `show:model` (source metadata is implemented).
 
-**Evidence:** `crates/rustasea-router/src/router.rs:46-358`; `crates/rustasea-router/src/dispatch.rs:23-83`; `crates/rustasea-http/src/lib.rs:241-379`; `crates/rustasea-cli/src/routes.rs:19-57`; `crates/rustasea-cli/src/commands/inspect.rs:44-67`, `:129-176`; `crates/rustasea-cli/src/model_inspect.rs:123-231`; `crates/rustasea-cli/src/model_inspect/impl_model.rs:37-88`; `crates/rustasea-cli/src/model_inspect/relations.rs:14-87`; `crates/rustasea-app/src/bootstrap/app.rs:57`; task `GAP-002` (completed), `GAP-029` (completed).
+**Evidence:** `crates/rustasea-router/src/router.rs:46-358`; `crates/rustasea-router/src/dispatch.rs:23-83`; `crates/rustasea-http/src/lib.rs:241-379`; `crates/rustasea-http/src/idle.rs:23-60`; `crates/rustasea-http/tests/idle_timeout.rs`; `crates/rustasea-cli/src/routes.rs:19-57`; `crates/rustasea-cli/src/commands/inspect.rs:44-67`, `:129-176`; `crates/rustasea-cli/src/model_inspect.rs:123-231`; `crates/rustasea-cli/src/model_inspect/impl_model.rs:37-88`; `crates/rustasea-cli/src/model_inspect/relations.rs:14-87`; `crates/rustasea-app/src/bootstrap/app.rs:57`; task `GAP-002` (completed), `GAP-029` (completed), `GAP-030` (completed).
 
 **Next actions**
-- Enforce `TimeoutKind::Idle` in the HTTP client (`GAP-030`).
 - Optionally add live DB column introspection to `show:model` when a pool is available.
 
 ---

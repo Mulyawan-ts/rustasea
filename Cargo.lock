@@ -7152,6 +7152,7 @@ name = "rustasea-http"
 version = "0.1.0"
 dependencies = [
  "axum 0.7.9",
+ "http 1.5.0",
  "reqwest 0.12.28",
  "rustasea-router",
  "sentry",

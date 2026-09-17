@@ -63,7 +63,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Database\Query` | `rustasea-orm` (`QueryBuilder`, `Value`, `JsonFilter`) | **Adopted** | Fluent builder + async execution real (`crates/rustasea-orm/src/builder/exec.rs:105`). |
 | `Illuminate\Events` | `rustasea-events` (`Dispatcher`, `Event`, `Listener`) | **Partial** | Inline dispatch real; queue-backed listeners unwired. |
 | `Illuminate\Routing` | `rustasea-router` (`Router`, `RouteEntry`, `ControllerRef`) | **Partial** | DSL + controller dispatch real; `route:list` introspection live (6-column table published at boot via `RouteSource`: `crates/rustasea-cli/src/routes.rs:19`, `:33`; `crates/rustasea-app/src/bootstrap/app.rs:57`; `crates/rustasea-cli/src/commands/inspect.rs:44`). |
-| `Illuminate\Http` | `rustasea-http` (`AppState`, `JsonResponse`, `HttpError`) | **Partial** | Request/response + CORS real; idle timeout declared, not enforced. |
+| `Illuminate\Http` | `rustasea-http` (`AppState`, `JsonResponse`, `HttpError`) | **Partial** | Request/response + CORS real; idle (inter-chunk) timeout enforced for streamed bodies (`crates/rustasea-http/src/idle.rs:23`). |
 | `Illuminate\Http\Client` | `rustasea-http` (`HttpClient`) | **Adopted** | reqwest wrapper with `throw` / `try_throw` semantics. |
 | `Illuminate\Http\Resources\JsonApi` | `rustasea-jsonapi` (`JsonApiResource`, `Document`, `ResourceBuilder`) | **Adopted** | Sparse fieldsets, links, JSON:API content type real. |
 | `Illuminate\Cache` | `rustasea-cache` (`Store`, `CacheManager`, `Repository`, `Lock`) | **Partial** | Memory store real; Redis store real behind the opt-in `redis` feature (`GAP-004`; `crates/rustasea-cache/src/redis.rs:155`; `crates/rustasea-cache/Cargo.toml:12`) — typed `StoreUnavailable` only when the feature is off or Redis is unreachable; driver matrix incomplete. |
@@ -273,7 +273,7 @@ The dominant pattern: **RustaSea already has the shape of most Laravel surfaces 
 | Order | Milestone | Gap to close | Target Laravel surface |
 |---|---|---|---|
 | 1 | **M0** Bootstrap & Core | Contextual bindings + provider DAG + auto-construction; populate provider/command registries | `Contracts\Container\ContextualBindingBuilder`, `SelfBuilding`, `Contracts\Foundation\Application` |
-| 2 | **M1** Routing & HTTP | Enforce idle timeout; add URL generation + implicit binding (`route:list` introspection is live) | `Contracts\Routing\Registrar`, `UrlGenerator`, `UrlRoutable`, `Contracts\Http\Kernel` |
+| 2 | **M1** Routing & HTTP | Add URL generation + implicit binding (`route:list` introspection is live; idle timeout now enforced) | `Contracts\Routing\Registrar`, `UrlGenerator`, `UrlRoutable`, `Contracts\Http\Kernel` |
 | 3 | **M2** ORM & Database | Attribute casts; reflect live DB column types in `show:model` (source-level `show:model` introspection landed) | `CastsAttributes`, `Castable` |
 | 4 | **M3** Auth, Middleware & Validation | General-purpose `Gate`; store-backed session guard; password broker/reset (runtime `#[authorize]` enforcement landed) | `Contracts\Auth\Access\Gate`, `Authorizable`, `StatefulGuard`, `PasswordBroker` |
 | 5 | **M4** Queue, Cache, Scheduling & Events | Cache/queue factory depth; `ShouldBeUnique`; lock owner/force-release surface | `Contracts\Queue\Factory`, `ShouldBeUnique`, `Contracts\Cache\Lock` |
