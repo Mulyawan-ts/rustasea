@@ -43,13 +43,14 @@ Run the same gates CI runs before you open a pull request.
 
 ```bash
 # Full local CI gate: fmt, then clippy (-D warnings), then deps:check,
-# then the crate-DAG cycle check.
+# then lines:check, then the crate-DAG cycle check.
 cargo xtask ci
 
 # Individual tasks.
 cargo xtask fmt          # cargo fmt --all -- --check
 cargo xtask clippy       # cargo clippy --workspace --all-targets -- -D warnings
 cargo xtask deps:check   # fail on dependency-version drift (see STD-002)
+cargo xtask lines:check  # fail on any source file over the 500-line limit (ADR-0009)
 cargo xtask check-cycles # validate the crate dependency graph stays acyclic
 cargo xtask migrate      # run the framework's registered migrations
 
@@ -63,7 +64,8 @@ cargo audit
 `cargo xtask` is a convenience alias defined in `.cargo/config.toml`; it expands
 to `cargo run -p xtask --`. The task surface is implemented in
 `xtask/src/main.rs` (`ci`, `fmt`, `clippy`, `check-cycles`, `deps:check`,
-`migrate`, and the `docker:up` / `docker:down` / `docker:logs` helpers).
+`lines:check`, `migrate`, and the `docker:up` / `docker:down` / `docker:logs`
+helpers).
 
 To format the tree in place rather than check it:
 
@@ -123,7 +125,7 @@ cargo test -p rustasea --features integration -- --ignored
 
    | Job | What it runs |
    |---|---|
-   | `quality` | `cargo xtask ci` (fmt, clippy with `-D warnings`, `deps:check`, cycle check) |
+   | `quality` | `cargo xtask ci` (fmt, clippy with `-D warnings`, `deps:check`, `lines:check`, cycle check) |
    | `test` | `cargo test --workspace` |
    | `deny` | `cargo deny check` |
    | `audit` | `cargo audit` |
@@ -138,7 +140,8 @@ cargo test -p rustasea --features integration -- --ignored
   generated trees). A file that must exceed the limit needs a documented
   exception recorded in an ADR; see `ADR-0009` for the one existing exemption
   (`.agents/documents/requirements/fsd.md`). Split a file that grows past the
-  limit rather than leaving it oversized.
+  limit rather than leaving it oversized. `cargo xtask lines:check` enforces the
+  limit for `.rs` sources and runs as part of `cargo xtask ci`.
 - **No `unwrap()` or `expect()` in non-test code.** Framework crates are
   expected to use typed errors (for example `thiserror`-derived enums) instead
   of panicking on fallible calls; `rustasea-auth` carries

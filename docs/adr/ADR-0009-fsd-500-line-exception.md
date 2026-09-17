@@ -39,6 +39,14 @@ Splitting the file would renumber every line below the split point, silently inv
 - Negative: a naive repo-wide line-count check will flag `fsd.md`; it must exclude this ADR-documented file.
 - Neutral: the exception is documentation-only and sets no precedent for code files, which remain bound by the 500-line split rule.
 
+## Enforcement
+
+`cargo xtask lines:check` enforces the 500-line limit for `.rs` sources across
+`crates/` and `xtask/src` (skipping `target/`, `generated/`, and `.agents/`),
+and runs inside `cargo xtask ci`. The check carries an exemption allowlist, but
+it is empty for code: this ADR's exception is `requirements/fsd.md`, a markdown
+document outside the scanned roots, so no `.rs` file is exempt.
+
 ---
 
 > **Archive note (rebrand 2026-09-09):** project renamed from Rustavel to **RustaSea**.

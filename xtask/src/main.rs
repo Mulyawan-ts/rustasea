@@ -4,15 +4,17 @@
 //! gates the workspace on rustfmt + clippy (C-04), `cargo xtask deps:check`
 //! fails on dependency-version drift from `[workspace.dependencies]`
 //! (ADOPT-031), `cargo xtask check-cycles` validates the crate DAG stays
-//! acyclic (architecture §3), and `cargo xtask migrate` runs the framework's
+//! acyclic (architecture §3), `cargo xtask lines:check` enforces the 500-line
+//! file limit (ADR-0009), and `cargo xtask migrate` runs the framework's
 //! registered migrations. The `docker:up` / `docker:down` / `docker:logs` tasks
 //! drive the dev compose stack (ADOPT-007). Toolchain tasks shell out to
-//! `cargo`; graph analysis, dependency scanning, and migration execution live in
-//! submodules.
+//! `cargo`; graph analysis, dependency scanning, line-limit enforcement, and
+//! migration execution live in submodules.
 
 mod cycles;
 mod deps;
 mod docker;
+mod lines;
 mod migrate;
 
 use std::process::Command;
@@ -41,13 +43,14 @@ fn main() {
         ),
         "check-cycles" => cycles::run(),
         "deps:check" => deps::run(),
+        "lines:check" => lines::run(),
         "migrate" => migrate::run(&rest),
         "docker:up" => docker::up(),
         "docker:down" => docker::down(),
         "docker:logs" => docker::logs(&rest),
         other => {
             eprintln!(
-                "xtask: unknown task `{other}` (expected ci|fmt|clippy|check-cycles|deps:check|migrate|docker:up|docker:down|docker:logs)"
+                "xtask: unknown task `{other}` (expected ci|fmt|clippy|check-cycles|deps:check|lines:check|migrate|docker:up|docker:down|docker:logs)"
             );
             FAILURE
         }
@@ -83,6 +86,12 @@ fn run_ci() -> i32 {
     let code = deps::run();
     if code != 0 {
         eprintln!("xtask ci: deps:check failed with exit code {code}");
+        return code;
+    }
+    println!("xtask ci: checking file line limits…");
+    let code = lines::run();
+    if code != 0 {
+        eprintln!("xtask ci: lines:check failed with exit code {code}");
         return code;
     }
     println!("xtask ci: checking crate DAG cycles…");
