@@ -5,9 +5,10 @@
 //! workspace-root `config/*.toml` files that are the source of truth for the
 //! Laravel 13.x parity surface (tasks CFG-001..CFG-011): `app`, `auth`, `cache`,
 //! `database`, `queue`, `session`, `logging`, `mail`, `services`, `storage`,
-//! `fortify`, and the standalone `mongo` connection. Long explanatory comment
-//! blocks are trimmed, but every default a generated app needs to parse is
-//! preserved. `inertia.toml` is emitted only for the react/vue variants.
+//! `fortify`, the standalone `mongo` connection, plus the framework's typed
+//! `broadcasting` and `cors` surfaces. Long explanatory comment blocks are
+//! trimmed, but every default a generated app needs to parse is preserved.
+//! `inertia.toml` is emitted only for the react/vue variants.
 
 use crate::variant::StarterKitVariant;
 
@@ -15,9 +16,9 @@ use super::TemplateFile;
 
 /// Config templates for `variant`.
 ///
-/// Emits the eleven Laravel-parity configs plus the standalone `mongo.toml`
-/// surface, then appends `inertia.toml` for the Inertia variants. Order is
-/// deterministic so generated trees diff cleanly.
+/// Emits the Laravel-parity configs plus the standalone `mongo.toml` surface,
+/// then appends `inertia.toml` for the Inertia variants. Order is deterministic
+/// so generated trees diff cleanly.
 pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
     let mut files = vec![
         ("config/app.toml", APP),
@@ -32,6 +33,8 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
         ("config/storage.toml", STORAGE),
         ("config/fortify.toml", FORTIFY),
         ("config/mongo.toml", MONGO),
+        ("config/broadcasting.toml", BROADCASTING),
+        ("config/cors.toml", CORS),
     ];
     if variant.uses_inertia() {
         files.push(("config/inertia.toml", INERTIA));
@@ -381,6 +384,62 @@ const MONGO: &str = r##"# MongoDB connection — MONGODB_URI / MONGODB_DATABASE 
 [mongo]
 uri = "mongodb://localhost:27017"
 database = "rustasea"
+"##;
+
+/// Broadcasting drivers (`config/broadcasting.toml`).
+///
+/// Mirrors the typed `rustasea_broadcast::BroadcastingConfig` parsed by
+/// `from_loader`: a `[broadcasting]` `default` selector plus
+/// `[broadcasting.connections.*]` driver tables. The shipped default is the
+/// in-process `hub` connection (zero external dependencies). The `pusher` and
+/// `redis` connection tables parse only when the corresponding crate feature is
+/// compiled in; both are documented and left inert so a generated app boots with
+/// no external broadcast backend.
+const BROADCASTING: &str = r##"# Broadcasting configuration - mirrors Laravel 13.x config/broadcasting.php.
+# Parsed by rustasea_broadcast::BroadcastingConfig::from_loader. The in-process
+# `hub` connection is the zero-dependency default.
+#
+# Environment overrides (bridged explicitly; the loader's `__` separator never
+# reaches these nested keys):
+#   BROADCAST_CONNECTION -> broadcasting.default
+#   PUSHER_APP_ID / PUSHER_APP_KEY / PUSHER_APP_SECRET / PUSHER_APP_CLUSTER
+#   PUSHER_HOST / PUSHER_PORT / PUSHER_SCHEME
+#   BROADCAST_REDIS_URL / REDIS_URL / BROADCAST_REDIS_PREFIX
+[broadcasting]
+default = "hub"
+
+# --- Pusher HTTP API (requires the `pusher` crate feature) -------------------
+# `cluster` selects https://api-{cluster}.pusher.com/apps/{app_id}/events;
+# setting `host` instead targets a self-hosted Pusher-compatible server.
+# [broadcasting.connections.pusher]
+# app_id = "123456"
+# key = "your-pusher-key"
+# secret = "your-pusher-secret"
+# cluster = "us2"
+# host = "127.0.0.1"
+# port = 6001
+# scheme = "http"
+# timeout = 10
+
+# --- Redis Pub/Sub (requires the `redis` crate feature) ----------------------
+# Channels are `{prefix}.{wire_channel}`.
+# [broadcasting.connections.redis]
+# url = "redis://127.0.0.1:6379"
+# prefix = "broadcasting"
+"##;
+
+/// CORS middleware policy (`config/cors.toml`).
+///
+/// Mirrors the typed `rustasea_http::CorsConfig`: an explicit allow-list of
+/// origins plus a credentials flag. The default is restrictive (no origins) so
+/// a generated app never becomes permissive by accident; opt into specific
+/// origins explicitly.
+const CORS: &str = r##"# CORS policy - mirrors rustasea_http::CorsConfig.
+# Empty `allowed_origins` keeps the layer restrictive (no cross-origin requests);
+# list the exact origins to allow instead of enabling a wildcard.
+[cors]
+allowed_origins = []
+allow_credentials = false
 "##;
 
 /// Inertia asset contract for the react/vue variants.

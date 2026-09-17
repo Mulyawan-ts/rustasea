@@ -10,3 +10,8 @@ description = "RustaSea starter-kit scaffolder — emits the shared core plus th
 thiserror = { workspace = true }
 # `Generated` is serializable so the `cargo-rustasea` binary can offer --json.
 serde = { workspace = true }
+
+[dev-dependencies]
+# Integration tests parse the generated `config/*.toml` so a malformed template
+# fails in CI rather than in a generated application.
+toml = { workspace = true }

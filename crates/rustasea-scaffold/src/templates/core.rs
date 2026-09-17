@@ -99,6 +99,11 @@ CACHE_PREFIX=rustasea-cache-
 # --- Queue (config/queue.toml) ---
 QUEUE_CONNECTION=database
 
+# --- Broadcasting (config/broadcasting.toml) ---
+# The in-process `hub` is the zero-dependency default. Switch to `pusher` or
+# `redis` once the matching driver feature and credentials are configured.
+BROADCAST_CONNECTION=hub
+
 # --- Session (config/session.toml) ---
 # Browser starter kits authenticate with session cookies + CSRF.
 SESSION_DRIVER=memory

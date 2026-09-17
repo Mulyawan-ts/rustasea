@@ -72,6 +72,8 @@ const REQUIRED_CORE: &[&str] = &[
     "config/storage.toml",
     "config/fortify.toml",
     "config/mongo.toml",
+    "config/broadcasting.toml",
+    "config/cors.toml",
     "storage/app/.gitignore",
     "storage/app/public/.gitignore",
     "storage/app/private/.gitignore",

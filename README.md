@@ -466,6 +466,8 @@ generated app (`crates/rustasea-scaffold/src/templates/config.rs`).
 | `config/services.toml` | Third-party credentials: Postmark, Resend, AWS SES, Slack (`config/services.php`) | `POSTMARK_API_KEY`, `RESEND_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `SLACK_BOT_USER_OAUTH_TOKEN`, `SLACK_BOT_USER_DEFAULT_CHANNEL` |
 | `config/storage.toml` | Default disk, read-through routing, disk definitions (`config/filesystems.php`) | `AWS_*` (for the S3 disk) |
 | `config/mongo.toml` | Standalone MongoDB connection (`MongoConfig`) | `MONGODB_URI`, `MONGODB_DATABASE` |
+| `config/broadcasting.toml` | Broadcast default connection and driver tables (`config/broadcasting.php`; the in-process `hub` is the zero-dependency default; `pusher`/`redis` connections are feature-gated) | `BROADCAST_CONNECTION`, `PUSHER_APP_ID`, `PUSHER_APP_KEY`, `PUSHER_APP_SECRET`, `PUSHER_APP_CLUSTER`, `PUSHER_HOST`, `PUSHER_PORT`, `PUSHER_SCHEME`, `BROADCAST_REDIS_URL`, `REDIS_URL`, `BROADCAST_REDIS_PREFIX` |
+| `config/cors.toml` | CORS allow-list and credentials flag (`rustasea_http::CorsConfig`; restrictive by default) | none (file only) |
 
 ---
 
