@@ -17,6 +17,8 @@ const REQUIRED_CORE: &[&str] = &[
     "LICENSE",
     "Cargo.toml",
     "rustasea.toml",
+    "rustfmt.toml",
+    ".github/workflows/ci.yml",
     "lib.rs",
     "main.rs",
     "bootstrap/app.rs",

@@ -32,6 +32,7 @@ These tokens govern **every generated file and directory name**. Violating them 
 | `scaffold.crate.umbrella` | `rustasea` | Re-export crate (like `laravel/framework`) | `use rustasea::prelude::*` |
 | `scaffold.xtask.bin` | `xtask` | CLI entry binary (`cargo xtask` + `cargo rustasea` alias) | `cargo rustasea list` dispatches to `xtask` |
 | `scaffold.dir.bootstrap` | `bootstrap/` | App wiring | `bootstrap/app.rs`, `bootstrap/providers.rs`, `bootstrap/commands.rs` |
+| `scaffold.dir.bootstrap.cache` | `bootstrap/cache/` | Compiled-configuration cache (runtime) | `bootstrap/cache/.gitignore` tracks the directory; contents ignored |
 | `scaffold.dir.config` | `config/` | Layered config (TOML) | `config/app.toml`, `config/database.toml` |
 | `scaffold.dir.routes` | `routes/` | Route definitions | `routes/web.rs` |
 | `scaffold.dir.database.migrations` | `database/migrations/` | Versioned migrations | `database/migrations/20260907_120000_create_users_table.rs` |
@@ -48,8 +49,12 @@ These tokens govern **every generated file and directory name**. Violating them 
 | `scaffold.dir.app.ai.agents` | `app/ai/agents/` | AI agents (M6) | `app/ai/agents/support_agent.rs` |
 | `scaffold.dir.app.ai.tools` | `app/ai/tools/` | AI tools (M6) | `app/ai/tools/search_docs.rs` |
 | `scaffold.dir.storage` | `storage/` | Runtime storage (git-ignored) | `storage/app/`, `storage/logs/` |
+| `scaffold.dir.storage.subdirs` | `storage/{app/{public,private},logs,framework/{cache/data,sessions,testing,views},archive}/` | Runtime storage subdirectories (each ships its own `.gitignore`) | `storage/app/private/`, `storage/framework/views/` |
+| `scaffold.dir.public` | `public/` | Web root (served directory) | `public/robots.txt`, `public/favicon.ico` |
 | `scaffold.dir.resources.views` | `resources/views/` | Templates (askama) | `resources/views/users/index.html` |
 | `scaffold.dir.tests` | `tests/feature/` | Integration tests | `tests/feature/user_test.rs` |
+| `scaffold.file.rustfmt` | `rustfmt.toml` | Formatting contract (mirrors the framework repo) | `edition = "2021"`, `max_width = 100`, `tab_spaces = 4` |
+| `scaffold.file.ci_workflow` | `.github/workflows/ci.yml` | Generated-app CI (fmt + clippy `-D warnings` + test) | Stable toolchain; no `xtask`/`deny`/`audit` |
 | `scaffold.file.cargo` | `Cargo.toml` | Workspace manifest — `[workspace] members = ["crates/*"]` | — |
 | `scaffold.file.env_example` | `.env.example` | Env template | Committed; `.env` is git-ignored |
 | `scaffold.file.rustasea_toml` | `rustasea.toml` | Optional framework config | Feature flags, generator defaults |

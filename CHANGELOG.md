@@ -53,6 +53,27 @@ Per the same section, each tag is expected to pass `cargo xtask ci` and
 
 ### Added
 
+- 2026-09-17 - Generated-app boot parity: the scaffold's `bootstrap/commands.rs`
+  registers the framework command surface (and queue migrations) via
+  `rustasea::cli::load_default_commands()` plus the application's nine own
+  migrations through `rustasea::orm::register_migration`, so `cargo artisan
+  migrate` runs the real schema instead of reporting an empty registry
+  (`feat(scaffold): [TASK-096] wire generated-app boot parity and emit
+  rustfmt.toml + CI workflow`).
+- 2026-09-17 - Generated apps ship a `rustfmt.toml` mirroring the framework's
+  formatting contract and a minimal `.github/workflows/ci.yml` running
+  `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`, and
+  `cargo test` on stable (`feat(scaffold): [TASK-096] wire generated-app boot
+  parity and emit rustfmt.toml + CI workflow`).
+- 2026-09-17 - App scaffold emits Hypervel-parity broadcasting and CORS config
+  templates (`config/broadcasting.toml`, `config/cors.toml`) with their
+  `.env.example` mirror (`feat(scaffold): [TASK-095] emit broadcasting and CORS
+  config templates (Hypervel parity)`).
+- 2026-09-17 - App scaffold emits Hypervel-parity root hygiene and directory
+  placeholders: `.gitattributes`, `LICENSE`, a `public/` web root
+  (`robots.txt`, `favicon.ico`), `bootstrap/cache/`, and the `storage/`
+  subdirectory `.gitignore` set (`feat(scaffold): [TASK-094] emit
+  Hypervel-parity root hygiene and directory placeholders`).
 - 2026-09-17 - Base `Controller` trait with shared JSON/validation/redirect
   helpers and the `redirect`/`see_other` free functions (Hypervel parity)
   (`feat(http): [TASK-091] add base Controller trait and redirect helpers

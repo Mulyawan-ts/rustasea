@@ -10,6 +10,7 @@ mod app_auth;
 mod app_domain;
 mod app_http;
 mod blade;
+mod bootstrap;
 mod config;
 mod core;
 mod database;
@@ -21,6 +22,7 @@ mod livewire;
 mod manifest;
 mod routes;
 mod tests;
+mod tooling;
 
 use crate::name::AppName;
 use crate::variant::StarterKitVariant;
@@ -106,6 +108,8 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
     let mut files: Vec<TemplateFile> = Vec::new();
     files.extend(manifest::entries(variant));
     files.extend(core::entries(variant));
+    files.extend(bootstrap::entries());
+    files.extend(tooling::entries());
     files.extend(app_domain::entries());
     files.extend(app_auth::entries());
     files.extend(app_http::entries(variant));

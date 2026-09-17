@@ -1,9 +1,10 @@
 //! Core application files shared by every variant.
 //!
 //! Emits the package entry points (`lib.rs`, `main.rs`), environment files, the
-//! `askama.toml` template root for server-rendered variants, and the
-//! `bootstrap/` kernel wiring that was an empty placeholder before the
-//! starter kit existed (`bootstrap/providers.rs`, `bootstrap/commands.rs`).
+//! `askama.toml` template root for server-rendered variants, and the root
+//! `.gitignore`/`.gitattributes`/`LICENSE` hygiene files. The `bootstrap/`
+//! kernel wiring lives in [`super::bootstrap`] and the developer-tooling config
+//! in [`super::tooling`].
 
 use crate::variant::StarterKitVariant;
 
@@ -19,10 +20,6 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
         ("README.md", README),
         ("lib.rs", LIB_RS),
         ("main.rs", MAIN_RS),
-        ("bootstrap/mod.rs", BOOTSTRAP_MOD),
-        ("bootstrap/app.rs", BOOTSTRAP_APP),
-        ("bootstrap/providers.rs", BOOTSTRAP_PROVIDERS),
-        ("bootstrap/commands.rs", BOOTSTRAP_COMMANDS),
         ("bootstrap/cache/.gitignore", BOOTSTRAP_CACHE_GITIGNORE),
         ("public/.gitignore", PUBLIC_GITIGNORE),
         ("public/robots.txt", PUBLIC_ROBOTS_TXT),
@@ -385,66 +382,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_graceful_shutdown(app.shutdown())
         .await?;
     Ok(())
-}
-"##;
-
-const BOOTSTRAP_MOD: &str = r##"//! Application bootstrap — providers, commands, and kernel configuration.
-
-pub mod app;
-pub mod commands;
-pub mod providers;
-"##;
-
-const BOOTSTRAP_APP: &str = r##"//! Application bootstrap — `Application::configure` for @@app_pascal@@.
-//!
-//! Registers the generated service providers and runs the register → boot DAG
-//! before the HTTP kernel starts serving.
-
-use rustasea::foundation::BootError;
-use rustasea::Application;
-
-use crate::bootstrap::providers;
-
-/// Build and boot the application container.
-///
-/// Returns [`BootError`] when the provider graph contains a cycle or an
-/// unresolved dependency, so a misconfigured boot never starts the server.
-pub fn configure() -> Result<Application, BootError> {
-    let mut app = Application::configure(|_| {});
-    for provider in providers::providers() {
-        app.provider(provider);
-    }
-    app.boot()?;
-    Ok(app)
-}
-"##;
-
-const BOOTSTRAP_PROVIDERS: &str = r##"//! Provider registry — service providers registered by the application.
-//!
-//! This registry is populated by the starter kit (previously empty) and is the
-//! registration site for providers generated with `cargo rustasea make:provider`.
-
-use rustasea::ServiceProvider;
-
-use crate::app::providers::{AppServiceProvider, AuthServiceProvider};
-
-/// Providers wired into the boot DAG, in registration order.
-///
-/// Order is the tie-breaker for providers without `dependencies()`; the
-/// foundation `Application::boot` topologically sorts them regardless.
-pub fn providers() -> Vec<Box<dyn ServiceProvider>> {
-    vec![Box::new(AppServiceProvider), Box::new(AuthServiceProvider)]
-}
-"##;
-
-const BOOTSTRAP_COMMANDS: &str = r##"//! CLI command registry — `cargo artisan` console commands.
-//!
-//! This registry gives the previously-empty command site a real home; commands
-//! generated into `app/console/commands/*` are appended here.
-
-/// Names of the console commands registered for the application.
-pub fn commands() -> Vec<&'static str> {
-    vec![]
 }
 "##;
 
