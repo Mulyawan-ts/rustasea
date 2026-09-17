@@ -6,6 +6,9 @@ pub mod error;
 /// Panic catching + dev panic-location capture (ADOPT-010).
 pub mod panic;
 
+/// Base `Controller` trait + standalone redirect helpers (Hypervel parity).
+pub mod controller;
+
 /// Idle (inter-chunk) timeout enforcement for buffered client responses.
 mod idle;
 
@@ -22,6 +25,8 @@ use axum::response::{IntoResponse, Response};
 use axum::Json as AxumJson;
 use serde::Serialize;
 use serde_json::Value;
+
+pub use controller::{redirect, see_other, Controller};
 
 /// Security posture consumed by HTTP middleware.
 ///

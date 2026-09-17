@@ -39,9 +39,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum::extract::Request;
-use axum::http::{header, HeaderValue, StatusCode};
+use axum::http::{header, StatusCode};
 use axum::middleware::Next;
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use tower_http::services::ServeDir;
 use tower_sessions::cookie::Cookie;
 
@@ -422,13 +422,8 @@ fn redirect_to_login() -> Response {
 
 /// Build a `302 Found` redirect to `location`.
 ///
-/// The static path constants are ASCII and contain no header-unsafe bytes, so
-/// the `HeaderValue` is built directly; the only dynamic value ever passed here
-/// is one of those constants.
+/// Delegates to the framework helper [`rustasea::http::redirect`], which keeps
+/// the invalid-location fallback (`/`) in one place.
 fn redirect_to(location: &'static str) -> Response {
-    (
-        StatusCode::FOUND,
-        [(header::LOCATION, HeaderValue::from_static(location))],
-    )
-        .into_response()
+    rustasea::http::redirect(location)
 }

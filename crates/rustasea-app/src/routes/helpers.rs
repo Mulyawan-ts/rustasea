@@ -12,7 +12,7 @@
 
 use std::sync::{Arc, OnceLock, RwLock};
 
-use axum::http::{header, HeaderValue, StatusCode};
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
 use rustasea::auth::{FortifyConfig, UserProvider};
@@ -145,8 +145,7 @@ fn hex_value(byte: u8) -> Option<u8> {
 /// re-submit the credentials when it follows the redirect. An invalid location
 /// falls back to `/` rather than panicking.
 pub(crate) fn see_other(location: &str) -> Response {
-    let value = HeaderValue::try_from(location).unwrap_or_else(|_| HeaderValue::from_static("/"));
-    (StatusCode::SEE_OTHER, [(header::LOCATION, value)]).into_response()
+    rustasea::http::see_other(location)
 }
 
 /// One item in the app's `{"errors":[...]}` JSON error envelope
