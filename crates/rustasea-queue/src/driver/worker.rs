@@ -44,7 +44,9 @@ where
     register_job_handler(
         std::any::type_name::<J>(),
         Arc::new(|body: &serde_json::Value| {
-            let job: J = serde_json::from_value(body.clone()).ok()?;
+            // `&Value` implements `Deserializer`, so the body is decoded by
+            // borrow, with no clone of the whole job JSON per attempt.
+            let job: J = serde::Deserialize::deserialize(body).ok()?;
             Some(Arc::new(ConcreteJob::new(job)))
         }),
     );
@@ -70,7 +72,9 @@ where
     register_job_handler(
         std::any::type_name::<J>(),
         Arc::new(move |body: &serde_json::Value| {
-            let job: J = serde_json::from_value(body.clone()).ok()?;
+            // Decode by borrow (`&Value` is a `Deserializer`), with no clone of
+            // the whole job JSON per attempt.
+            let job: J = serde::Deserialize::deserialize(body).ok()?;
             Some(Arc::new(ConcreteJob::with_policy(job, policy)))
         }),
     );

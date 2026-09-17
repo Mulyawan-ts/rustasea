@@ -237,7 +237,7 @@ async fn execute_sqlite_script_tx(
 #[cfg(feature = "postgres")]
 fn bind_postgres<'q>(
     query: sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments>,
-    bindings: &[Value],
+    bindings: &'q [Value],
 ) -> sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments> {
     #[cfg(feature = "vector")]
     {

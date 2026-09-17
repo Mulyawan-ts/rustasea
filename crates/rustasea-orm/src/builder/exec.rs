@@ -180,16 +180,30 @@ impl QueryBuilder {
         executor: impl Into<Executor<'a>>,
     ) -> Result<Vec<serde_json::Value>> {
         let resolved = self.resolved();
-        let sql = resolved.to_sql()?;
-        let bindings = resolved.bindings().to_vec();
-        let table = resolved.table_name().to_string();
         let mut executor = executor.into();
+        resolved.fetch_resolved(&mut executor).await
+    }
+
+    /// Execute an already-resolved builder against `executor` without cloning it.
+    ///
+    /// Renders the exact SQL of this builder (no further scope resolution) and
+    /// runs it through the same cache path as [`QueryBuilder::get`]. Callers
+    /// must pass a builder whose global scopes are already applied, i.e. the
+    /// output of [`QueryBuilder::resolved`], so the SQL and bind values stay in
+    /// step. Borrowing the builder instead of cloning it keeps multi-window
+    /// loops (e.g. [`QueryBuilder::chunk_by`]) allocation-free per iteration.
+    async fn fetch_resolved<'a>(
+        &self,
+        executor: &mut Executor<'a>,
+    ) -> Result<Vec<serde_json::Value>> {
+        let sql = self.render_sql()?;
+        let table = self.table_name().to_string();
         fetch_json_cached(
-            &mut executor,
-            resolved.cache_mode(),
+            executor,
+            self.cache_mode(),
             &table,
             &sql,
-            &bindings,
+            &self.bindings,
             "",
         )
         .await
@@ -295,11 +309,18 @@ impl QueryBuilder {
             ));
         }
         let mut executor = executor.into();
-        let mut offset = self.offset.unwrap_or(0);
+        // Resolve global scopes once, then mutate only the `limit`/`offset`
+        // fields in place per window. Cloning the whole builder each iteration
+        // would copy the table, conditions, bindings, and eager plan for every
+        // window; the SQL semantics are identical because scopes are applied
+        // exactly once here.
+        let mut resolved = self.resolved();
+        let mut offset = resolved.offset.unwrap_or(0);
         let mut processed: u64 = 0;
         loop {
-            let window = self.clone().limit(size).offset(offset);
-            let rows = window.get(executor.reborrow()).await?;
+            resolved.limit = Some(size);
+            resolved.offset = Some(offset);
+            let rows = resolved.fetch_resolved(&mut executor).await?;
             let fetched = rows.len() as u64;
             if fetched == 0 {
                 break;

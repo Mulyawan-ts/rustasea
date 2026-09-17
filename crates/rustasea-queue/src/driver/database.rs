@@ -158,11 +158,10 @@ impl DatabaseDriver {
         );
         let queue = queue.to_string();
 
-        let claimed = rustasea_orm::transaction(&self.pool, |tx| {
-            let select = select.clone();
-            let update = update.clone();
-            let queue = queue.clone();
-            let now = now.clone();
+        // `transaction` runs the body exactly once, so the SQL strings, queue
+        // name and timestamp are moved into the closure instead of cloned on
+        // every poll (the poll loop fires every `POLL_INTERVAL`).
+        let claimed = rustasea_orm::transaction(&self.pool, move |tx| {
             Box::pin(async move {
                 let rows = tx
                     .fetch_json(&select, &[Value::Text(queue), Value::Text(now.clone())])

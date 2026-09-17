@@ -166,6 +166,40 @@ async fn chunk_by_invokes_callback_per_window() {
     assert_eq!(processed, 5);
 }
 
+/// Verifies `chunk_by` honours a pre-existing offset and yields contiguous,
+/// non-overlapping ordered windows (the invariant the in-place LIMIT/OFFSET
+/// rewrite must preserve).
+#[tokio::test]
+async fn chunk_by_honours_offset_and_windows_are_contiguous() {
+    let pool = pool_with_users().await;
+    // Deterministic ids so ordering is stable across windows.
+    for index in 0..6 {
+        let mut user = sample(&format!("user-{index}"));
+        user.id = Uuid::from_u128(index as u128 + 1);
+        User::create(&pool, user).await.unwrap();
+    }
+
+    let mut seen: Vec<Uuid> = Vec::new();
+    let processed = QueryBuilder::table("users")
+        .order_by("id", rustasea_orm::OrderDirection::Asc)
+        .offset(1)
+        .chunk_by(&pool, 2, |chunk| {
+            for row in chunk {
+                let user: User = serde_json::from_value(row).unwrap();
+                seen.push(user.id);
+            }
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+    // Offset 1 skips the first id; the remaining five are covered exactly once,
+    // in order, across three windows (2 + 2 + 1).
+    assert_eq!(processed, 5);
+    let expected: Vec<Uuid> = (2..=6).map(Uuid::from_u128).collect();
+    assert_eq!(seen, expected, "windows are contiguous and ordered");
+}
+
 /// Verifies exists reports presence without loading rows.
 #[tokio::test]
 async fn exists_reports_presence() {

@@ -17,9 +17,14 @@ use sqlx::{Column, ColumnIndex, Database, Decode, Encode, Row, Type, TypeInfo};
 /// `json`/`uuid`/`chrono` sqlx features are enabled). A vector value binds as its
 /// pgvector text literal (`[a,b,c]`) on the generic path — Postgres callers
 /// should use [`bind_all_pg`] for native `vector` binding (no manual cast).
+///
+/// Values are bound **by reference**: `sqlx` has a blanket `Encode`/`Type` impl
+/// for `&T`, so the loop borrows each [`Value`] instead of cloning it. This
+/// keeps a `Value::Text`/`Value::Json` bind (and the per-row bind loop in every
+/// executor) allocation-free.
 pub fn bind_all<'q, DB>(
     mut query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
-    values: &[Value],
+    values: &'q [Value],
 ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>
 where
     DB: Database,
@@ -33,7 +38,7 @@ where
     Option<i64>: Encode<'q, DB> + Type<DB>,
 {
     for value in values {
-        query = bind_one(query, value.clone());
+        query = bind_one(query, value);
     }
     query
 }
@@ -41,10 +46,11 @@ where
 /// Bind a single [`Value`] onto a `sqlx` query.
 ///
 /// A vector value has no native encoding on the generic path, so it is bound as
-/// text; use [`bind_all_pg`] for native Postgres `vector` binding.
+/// text; use [`bind_all_pg`] for native Postgres `vector` binding. Scalars are
+/// bound by reference (no clone) via the blanket `Encode`/`Type` impl for `&T`.
 pub fn bind_one<'q, DB>(
     query: Query<'q, DB, <DB as Database>::Arguments<'q>>,
-    value: Value,
+    value: &'q Value,
 ) -> Query<'q, DB, <DB as Database>::Arguments<'q>>
 where
     DB: Database,
@@ -59,15 +65,15 @@ where
 {
     match value {
         Value::Null => query.bind(Option::<i64>::None),
-        Value::Bool(v) => query.bind(v),
-        Value::Int(v) => query.bind(v),
-        Value::Float(v) => query.bind(v),
+        Value::Bool(v) => query.bind(*v),
+        Value::Int(v) => query.bind(*v),
+        Value::Float(v) => query.bind(*v),
         Value::Text(v) => query.bind(v),
         Value::Uuid(v) => query.bind(v),
         Value::Timestamp(v) => query.bind(v),
         Value::Json(v) => query.bind(v),
         #[cfg(feature = "vector")]
-        Value::Vector(v) => query.bind(crate::vector::to_vector_literal(&v)),
+        Value::Vector(v) => query.bind(crate::vector::to_vector_literal(v)),
     }
 }
 
@@ -76,16 +82,20 @@ where
 /// Unlike [`bind_all`], a [`Value::Vector`] is encoded with the `pgvector` crate
 /// so the driver sends the `vector` type directly — no text literal and no
 /// caller-supplied `$n::vector` cast. All other values fall through to
-/// [`bind_one`].
+/// [`bind_one`], binding by reference.
+///
+/// The `pgvector::Vector` type owns its `Vec<f32>` (it has no `From<&[f32]>`),
+/// so a native vector bind still copies the embedding once; every scalar bind is
+/// clone-free.
 #[cfg(all(feature = "vector", feature = "postgres"))]
 pub fn bind_all_pg<'q>(
     mut query: sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments>,
-    values: &[Value],
+    values: &'q [Value],
 ) -> sqlx::query::Query<'q, sqlx::Postgres, sqlx::postgres::PgArguments> {
     for value in values {
         query = match value {
             Value::Vector(vector) => query.bind(pgvector::Vector::from(vector.clone())),
-            other => bind_one::<sqlx::Postgres>(query, other.clone()),
+            other => bind_one::<sqlx::Postgres>(query, other),
         };
     }
     query
