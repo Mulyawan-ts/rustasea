@@ -167,12 +167,12 @@ Milestones are **dependency-ordered**: each builds only on predecessors. No circ
 | Field | Detail |
 |---|---|
 | **Goal** | First-class developer experience: CLI, code generation, and a testing story that feels like Laravel. |
-| **Scope** | `cargo artisan` CLI (via `clap` + `cargo xtask`): `list`, `make:*` (controller, middleware, request, model, provider, command, job, event, listener, observer, test, seeder, migration, agent, tool — 15 kinds), typed command args/flags, `ask`/`secret`/`confirm`/`choice`/`multiSelect` prompts, `table`/`progressBar`/`spinner`, graceful shutdown (`Shutdownable`), programmatic `Artisan::call()`. Declarative attributes: `#[middleware]`, `#[authorize]`, `#[tries]`, `#[backoff]`, `#[timeout]`, `#[usage]`/`#[help]`/`#[hidden]` for commands (`#[middleware]`/`#[authorize]` are consumed at runtime through the router registries and `#[tries]`/`#[backoff]`/`#[timeout]` bind through `JobPolicy`; see M3 status). Testing: `cargo test` integration, `TestCase` harness, `testcontainers`-backed isolated Postgres fixture (`PostgresTestDb`, `crates/rustasea-testing/src/fixtures.rs:49`), `Factory::create`, `Str` factory resets between tests, paginator views. |
+| **Scope** | `cargo artisan` CLI (via `clap` + `cargo xtask`): `list`, `make:*` (controller, middleware, request, model, provider, command, job, event, listener, observer, test, seeder, migration, agent, tool, action, module — 17 kinds; see [Artisan CLI](#artisan-cli)), typed command args/flags, `ask`/`secret`/`confirm`/`choice`/`multiSelect` prompts, `table`/`progressBar`/`spinner`, graceful shutdown (`Shutdownable`), programmatic `Artisan::call()`. Declarative attributes: `#[middleware]`, `#[authorize]`, `#[tries]`, `#[backoff]`, `#[timeout]`, `#[usage]`/`#[help]`/`#[hidden]` for commands (`#[middleware]`/`#[authorize]` are consumed at runtime through the router registries and `#[tries]`/`#[backoff]`/`#[timeout]` bind through `JobPolicy`; see M3 status). Testing: `cargo test` integration, `TestCase` harness, `testcontainers`-backed isolated Postgres fixture (`PostgresTestDb`, `crates/rustasea-testing/src/fixtures.rs:49`), `Factory::create`, `Str` factory resets between tests, paginator views. |
 | **Deliverables** | `rustasea-cli` + `rustasea-macros` + `rustasea-testing` crates, `bootstrap/commands.rs` (populated — `:12`), `crates/rustasea/tests/feature/` integration suite, `cargo artisan make:test` generator, `#[test]` helpers. |
 | **Success Criteria** | `cargo artisan make:controller UserController` scaffolds a controller (route registration stays manual — see status note); all generated `make:*` commands produce `rustfmt`-clean code that compiles; `cargo test` spins up an isolated Postgres via `testcontainers` and tears it down. |
 | **Laravel 13 features** | #7 expanded attributes (all `#[Tries]`/`#[Backoff]`/`#[Timeout]`/`#[WithoutBroadcasting]` etc.), #20 `ModelInspector`/`route:list`/`Str` factory resets. |
 
-> **Status (2026-09-12):** Partial. The 16 `make:*` generators, `cargo rustasea new --variant {blade|react|vue|livewire}`, real `xtask check-cycles` DAG validation, `xtask migrate`, and the testcontainers `PostgresTestDb` fixture are implemented (`crates/rustasea-cli/src/commands/mod.rs:17-31`; `crates/cargo-rustasea/src/main.rs:46`; `xtask/src/cycles.rs:32`; `xtask/src/main.rs:37`; `crates/rustasea-testing/src/fixtures.rs:49`). Remaining: Docker-gated integration tests are opt-in (`cargo test -p rustasea --features integration -- --ignored`), and generated controllers leave route registration manual (`crates/rustasea-cli/src/generators/kinds/controller.rs:32`). Tracked in `GAP-016`–`GAP-018` (completed).
+> **Status (2026-09-12):** Partial. The 17 `make:*` generators, `cargo rustasea new --variant {blade|react|vue|livewire}`, real `xtask check-cycles` DAG validation, `xtask migrate`, and the testcontainers `PostgresTestDb` fixture are implemented (`crates/rustasea-cli/src/commands/mod.rs:17-31`; `crates/cargo-rustasea/src/main.rs:46`; `xtask/src/cycles.rs:32`; `xtask/src/main.rs:37`; `crates/rustasea-testing/src/fixtures.rs:49`). Remaining: Docker-gated integration tests are opt-in (`cargo test -p rustasea --features integration -- --ignored`), and generated controllers leave route registration manual (`crates/rustasea-cli/src/generators/kinds/controller.rs:32`). Tracked in `GAP-016`–`GAP-018` (completed).
 
 ### M6 — Advanced (Broadcasting, Search, Filesystem, AI SDK, Real-time)
 
@@ -185,6 +185,121 @@ Milestones are **dependency-ordered**: each builds only on predecessors. No circ
 | **Laravel 13 features** | #1 AI SDK, #2 AI Agents, #3 JSON:API Resources, #6 semantic/vector search (full), #9 read-through filesystem, #17 mail/notification defaults, #18 SSE `eventStream`. |
 
 > **Status (2026-09-12):** Partial. Broadcast WS (default `ws` feature → `axum/ws`) + SSE, `object_store`-backed storage with the `config/storage.toml` facade, JSON:API, `rustasea-mail`, the view/Inertia/Livewire/scaffold presentation crates, real HTTP AI providers (`provider_from_env()`, `crates/rustasea-ai/src/providers/mod.rs:27`), AI queueing (`crates/rustasea-ai/src/queue.rs:41`), MCP client/registry (`crates/rustasea-ai/src/mcp/client.rs:40`), and feature-gated `pgvector` (`crates/rustasea-search/src/pgvector.rs:24`) are implemented. Remaining: Gemini/Bedrock have no adapter (`AiError::UnknownProvider`, `crates/rustasea-ai/src/providers/client.rs:223`), embeddings fall back to the deterministic stub (`crates/rustasea-search/src/embeddings.rs:97`), and `InProcessProvider` remains for deterministic tests (`crates/rustasea-ai/src/adapters.rs:50`). Tracked in `GAP-012`, `GAP-014`, `GAP-015`, `GAP-020` (completed).
+
+---
+
+## Artisan CLI
+
+`cargo artisan <command>` runs the framework console. It is a `cargo-rustasea`
+subcommand (`crates/cargo-rustasea/src/main.rs`), with `cargo artisan` retained
+as the in-app alias. The registry
+(`crates/rustasea-cli/src/commands/mod.rs:22`) registers **37 default commands**
+plus the feature-gated `mcp:serve`. Run `cargo artisan list` for the live
+surface; `list --json` emits the same metadata as machine-readable JSON.
+
+### Generators (`make:*`)
+
+17 scaffolds. `{name}` is PascalCase (snake_case for `make:migration`).
+`--force`/`-f` overwrites; `--resource`/`-r` (controller) adds resource methods;
+`-m`/`--migration` (model) emits a migration; `--browser` (test) targets the
+WebDriver e2e harness under `tests/browser/`
+(`crates/rustasea-cli/src/generators/mod.rs:245`, `:297`).
+
+| Command | Purpose |
+|---|---|
+| `make:controller {name} [--resource] [--force]` | HTTP controller |
+| `make:middleware {name} [--force]` | axum HTTP middleware |
+| `make:request {name} [--force]` | Validated form request |
+| `make:model {name} [-m] [--force]` | ORM model (+ optional migration) |
+| `make:provider {name} [--force]` | Service provider |
+| `make:command {name} [--force]` | Console command |
+| `make:job {name} [--force]` | Queue job |
+| `make:event {name} [--force]` | Domain event |
+| `make:listener {name} [--force]` | Event listener |
+| `make:observer {name} [--force]` | Model lifecycle observer |
+| `make:test {name} [--force] [--browser]` | Feature test, or browser e2e test with `--browser` |
+| `make:seeder {name} [--force]` | Database seeder |
+| `make:migration {name} [--force]` | Database migration (snake_case name) |
+| `make:agent {name} [--force]` | AI agent scaffold (M6) |
+| `make:tool {name} [--force]` | AI tool scaffold (M6) |
+| `make:action {name} [--force]` | Action class (ADOPT-028) |
+| `make:module {name} [--force]` | Modular application crate (ADOPT-027) |
+
+### Modules
+
+Module state is discovered from `modules/<name>/` and persisted in the
+`[modules]` table of `rustasea.toml` (or `config/modules.toml`). Enabling or
+disabling an unknown name is rejected before the manifest is written
+(`crates/rustasea-cli/src/commands/modules.rs`).
+
+| Command | Purpose |
+|---|---|
+| `module:list [--json]` | List discovered modules with status and version |
+| `module:enable {name}` | Mark a module enabled |
+| `module:disable {name}` | Mark a module disabled |
+
+### Routing & introspection
+
+| Command | Purpose |
+|---|---|
+| `list [--json] [--all]` | List available commands (`--all` includes hidden) |
+| `route:list [--json]` | Render the live route table (Method, URI, Name, Action, Middleware, Binding) |
+| `show:model {name}` | Show a model's file path and derived table name |
+| `openapi:generate [--output=openapi.json] [--pretty]` | Emit an OpenAPI 3.1 spec from the live route table |
+
+### Database & migrations
+
+Connection resolution prefers `DATABASE_URL`, then `DATABASE__URL`, then
+`config/database.toml` (`crates/rustasea-cli/src/commands/ops/migration.rs:40`).
+A destructive `migrate:fresh` is refused in production unless `--force` is set.
+
+| Command | Purpose |
+|---|---|
+| `migrate [--fresh] [--seed] [--force]` | Run pending migrations (`--seed` runs seeders after) |
+| `migrate:fresh [--seed] [--force]` | Drop all tables and re-run every migration |
+| `migrate:rollback [--step N]` | Roll back the last N migration batches (default 1) |
+
+### Queue & schedule
+
+| Command | Purpose |
+|---|---|
+| `queue:failed` | List dead-lettered jobs |
+| `queue:retry {id}` | Retry a failed job by id |
+| `queue:work [--queue=default] [--max-jobs=1]` | Process jobs from the database queue |
+| `schedule:list [--json]` | List scheduled commands |
+| `schedule:run` | Run due scheduled commands once |
+| `schedule:pause` | Pause scheduled command dispatch |
+| `schedule:resume` | Resume scheduled command dispatch |
+
+### Localization, logging & interactive
+
+`lang:check` (ADOPT-005) reports missing, unused, and duplicate translation
+entries; `missing` and `duplicate` findings fail the command, `unused` is
+informational (`crates/rustasea-cli/src/commands/langcheck.rs`).
+
+| Command | Flags | Purpose |
+|---|---|---|
+| `lang:check` | `--locale=xx` (reference locale, defaults to `app_locale`), `--path=resources/lang` (base directory), `--json` | Check translation dictionaries for missing, unused, and duplicate entries |
+| `log:show` | `--level` (min severity: trace/debug/info/warn/error), `--channel` (channel name, defaults to the configured default), `--since` (RFC 3339 lower bound), `--grep` (case-insensitive substring), `--limit` (newest N, default 200), `--follow` (poll appended lines every 250 ms), `--json` (newline-delimited JSON) | Filter, print, and optionally tail the application log (`crates/rustasea-cli/src/commands/log_show.rs:74`) |
+| `tinker` | (none) | Interactive REPL for a booted application: `config`/container/route/command inspection with a friendly `help`; piped stdin scripts the session (ADOPT-008, `crates/rustasea-cli/src/commands/tinker.rs:43`) |
+
+### AI agent workflows (feature-gated)
+
+`mcp:serve` exposes the project knowledge surface over the Model Context
+Protocol on stdin/stdout, so an AI coding agent can discover routes, docs,
+commands, and redacted config (laravel/boost parity, ADOPT-015). It is gated
+behind the `mcp` cargo feature
+(`crates/rustasea-cli/src/commands/mod.rs:60-61`); a build without that feature
+does not register the command.
+
+| Command | Purpose |
+|---|---|
+| `mcp:serve` | Serve project knowledge (routes, docs, commands, config) over MCP stdio; config values are redacted and reads are confined to `docs/**.md` and `config/*.toml` |
+
+> The MCP server advertises the tools `route:list`, `model:show`, `make:plan`,
+> and `migrate:status`, and the resources `rustasea://docs/{name}`,
+> `rustasea://config/{name}`, `rustasea://routes`, and `rustasea://commands`
+> (`crates/rustasea-cli/src/commands/mcp_serve.rs:10-12`).
 
 ---
 
