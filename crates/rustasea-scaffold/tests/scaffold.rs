@@ -132,6 +132,51 @@ fn assert_manifest_contains(root: &Path, needle: &str) {
     );
 }
 
+/// Inertia page modules every react/vue/svelte variant must emit (TASK-107).
+///
+/// The six entries extend the original five (dashboard, auth login/register,
+/// settings profile/password) to full auth/settings parity.
+const REQUIRED_INERTIA_PAGES: &[&str] = &[
+    "resources/js/pages/auth_forgot_password.rs",
+    "resources/js/pages/auth_reset_password.rs",
+    "resources/js/pages/auth_confirm_password.rs",
+    "resources/js/pages/auth_verify_email.rs",
+    "resources/js/pages/auth_two_factor_challenge.rs",
+    "resources/js/pages/settings_security.rs",
+];
+
+/// Inertia registry keys every react/vue/svelte variant must map (TASK-107).
+const REQUIRED_INERTIA_KEYS: &[&str] = &[
+    "auth/login",
+    "auth/register",
+    "auth/forgot-password",
+    "auth/reset-password",
+    "auth/confirm-password",
+    "auth/verify-email",
+    "auth/two-factor-challenge",
+    "dashboard",
+    "settings/profile",
+    "settings/password",
+    "settings/security",
+];
+
+/// Assert the Inertia page modules and registry keys are present.
+fn assert_inertia_parity(root: &Path) {
+    for relative in REQUIRED_INERTIA_PAGES {
+        assert!(
+            root.join(relative).exists(),
+            "missing inertia page: {relative}"
+        );
+    }
+    let registry = read(root, "resources/js/pages/mod.rs");
+    for key in REQUIRED_INERTIA_KEYS {
+        assert!(
+            registry.contains(&format!("\"{key}\"")),
+            "pages/mod.rs missing registry key `{key}`:\n{registry}"
+        );
+    }
+}
+
 /// Root hygiene files (TASK-094) are emitted with the expected content.
 ///
 /// `.gitattributes` normalizes line endings, `LICENSE` is a non-empty MIT
@@ -202,6 +247,7 @@ fn react_variant_generates_dioxus_inertia_layout() {
     assert!(!root.join("askama.toml").exists());
     assert_manifest_contains(&root, "wasm-dioxus");
     assert_manifest_contains(&root, "features = [\"react\"]");
+    assert_inertia_parity(&root);
 
     std::fs::remove_dir_all(&root).ok();
 }
@@ -222,6 +268,7 @@ fn vue_variant_generates_leptos_inertia_layout() {
     assert!(root.join("config/inertia.toml").exists());
     assert_manifest_contains(&root, "wasm-leptos");
     assert_manifest_contains(&root, "features = [\"vue\"]");
+    assert_inertia_parity(&root);
 
     std::fs::remove_dir_all(&root).ok();
 }
@@ -244,6 +291,7 @@ fn svelte_variant_generates_sycamore_inertia_layout() {
     assert!(!root.join("askama.toml").exists());
     assert_manifest_contains(&root, "wasm-sycamore");
     assert_manifest_contains(&root, "features = [\"svelte\"]");
+    assert_inertia_parity(&root);
 
     std::fs::remove_dir_all(&root).ok();
 }
