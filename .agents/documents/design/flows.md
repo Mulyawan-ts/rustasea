@@ -28,7 +28,7 @@ Every flow below lists **Node Table** and **Edge Table** with consistent IDs, pl
 
 ```text
 cargo rustasea [Public — no running app required]
-├── new <app>                         [Public]  scaffold new workspace  (FR-005 / FS-M0-01)
+├── new <app> --variant <v>           [Public]  scaffold new workspace  (FR-005 / FS-M0-01; v = blade|react|vue|svelte|livewire)
 ├── list [--json] [--all]             [Public]  enumerate commands      (FR-500)
 ├── make:*                            [Public]  17 generators       (FR-501)
 │   ├── make:controller <Name> [--resource] [--force]
@@ -155,13 +155,13 @@ flowchart TB
 
 ## 4. Journey Flows
 
-### 4.1 F-01 — New Application (`cargo rustasea new <app>`)
+### 4.1 F-01 — New Application (`cargo rustasea new <app> --variant <v>`)
 
-**User goal:** Scaffold a bootable RustaSea workspace that `cargo run` can boot in <2s.
+**User goal:** Scaffold a bootable RustaSea workspace that `cargo run` can boot in <2s. The presentation variant is one of `blade|react|vue|svelte|livewire` (`crates/rustasea-scaffold/src/variant.rs:13`); all variants share one auth/domain core and differ only in presentation (ADR-0002).
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ValidateName : cargo rustasea new &lt;app&gt;
+    [*] --> ValidateName : cargo rustasea new &lt;app&gt; --variant &lt;v&gt;
     ValidateName --> ExistsCheck : name valid
     ValidateName --> ERR_InvalidName : empty / reserved / non-kebab-or-snake
     ExistsCheck --> Generate : path not exists
@@ -180,10 +180,10 @@ stateDiagram-v2
 
 | ID | Type | Label | Description |
 |----|------|-------|-------------|
-| N1 | input | `cargo rustasea new <app>` | Shell invocation with app name arg |
+| N1 | input | `cargo rustasea new <app> --variant <v>` | Shell invocation with app name and variant (`blade|react|vue|svelte|livewire`) |
 | N2 | decision | ValidateName | Check `<app>` is non-empty, not reserved (`test`, `target`), kebab/snake allowed |
 | N3 | decision | ExistsCheck | `fs::exists("./<app>")` — must be absent |
-| N4 | action | Generate | Write `Cargo.toml`, `bootstrap/`, `config/`, `routes/web.rs`, `database/`, `storage/`, `.env.example`, `app/` dirs (see scaffold map) |
+| N4 | action | Generate | Write `Cargo.toml`, `bootstrap/`, `config/`, `routes/web.rs`, `database/`, `storage/`, `.env.example`, `app/` dirs, plus the variant-specific `resources/` layer (see scaffold map) |
 | N5 | action | Rustfmt | Run `rustfmt` on generated `.rs` files (NFR-Usa-03) |
 | N6 | action | CargoCheck | `cargo check` on generated workspace (non-blocking advisory; failure is diagnostic, not rollback) |
 | N7 | screen | Success | `stdout: Created <app> — run: cd <app> && cargo run` (exit 0) |

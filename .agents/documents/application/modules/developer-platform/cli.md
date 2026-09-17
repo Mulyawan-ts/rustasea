@@ -116,6 +116,7 @@ line, verified against its parser in `crates/rustasea-cli/src/commands/`.
 
 | Command | Usage | Source | Description |
 |---------|-------|--------|-------------|
+| `new` | `new <app> --variant {blade\|react\|vue\|svelte\|livewire}` | `cargo-rustasea.rs` | Scaffold a new application from the selected starter-kit variant (ADR-0002); `rustasea-scaffold` is the library behind it (`crates/rustasea-scaffold/src/variant.rs:13`). |
 | `show:model` | `show:model {name} [--json]` | `inspect.rs` | Source-level model introspection: attributes, casts, soft-delete and timestamp flags, and relations parsed from `app/models/{snake}.rs` (`GAP-029`). |
 | `module:list` | `module:list [--json]` | `modules.rs` | List discovered `modules/<name>/` crates with status, version, and path (`ADOPT-027`). |
 | `module:enable` | `module:enable {name}` | `modules.rs` | Mark an existing module enabled in the `[modules]` manifest table (`ADOPT-027`). |

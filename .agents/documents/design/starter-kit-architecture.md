@@ -2,7 +2,7 @@
 
 > **Status:** Draft — design proposal (TASK-004)
 > **Date:** 2026-09-11
-> **Scope:** First-party application starter kits — the Rust equivalent of Laravel's Blade / React / Vue / Livewire starter kits.
+> **Scope:** First-party application starter kits — the Rust equivalent of Laravel's Blade / React / Vue / Svelte / Livewire starter kits.
 > **Milestones:** spans **M3** (auth core), **M5** (scaffolder + generators), **M6** (view engine, Inertia-analogue, real-time).
 > **Parents:** `README.md` §Milestones · `docs/milestones.md` · `docs/laravel-parity.md` §8 · TASK-004 enrichment comment.
 > **ADR:** [`docs/adr/ADR-0002-rustasea-starter-kit-architecture.md`](../../../docs/adr/ADR-0002-rustasea-starter-kit-architecture.md)
@@ -24,7 +24,9 @@ RustaSea has no presentation layer. The audit (TASK-001 C8, TASK-002) and the cu
 | Scaffolder | None. 13 `make:*` kinds exist; no `new`. | `crates/rustasea-cli/src/generators/mod.rs:19`; `docs/milestones.md:74,247` |
 | App layout | `app/` has `http/{controllers,middleware}`, `models`, `providers`, `console`, `jobs`, `events`, `listeners`, `ai`; no `app/actions`, `app/concerns`, `database/{factories,seeders}`, `tests/{feature,unit}`. | `README.md:264-279` |
 
-**Goal:** define a starter-kit architecture where auth and domain logic are a single shared core and the four variants differ **only** in presentation — exactly the Laravel model (Fortify is shared; Blade/React/Vue/Livewire swap the view layer).
+**Goal:** define a starter-kit architecture where auth and domain logic are a single shared core and the variants differ **only** in presentation — exactly the Laravel model (Fortify is shared; Blade/React/Vue/Svelte/Livewire swap the view layer).
+
+> **As-built note (2026-09-17):** the variant set is now five tokens, `{blade|react|vue|svelte|livewire}` (`crates/rustasea-scaffold/src/variant.rs:13`). The `svelte` variant maps to **Sycamore** (Rust-native fine-grained reactive WASM, no Node.js) alongside `react`→Dioxus and `vue`→Leptos. Each variant is distributed as its own repository (`rustasea/react-starter-kit`, `rustasea/vue-starter-kit`, `rustasea/svelte-starter-kit`, `rustasea/livewire-starter-kit`), mirroring the `laravel/<x>-starter-kit` split, while `rustasea/rustasea` remains the Blade skeleton (ADR-0002 note "Svelte variant (Sycamore) and starter-kit distribution"). The planning text below records the original four-variant intent.
 
 ---
 
@@ -35,10 +37,10 @@ Laravel 13 starter kits share one Fortify-based core and differ only in presenta
 - **Shared core:** `app/Actions/Fortify`, `app/Concerns`, `app/Http/Requests/Settings`, `app/Http/Middleware`, `bootstrap/{app,providers}.php`, `config/{fortify,inertia}.php`, `routes/{web,auth,settings,console}.php`, `database/{migrations,factories,seeders}`, `tests/{Feature,Unit}`.
 - **Variant deltas:**
   - **Blade** → `resources/views`.
-  - **React** / **Vue** → `resources/js` + Inertia + shadcn + Wayfinder + Vite.
+  - **React** / **Vue** / **Svelte** → `resources/js` + Inertia + shadcn + Wayfinder + Vite.
   - **Livewire** → `resources/views` + Flux.
 
-RustaSea mirrors this split: one shared Rust core, four presentation strategies, one scaffolder that emits the right layout.
+RustaSea mirrors this split: one shared Rust core, five presentation strategies, one scaffolder that emits the right layout.
 
 ---
 
@@ -59,6 +61,7 @@ flowchart TB
     LIVE["livewire<br/>askama + HTMX + broadcast"]
     REACT["react<br/>Dioxus WASM + inertia"]
     VUE["vue<br/>Leptos WASM + inertia"]
+    SVELTE["svelte<br/>Sycamore WASM + inertia"]
   end
   subgraph engines["Presentation Crates"]
     VIEW["rustasea-view<br/>ViewEngine"]
@@ -71,6 +74,7 @@ flowchart TB
   LIVE --> VIEW
   REACT --> INERTIA
   VUE --> INERTIA
+  SVELTE --> INERTIA
   INERTIA --> VIEW
   core --> engines
 ```
@@ -158,19 +162,20 @@ Behavior:
 - **Server-side HTML only for React/Vue:** abandons the SPA interaction model the variants exist to provide. Rejected.
 - **Embedded V8/QuickJS SSR runtime:** enormous dependency and operational surface, not Rust-native. Rejected.
 
-### D4 — WASM framework mapping: `react` → Dioxus, `vue` → Leptos
+### D4 — WASM framework mapping: `react` → Dioxus, `vue` → Leptos, `svelte` → Sycamore
 
 **Chosen:** each JS variant maps to one Rust WASM framework, sharing `rustasea-inertia`:
 - **`react` variant → Dioxus** — RSX syntax and hooks are the closest mental model to React.
 - **`vue` variant → Leptos** — fine-grained signals/reactivity map to Vue's reactive model.
+- **`svelte` variant → Sycamore**: Rust-native fine-grained reactive signals map to Svelte's compiled reactivity, with no Node.js toolchain.
 - A generated `resources/js/` (kept as the canonical path for parity) holds the WASM entrypoint and `pages/` registry; `rustasea-inertia-client` parses `Page<T>` and mounts the matching component via a generated `match component { ... }` registry (WASM has no reflection, so the scaffolder emits the map).
 
-**Rationale:** preserves React/Vue developer expectations while keeping the whole stack Rust; both frameworks compile to WASM and interoperate with the same Inertia envelope.
+**Rationale:** preserves React/Vue/Svelte developer expectations while keeping the whole stack Rust; all three frameworks compile to WASM and interoperate with the same Inertia envelope.
 
 **Rejected:**
-- **One framework for both variants** (e.g. Leptos only): halves the variant matrix but breaks React/Vue fidelity — the kits exist precisely to offer both mental models. Rejected.
-- **`yew`:** viable, but offers no capability Dioxus/Leptos lack for this scope; adding a third framework increases maintenance without user value. Rejected.
-- **Real React/Vue via `wasm-bindgen` + Node/Vite:** reintroduces the JS toolchain and `node_modules` the Rust-native thesis avoids. Rejected.
+- **One framework for the WASM variants** (e.g. Leptos only): halves the variant matrix but breaks React/Vue/Svelte fidelity; the kits exist precisely to offer each mental model. Rejected.
+- **`yew`:** viable, but offers no capability Dioxus/Leptos/Sycamore lack for this scope; adding a fourth framework increases maintenance without user value. Rejected.
+- **Real React/Vue/Svelte via `wasm-bindgen` + Node/Vite:** reintroduces the JS toolchain and `node_modules` the Rust-native thesis avoids. Rejected.
 
 ### D5 — Livewire analogue: askama + HTMX + `rustasea-broadcast`
 
@@ -248,7 +253,7 @@ my-app/
 │   ├── concerns/                  # PasswordValidationRules, ProfileValidationRules
 │   ├── http/
 │   │   ├── controllers/           # AuthController, DashboardController, settings/*
-│   │   ├── middleware/            # HandleInertiaRequests (react/vue), EnsureEmailIsVerified
+│   │   ├── middleware/            # HandleInertiaRequests (react/vue/svelte), EnsureEmailIsVerified
 │   │   └── requests/
 │   │       └── settings/          # ProfileUpdateRequest, PasswordUpdateRequest
 │   ├── models/                    # user.rs (#[derive(Model)])
@@ -275,7 +280,7 @@ my-app/
 │   ├── cache.toml
 │   ├── queue.toml
 │   ├── session.toml               # new
-│   └── inertia.toml               # react/vue only
+│   └── inertia.toml               # react/vue/svelte only
 ├── database/
 │   ├── migrations/                # create_users, create_sessions, create_password_reset_tokens
 │   ├── factories/                 # UserFactory
@@ -288,14 +293,14 @@ my-app/
 
 **Variant deltas** (everything not listed is byte-identical across variants):
 
-| Path | blade | react | vue | livewire |
-|---|---|---|---|---|
-| `resources/views/**` | ✅ askama | shell only (`app.html`) | shell only | ✅ askama + HTMX partials |
-| `resources/js/**` | — | ✅ Dioxus WASM | ✅ Leptos WASM | — |
-| `app/http/middleware/handle_inertia_requests.rs` | — | ✅ | ✅ | — |
-| `config/inertia.toml` | — | ✅ | ✅ | — |
-| `Cargo.toml` features | `view` | `inertia`,`wasm-dioxus` | `inertia`,`wasm-leptos` | `view`,`broadcast` |
-| Auth/domain core | identical | identical | identical | identical |
+| Path | blade | react | vue | svelte | livewire |
+|---|---|---|---|---|---|
+| `resources/views/**` | askama | shell only (`app.html`) | shell only | shell only | askama + HTMX partials |
+| `resources/js/**` | — | Dioxus WASM | Leptos WASM | Sycamore WASM | — |
+| `app/http/middleware/handle_inertia_requests.rs` | — | yes | yes | yes | — |
+| `config/inertia.toml` | — | yes | yes | yes | — |
+| `Cargo.toml` features | `view` | `inertia`,`wasm-dioxus` | `inertia`,`wasm-leptos` | `inertia`,`wasm-sycamore` | `view` |
+| Auth/domain core | identical | identical | identical | identical | identical |
 
 ---
 
@@ -367,7 +372,7 @@ impl Inertia {
 
 ```rust
 /// Supported starter-kit presentation variants.
-pub enum StarterKitVariant { Blade, React, Vue, Livewire }
+pub enum StarterKitVariant { Blade, React, Vue, Svelte, Livewire }
 
 /// Scaffold a new application.
 pub struct Scaffold { /* app name, variant, target path */ }
@@ -378,7 +383,7 @@ impl Scaffold {
 }
 ```
 
-- **Binary:** `cargo-rustasea` (cargo subcommand, shipped in the `rustasea` facade package) → `cargo rustasea new <app> --variant {blade|react|vue|livewire} [--force] [--no-git]`.
+- **Binary:** `cargo-rustasea` (cargo subcommand, shipped in the `rustasea` facade package) → `cargo rustasea new <app> --variant {blade|react|vue|svelte|livewire} [--force] [--no-git]`.
 - **Templates:** embedded via `include_str!`, parameterized by app name; shared templates emitted for every variant, variant templates merged in.
 - **Validation:** golden-file snapshot tests per variant (tree + file contents), plus a CI job that runs `cargo check` on each generated app to prove it compiles.
 - **Reuse:** shares `Generator`/`Generated` primitives with `rustasea-cli` (`crates/rustasea-cli/src/generator.rs`) so `make:*` and `new` never diverge.
@@ -436,8 +441,8 @@ sequenceDiagram
 | **SK-2** | `rustasea-view` (`ViewEngine`, askama default, minijinja feature) (D2) | M6 | M1 | Blade layout + auth/dashboard pages render from `resources/views` |
 | **SK-3** | `rustasea-inertia` + `rustasea-inertia-client` (`Page<T>`, headers, partials, shared props) (D3) | M6 | SK-2 | JSON page + HTML shell + 409 version flow verified |
 | **SK-4** | `rustasea-scaffold` + `cargo-rustasea new` for **blade** + **livewire** (D6, D5) | M5 | SK-1, SK-2 | `cargo rustasea new demo --variant blade` compiles and serves login/dashboard |
-| **SK-5** | **react** (Dioxus) + **vue** (Leptos) variants on the shared Inertia contract (D4) | M6 | SK-3, SK-4 | Both WASM variants build and hydrate the dashboard |
-| **SK-6** | Golden-file + `cargo check` generator tests, docs, kit READMEs | M5/M6 | SK-4, SK-5 | CI generates and compiles all four variants |
+| **SK-5** | **react** (Dioxus) + **vue** (Leptos) + **svelte** (Sycamore) variants on the shared Inertia contract (D4) | M6 | SK-3, SK-4 | All three WASM variants build and hydrate the dashboard |
+| **SK-6** | Golden-file + `cargo check` generator tests, docs, kit READMEs | M5/M6 | SK-4, SK-5 | CI generates and compiles all five variants |
 
 > The `View` surface is tracked as **M6** in `docs/laravel-parity.md:80` / `docs/milestones.md:280`; the scaffolder is **M5** (`docs/milestones.md:247`); the session guard is **M3** (`docs/milestones.md:172`). This plan sequences them so the first usable kit (blade) lands at **SK-4**.
 
@@ -447,7 +452,7 @@ sequenceDiagram
 
 | Risk / cost | Impact | Mitigation |
 |---|---|---|
-| Two WASM frameworks (Dioxus + Leptos) to track | Maintenance + upgrade churn | Isolate behind `rustasea-inertia-client`; a framework bump touches only the client adapter + `pages/` |
+| Three WASM frameworks (Dioxus + Leptos + Sycamore) to track | Maintenance + upgrade churn | Isolate behind `rustasea-inertia-client`; a framework bump touches only the client adapter + `pages/` |
 | askama recompiles on template change | Slower dev loop | `runtime-templates` (minijinja) feature for dev hot-reload |
 | Typed props vs partial reloads | Partial filtering needs untyped map | Serialize to `serde_json::Value` at the wire boundary; keep typed construction API |
 | Session-guard completion touches security | Auth regression risk | Dedicated M3 tests: fixation rotation, logout destroy, CSRF on login; reuse `SessionPolicy` allow-list |
@@ -458,7 +463,7 @@ sequenceDiagram
 
 ## 12. Recommendation
 
-**Adopt this architecture as the single starter-kit plan:** one shared Rust auth/domain core, `rustasea-view` (askama default, minijinja behind a feature) and `rustasea-inertia` (`Page<T>`) as the two presentation engines, a `rustasea-scaffold` library behind the `cargo rustasea new <app> --variant {blade|react|vue|livewire}` subcommand, and completion of the existing `rustasea-auth` session guard. Sequence delivery SK-0 → SK-6 so a working Blade kit ships first, then livewire (HTMX + broadcast), then react/vue (Dioxus/Leptos WASM) on the same Inertia contract.
+**Adopt this architecture as the single starter-kit plan:** one shared Rust auth/domain core, `rustasea-view` (askama default, minijinja behind a feature) and `rustasea-inertia` (`Page<T>`) as the two presentation engines, a `rustasea-scaffold` library behind the `cargo rustasea new <app> --variant {blade|react|vue|svelte|livewire}` subcommand, and completion of the existing `rustasea-auth` session guard. Sequence delivery SK-0 → SK-6 so a working Blade kit ships first, then livewire (HTMX + broadcast), then react/vue/svelte (Dioxus/Leptos/Sycamore WASM) on the same Inertia contract.
 
 ---
 

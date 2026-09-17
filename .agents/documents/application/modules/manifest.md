@@ -61,7 +61,7 @@ The table is ordered by milestone (M0 to M6) and then by owning module. The `Ado
 
 ### Starter-Kit Adoption Layers
 
-The starter-kit architecture (`.agents/documents/design/starter-kit-architecture.md` §3, ADR-0002) groups the crates into four adoption layers. The shared layers are identical across the blade/react/vue/livewire variants; only the presentation layer varies.
+The starter-kit architecture (`.agents/documents/design/starter-kit-architecture.md` §3, ADR-0002) groups the crates into four adoption layers. The shared layers are identical across the blade/react/vue/svelte/livewire variants; only the presentation layer varies. The five variants ship as separate repositories mirroring the `laravel/<x>-starter-kit` split: `rustasea/rustasea` (blade), `rustasea/react-starter-kit`, `rustasea/vue-starter-kit`, `rustasea/svelte-starter-kit`, and `rustasea/livewire-starter-kit` (ADR-0002 note "Svelte variant (Sycamore) and starter-kit distribution").
 
 | Adoption layer | Shared? | Crates |
 |----------------|---------|--------|

@@ -53,6 +53,23 @@ Per the same section, each tag is expected to pass `cargo xtask ci` and
 
 ### Added
 
+- 2026-09-17 - Svelte starter-kit variant with full auth/settings page parity: the
+  `svelte` variant scaffolds the same 11 auth/settings pages as the react/vue
+  kits on the shared Inertia contract
+  (`feat(scaffold): [TASK-107] complete auth and settings page parity for Inertia
+  variants`; `feat(scaffold): [TASK-106] add svelte starter-kit variant backed by
+  Sycamore`).
+- 2026-09-17 - Sycamore WASM adapter for the svelte variant: `rustasea-inertia-adapters`
+  gains a `svelte` feature (Sycamore router context, provider, and Inertia link)
+  and the umbrella exposes `wasm-sycamore`, so the `svelte` kit maps to
+  Rust-native fine-grained reactive WASM with no Node.js toolchain
+  (`feat(inertia): [TASK-105] add Sycamore WASM adapter for the svelte variant`).
+- 2026-09-17 - Four first-party starter-kit repositories published, mirroring the
+  `laravel/<x>-starter-kit` split (ADR-0002): `rustasea/react-starter-kit`
+  (Dioxus WASM + Inertia), `rustasea/vue-starter-kit` (Leptos WASM + Inertia),
+  `rustasea/svelte-starter-kit` (Sycamore WASM + Inertia), and
+  `rustasea/livewire-starter-kit` (askama + HTMX); `rustasea/rustasea` remains the
+  Blade skeleton (TASK-108, TASK-109, TASK-110, TASK-111).
 - 2026-09-17 - Example application domain in the runnable `rustasea-app` crate:
   a scaffold-style `app/` tree with a `Post` model plus in-memory
   `PostRepository`, a JSON CRUD `PostController` implementing the base
