@@ -3,6 +3,7 @@ name = "rustasea-modules"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Modular application support (ADOPT-027) — module manifest, deterministic registry, and the runtime Module contract (nwidart/laravel-modules parity)."
 
 [dependencies]

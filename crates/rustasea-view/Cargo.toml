@@ -3,6 +3,7 @@ name = "rustasea-view"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea view layer — ViewEngine with askama (default) and minijinja (runtime-templates)"
 
 [dependencies]

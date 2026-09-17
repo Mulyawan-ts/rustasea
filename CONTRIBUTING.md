@@ -23,8 +23,8 @@ repository's `master` branch green.
 
 ```bash
 # Clone and enter the workspace.
-git clone git@github.com:rustasea/rustasea.git
-cd rustasea
+git clone git@github.com:rustasea/framework.git
+cd framework
 
 # Build the whole workspace.
 cargo build

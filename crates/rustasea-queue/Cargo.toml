@@ -3,6 +3,7 @@ name = "rustasea-queue"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Typed Job trait, central Queue::route registry, sync/database/redis drivers, chain/batch and Cloud queue metrics."
 
 [features]

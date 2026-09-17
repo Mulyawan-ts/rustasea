@@ -3,6 +3,7 @@ name = "rustasea-excel"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Excel/CSV import-export (ADOPT-023) — streaming import with row validation, chunked/queued export to storage, signed download links (maatwebsite/excel parity)."
 
 [dependencies]

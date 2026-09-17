@@ -3,6 +3,7 @@ name = "rustasea-inertia-client"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea Inertia WASM client — Page parsing, generated component registry, navigation"
 
 [dependencies]

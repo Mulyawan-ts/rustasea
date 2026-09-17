@@ -103,6 +103,12 @@ Per the same section, each tag is expected to pass `cargo xtask ci` and
 
 ### Changed
 
+- 2026-09-17 - Repository renamed to `rustasea/framework` (analog
+  `laravel/framework`); the application skeleton lives at `rustasea/rustasea`
+  (analog `laravel/laravel`). In-repo URLs, `Cargo.toml` `repository` metadata
+  (workspace-inherited across all 44 packages), and the README repository layout
+  section were updated (`chore(repo): [TASK-098] rename to rustasea/framework
+  and add repository metadata`).
 - 2026-09-17 - Documentation reconciliation: canonical crate inventory
   synchronized to the 44 workspace packages (`GAP-022`); stale `route:list` and
   attribute-consumption documentation corrected (`GAP-023`); complete artisan

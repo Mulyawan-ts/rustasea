@@ -3,6 +3,7 @@ name = "rustasea-auth"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea authentication and security — JWT/session guards, origin-aware CSRF, throttling"
 
 [dependencies]

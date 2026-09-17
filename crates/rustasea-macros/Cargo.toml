@@ -3,6 +3,7 @@ name = "rustasea-macros"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Procedural macros for RustaSea — route, middleware, authorize, tries, backoff, timeout, usage, help, hidden"
 
 [lib]

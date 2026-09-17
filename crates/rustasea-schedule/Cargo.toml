@@ -3,6 +3,7 @@ name = "rustasea-schedule"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Scheduler with daily/cron/everyMinute frequencies, pause/resume, skipIfStillRunning, onOneServer and schedule events."
 
 [dependencies]

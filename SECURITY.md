@@ -26,7 +26,7 @@ supported minor lines. Until then, please verify a report against the current
 Report privately through GitHub's private security advisory flow:
 
 1. Go to the repository's **Security** tab:
-   <https://github.com/rustasea/rustasea/security>
+   <https://github.com/rustasea/framework/security>
 2. Select **Advisories** and then **Report a vulnerability**
    (GitHub private security advisory).
 3. Provide a description, the affected crate(s) and version/commit, reproduction

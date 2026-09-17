@@ -3,6 +3,7 @@ name = "rustasea-cache"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Store/Repository cache traits with memory (moka-like) and redis (feature-gated) stores, TTL touch and distributed Lock."
 
 [features]

@@ -3,6 +3,7 @@ name = "rustasea-activitylog"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea activity log — model-change audit trail with causer/subject, property diffs, and batch grouping"
 
 [features]

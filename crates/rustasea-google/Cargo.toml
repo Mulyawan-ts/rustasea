@@ -3,6 +3,7 @@ name = "rustasea-google"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea Google — service-account auth and cached OAuth2 access tokens (google/auth parity)"
 
 [dependencies]

@@ -3,6 +3,7 @@ name = "rustasea-testing"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea testing harness — TestCase, testcontainers isolation, factory sequence resets, paginator views."
 
 [features]

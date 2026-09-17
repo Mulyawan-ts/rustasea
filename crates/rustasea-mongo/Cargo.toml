@@ -3,6 +3,7 @@ name = "rustasea-mongo"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea Mongo — MongoDB document store: typed client, Document contract, CRUD helpers, filter/update builders"
 
 [dependencies]

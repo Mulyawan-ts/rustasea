@@ -3,6 +3,7 @@ name = "cargo-rustasea"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Cargo subcommand for RustaSea — `cargo rustasea new <app> --variant <variant>`"
 
 # Cargo convention: a binary named `cargo-rustasea` makes the crate invocable as

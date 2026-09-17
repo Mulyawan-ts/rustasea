@@ -3,6 +3,7 @@ name = "rustasea-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea Artisan-like CLI — clap + xtask, list, make:* generators, prompts, Artisan::call, Shutdownable."
 
 # Cargo convention: a binary named `cargo-artisan` makes the crate's CLI

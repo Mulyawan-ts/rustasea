@@ -3,6 +3,7 @@ name = "rustasea"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
 rustasea-foundation = { path = "../rustasea-foundation" }

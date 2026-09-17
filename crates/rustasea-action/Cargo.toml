@@ -3,6 +3,7 @@ name = "rustasea-action"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Action pattern (ADOPT-028) — one unit of work invoked across HTTP/queue/CLI/events with validate/authorize hooks (laravel-actions parity)."
 
 [dependencies]

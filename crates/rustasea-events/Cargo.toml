@@ -3,6 +3,7 @@ name = "rustasea-events"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Event/Listener traits, immediate + after-response dispatch, and async listeners via Queue{enable:true}."
 
 [dependencies]

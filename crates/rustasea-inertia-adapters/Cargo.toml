@@ -3,6 +3,7 @@ name = "rustasea-inertia-adapters"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea Inertia WASM presentation adapters — Dioxus (react) and Leptos (vue) variants"
 
 [dependencies]

@@ -3,6 +3,7 @@ name = "rustasea-inertia"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea Inertia server — Page<T> envelope, X-Inertia header contract, partial reloads, shared props"
 
 [dependencies]

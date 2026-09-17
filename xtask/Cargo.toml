@@ -3,6 +3,7 @@ name = "xtask"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea cargo-xtask — CI gates: fmt, clippy, cycles, migrate (M5)."
 
 [[bin]]

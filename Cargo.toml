@@ -7,6 +7,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.88"
 license = "MIT"
+repository = "https://github.com/rustasea/framework"
 authors = ["RustaSea Team"]
 
 # Single source of truth for shared dependencies; crates opt in with `workspace = true`.

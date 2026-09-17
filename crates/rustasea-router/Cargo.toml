@@ -3,6 +3,7 @@ name = "rustasea-router"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Expressive routing layer for RustaSea — Axum-backed"
 
 [dependencies]

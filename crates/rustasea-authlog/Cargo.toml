@@ -3,6 +3,7 @@ name = "rustasea-authlog"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea authentication log — login/logout/failed/lockout history with optional new-device notification (rappasoft/laravel-authentication-log parity)"
 
 [features]

@@ -3,6 +3,7 @@ name = "rustasea-broadcast"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea broadcast — ShouldBroadcast channels, WebSocket auth, SSE eventStream"
 
 [dependencies]

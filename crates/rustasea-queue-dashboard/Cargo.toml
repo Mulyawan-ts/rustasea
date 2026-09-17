@@ -3,6 +3,7 @@ name = "rustasea-queue-dashboard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Queue dashboard (ADOPT-021) — metrics history, failed-job management, and a background metrics sampler (laravel/horizon parity)."
 
 [dependencies]

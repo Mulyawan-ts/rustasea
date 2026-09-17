@@ -7,6 +7,7 @@ name = "rustasea-app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 publish = false
 description = "RustaSea runnable app scaffold — `cargo dev` serves the example HTTP application."
 

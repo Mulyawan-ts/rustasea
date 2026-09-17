@@ -3,6 +3,7 @@ name = "rustasea-scaffold"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "RustaSea starter-kit scaffolder — emits the shared core plus the blade/react/vue/livewire presentation tree"
 
 [dependencies]

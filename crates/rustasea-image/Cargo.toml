@@ -3,6 +3,7 @@ name = "rustasea-image"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Image manipulation (ADOPT-024) — fluent transform pipeline, EXIF auto-orient, storage round-trip and queued transforms (intervention/image parity)."
 
 [dependencies]

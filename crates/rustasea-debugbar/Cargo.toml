@@ -3,6 +3,7 @@ name = "rustasea-debugbar"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Dev-only request profiler / debug toolbar (ADOPT-009) — SQL, cache, and event capture per request with an in-memory ring buffer and JSON/HTML surface."
 
 [dependencies]
