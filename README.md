@@ -669,6 +669,8 @@ gantt
 3. **Open an RFC** — for any cross-crate design decision, open a discussion/issue before coding.
 4. **Conventions** — `rustfmt` + `clippy -- -D warnings` must pass; generated code must be `rustfmt`-clean; workspace `Cargo.toml` is the source of truth for versions.
 
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for prerequisites, setup, the full development workflow, and coding standards. Release and program history is recorded in [`CHANGELOG.md`](CHANGELOG.md), and the vulnerability disclosure process is in [`SECURITY.md`](SECURITY.md).
+
 ```bash
 # local setup
 cargo xtask ci       # fmt + clippy + check-cycles
