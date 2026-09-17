@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "RustaSea umbrella crate — Laravel-inspired developer experience for Rust with typed re-exports of the framework"
 
 # Cargo convention: a binary named `cargo-rustasea` makes the facade crate
 # invocable as `cargo rustasea <command>` (mirroring `cargo artisan`). The bin

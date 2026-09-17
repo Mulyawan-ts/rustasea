@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "RustaSea cargo-xtask — CI gates: fmt, clippy, cycles, migrate (M5)."
+# Internal CI harness, not published to crates.io.
+publish = false
 
 [[bin]]
 name = "xtask"
