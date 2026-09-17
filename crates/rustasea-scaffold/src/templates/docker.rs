@@ -9,7 +9,7 @@
 //! The templates are raw-string constants per the module convention; the
 //! `@@app_name@@` / `@@app_snake@@` placeholders are substituted by
 //! [`super::render`]. The generated app is a single crate whose binary is named
-//! `@@app_name@@` (see [`super::manifest`]) and which binds `0.0.0.0:3000`, so
+//! `@@app_name@@` (see [`super::manifest`]) and which binds `0.0.0.0:8000`, so
 //! the image and its healthcheck target that port.
 
 use super::TemplateFile;
@@ -53,7 +53,7 @@ RUN cargo build --release --bin @@app_name@@
 # --- Dev: hot-reloading stage for the compose dev override -----------------
 FROM builder AS dev
 RUN cargo install cargo-watch --locked
-EXPOSE 3000
+EXPOSE 8000
 CMD ["cargo", "watch", "-x", "run"]
 
 # --- Runtime: slim image with only what the binary reads -------------------
@@ -77,10 +77,10 @@ RUN mkdir -p storage/logs storage/framework storage/app/public \
 
 USER appuser
 ENV APP_ENV=local
-EXPOSE 3000
+EXPOSE 8000
 # Liveness probe: the app has no HTTP health route yet, so check the port.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/3000' || exit 1
+    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/8000' || exit 1
 
 CMD ["@@app_name@@"]
 "##;
@@ -136,11 +136,11 @@ services:
     image: @@app_name@@:dev
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "8000:8000"
     environment:
       APP_ENV: ${APP_ENV:-local}
       APP_DEBUG: ${APP_DEBUG:-true}
-      APP_URL: ${APP_URL:-http://localhost:3000}
+      APP_URL: ${APP_URL:-http://localhost:8000}
       APP_KEY: ${APP_KEY:-}
       # Full connection URL wins over the granular DB_* fields at runtime.
       DATABASE_URL: ${DATABASE_URL:-postgres://rustasea:secret@postgres:5432/rustasea}

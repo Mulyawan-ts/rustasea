@@ -68,7 +68,7 @@ const ENV_EXAMPLE: &str = r##"# Copy to `.env` and adjust per environment. Envir
 APP_NAME=@@app_name@@
 APP_ENV=local
 APP_DEBUG=true
-APP_URL=http://localhost:3000
+APP_URL=http://localhost:8000
 APP_KEY=
 APP_LOCALE=en
 APP_FALLBACK_LOCALE=en
@@ -348,7 +348,7 @@ Rust 1.88 or newer is required. Install the toolchain via [rustup](https://rustu
 cargo run
 ```
 
-The server binds `0.0.0.0:3000` by default (`APP_URL` overrides it).
+The server binds `0.0.0.0:8000` by default (`APP_URL` overrides it).
 
 Console commands are run through the Artisan-style CLI:
 
@@ -379,13 +379,13 @@ docker-compose down                                           # tear down
 
 | Service | Ports | Purpose |
 |---|---|---|
-| `app` | `3000` | The @@app_pascal@@ HTTP app |
+| `app` | `8000` | The @@app_pascal@@ HTTP app |
 | `postgres` | `5432` | Primary SQL store + pgvector |
 | `redis` | `6379` | Cache + queue backend |
 | `minio` | `9000`, `9001` | S3-compatible storage (`9001` = console) |
 | `mailpit` | `1025`, `8025` | SMTP capture (`1025`) + web UI (`8025`) |
 
-App: <http://localhost:3000> · Mailpit UI: <http://localhost:8025> ·
+App: <http://localhost:8000> · Mailpit UI: <http://localhost:8025> ·
 MinIO console: <http://localhost:9001>.
 
 ## Agentic Development
@@ -430,10 +430,14 @@ pub mod routes;
 
 const MAIN_RS: &str = r##"//! @@app_pascal@@ HTTP entry point.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use @@app_snake@@::{bootstrap, routes};
 use rustasea::http::AppState;
+
+/// Default bind address for the dev server (Laravel `php artisan serve` parity).
+const DEFAULT_BIND: &str = "0.0.0.0:8000";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -449,13 +453,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Build the axum router from the generated route tables.
     let router = routes::router(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-    println!("@@app_pascal@@ listening on http://0.0.0.0:3000");
+    // Resolve the bind address from `APP_URL` (host:port) so the advertised URL
+    // and the listening socket stay in sync; fall back to the default.
+    let addr: SocketAddr = bind_address();
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    println!("@@app_pascal@@ listening on http://{addr}");
 
     axum::serve(listener, router)
         .with_graceful_shutdown(app.shutdown())
         .await?;
     Ok(())
+}
+
+/// Resolve the bind address from `APP_URL` (host:port) or the default.
+fn bind_address() -> SocketAddr {
+    std::env::var("APP_URL")
+        .ok()
+        .and_then(parse_host_port)
+        .unwrap_or_else(default_bind)
+}
+
+/// The fallback bind address used when `APP_URL` is unset or carries no port.
+fn default_bind() -> SocketAddr {
+    match DEFAULT_BIND.parse() {
+        Ok(addr) => addr,
+        // `DEFAULT_BIND` is a compile-time constant and always parses; this arm
+        // keeps the function panic-free without an `expect`.
+        Err(_) => SocketAddr::from(([0, 0, 0, 0], 8000)),
+    }
+}
+
+/// Parse an `APP_URL` value into a `SocketAddr` when it carries a port.
+fn parse_host_port(url: String) -> Option<SocketAddr> {
+    let authority = url.split("://").nth(1)?;
+    let host_port = authority.split('/').next()?;
+    host_port.parse().ok()
 }
 "##;
 

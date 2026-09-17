@@ -103,6 +103,14 @@ Per the same section, each tag is expected to pass `cargo xtask ci` and
 
 ### Changed
 
+- 2026-09-17 - App scaffold now emits Laravel-parity port 8000: the generated
+  `.env.example`, README, `Dockerfile` (`EXPOSE`/healthcheck), and
+  `docker-compose.yml` all use 8000 (matching `php artisan serve` and
+  `config/app.toml`), and the generated `main.rs` derives its bind address from
+  `APP_URL` (host:port) with an `0.0.0.0:8000` fallback instead of hard-coding
+  the port, fixing the README claim that `APP_URL` overrides the bind
+  (`fix(scaffold): [TASK-101] emit Laravel-parity port 8000 and derive the bind
+  from APP_URL`).
 - 2026-09-17 - Repository renamed to `rustasea/framework` (analog
   `laravel/framework`); the application skeleton lives at `rustasea/rustasea`
   (analog `laravel/laravel`). In-repo URLs, `Cargo.toml` `repository` metadata
