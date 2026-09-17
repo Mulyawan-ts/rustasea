@@ -13,7 +13,9 @@ use super::TemplateFile;
 pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
     let mut files = vec![
         (".env.example", ENV_EXAMPLE),
+        (".gitattributes", GITATTRIBUTES),
         (".gitignore", GITIGNORE),
+        ("LICENSE", LICENSE),
         ("README.md", README),
         ("lib.rs", LIB_RS),
         ("main.rs", MAIN_RS),
@@ -21,13 +23,37 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
         ("bootstrap/app.rs", BOOTSTRAP_APP),
         ("bootstrap/providers.rs", BOOTSTRAP_PROVIDERS),
         ("bootstrap/commands.rs", BOOTSTRAP_COMMANDS),
+        ("bootstrap/cache/.gitignore", BOOTSTRAP_CACHE_GITIGNORE),
+        ("public/.gitignore", PUBLIC_GITIGNORE),
+        ("public/robots.txt", PUBLIC_ROBOTS_TXT),
+        ("public/favicon.ico", PUBLIC_FAVICON_ICO),
         ("storage/app/.gitignore", STORAGE_APP_GITIGNORE),
         (
             "storage/app/public/.gitignore",
             STORAGE_APP_PUBLIC_GITIGNORE,
         ),
+        (
+            "storage/app/private/.gitignore",
+            STORAGE_APP_PRIVATE_GITIGNORE,
+        ),
         ("storage/logs/.gitignore", STORAGE_LOGS_GITIGNORE),
         ("storage/framework/.gitignore", STORAGE_FRAMEWORK_GITIGNORE),
+        (
+            "storage/framework/cache/data/.gitignore",
+            STORAGE_FRAMEWORK_CACHE_DATA_GITIGNORE,
+        ),
+        (
+            "storage/framework/sessions/.gitignore",
+            STORAGE_FRAMEWORK_SESSIONS_GITIGNORE,
+        ),
+        (
+            "storage/framework/testing/.gitignore",
+            STORAGE_FRAMEWORK_TESTING_GITIGNORE,
+        ),
+        (
+            "storage/framework/views/.gitignore",
+            STORAGE_FRAMEWORK_VIEWS_GITIGNORE,
+        ),
         ("storage/archive/.gitignore", STORAGE_ARCHIVE_GITIGNORE),
     ];
     if variant.uses_askama() {
@@ -159,6 +185,57 @@ const GITIGNORE: &str = r##"/target
 /database/*.sqlite
 "##;
 
+// Normalize line endings on checkout so generated text files are byte-stable
+// across platforms; Rust sources keep an explicit `eol=lf` rule.
+const GITATTRIBUTES: &str = r##"* text=auto eol=lf
+*.rs text eol=lf
+"##;
+
+// Generic MIT license; `@@app_pascal@@` names the generated application while
+// the copyright holder stays generic because the scaffold has no author input.
+const LICENSE: &str = r##"MIT License
+
+Copyright (c) @@app_pascal@@
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"##;
+
+// The `public/` web root mirrors Hypervel: a self-contained `.gitignore` tracks
+// the directory while ignoring build output, and the robots/favicon stubs give
+// the served root the files a browser or crawler requests first.
+const PUBLIC_GITIGNORE: &str = r##"*
+!.gitignore
+"##;
+
+const PUBLIC_ROBOTS_TXT: &str = r##"User-agent: *
+Disallow:
+"##;
+
+// Empty placeholder matching Hypervel's 0-byte `public/favicon.ico`.
+const PUBLIC_FAVICON_ICO: &str = "";
+
+// The compiled-configuration cache directory (`bootstrap/cache/`) is runtime
+// state; track the directory itself and ignore its contents.
+const BOOTSTRAP_CACHE_GITIGNORE: &str = r##"*
+!.gitignore
+"##;
+
 // Storage layout uses the laravel/livewire-starter-kit convention: each runtime
 // directory ships its own self-contained `.gitignore` so the directory itself is
 // tracked while its runtime contents are ignored. This keeps the generated tree
@@ -172,6 +249,12 @@ const STORAGE_APP_PUBLIC_GITIGNORE: &str = r##"*
 !.gitignore
 "##;
 
+// Private-disk root (`config/storage.toml` `storage/app/private`); runtime
+// contents stay untracked while the directory is preserved.
+const STORAGE_APP_PRIVATE_GITIGNORE: &str = r##"*
+!.gitignore
+"##;
+
 const STORAGE_LOGS_GITIGNORE: &str = r##"*
 !.gitignore
 "##;
@@ -181,6 +264,24 @@ const STORAGE_LOGS_GITIGNORE: &str = r##"*
 const STORAGE_FRAMEWORK_GITIGNORE: &str = r##"# Maintenance-mode marker (rustasea-foundation MAINTENANCE_MARKER); all other
 # storage/framework content is runtime state and must stay untracked.
 *
+!.gitignore
+"##;
+
+// Per-directory ignores for the framework runtime subdirectories (cache data,
+// sessions, testing fixtures, compiled views); each keeps its own `.gitignore`.
+const STORAGE_FRAMEWORK_CACHE_DATA_GITIGNORE: &str = r##"*
+!.gitignore
+"##;
+
+const STORAGE_FRAMEWORK_SESSIONS_GITIGNORE: &str = r##"*
+!.gitignore
+"##;
+
+const STORAGE_FRAMEWORK_TESTING_GITIGNORE: &str = r##"*
+!.gitignore
+"##;
+
+const STORAGE_FRAMEWORK_VIEWS_GITIGNORE: &str = r##"*
 !.gitignore
 "##;
 
@@ -198,13 +299,15 @@ cargo rustasea new @@app_name@@ --variant @@variant@@
 
 ## Layout
 
-- `app/` — domain actions, concerns, HTTP controllers/middleware/requests, models, providers
-- `bootstrap/` — application kernel wiring (providers, commands)
-- `config/` — typed TOML configuration, auto-discovered by the loader (`config/*.toml`)
-- `routes/` — `web`, `auth`, `settings`, and `console` route tables
-- `database/` — migrations, factories, seeders
-- `resources/` — presentation layer for the `@@variant@@` variant
-- `tests/` — `feature` and `unit` test suites
+- `app/`: domain actions, concerns, HTTP controllers/middleware/requests, models, providers
+- `bootstrap/`: application kernel wiring (providers, commands); `bootstrap/cache/` is runtime config cache
+- `config/`: typed TOML configuration, auto-discovered by the loader (`config/*.toml`)
+- `routes/`: `web`, `auth`, `settings`, and `console` route tables
+- `database/`: migrations, factories, seeders
+- `public/`: web root (`robots.txt`, `favicon.ico`); build output is ignored
+- `resources/`: presentation layer for the `@@variant@@` variant
+- `storage/`: runtime state (`app/private`, `framework/{cache/data,sessions,testing,views}`)
+- `tests/`: `feature` and `unit` test suites
 
 ## Development
 

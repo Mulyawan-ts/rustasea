@@ -8,12 +8,17 @@
 
 use rustasea_scaffold::{Scaffold, StarterKitVariant};
 
-/// The five per-directory `.gitignore` files every variant must emit.
+/// The ten per-directory `.gitignore` files every variant must emit.
 const STORAGE_GITIGNORES: &[&str] = &[
     "storage/app/.gitignore",
     "storage/app/public/.gitignore",
+    "storage/app/private/.gitignore",
     "storage/logs/.gitignore",
     "storage/framework/.gitignore",
+    "storage/framework/cache/data/.gitignore",
+    "storage/framework/sessions/.gitignore",
+    "storage/framework/testing/.gitignore",
+    "storage/framework/views/.gitignore",
     "storage/archive/.gitignore",
 ];
 
@@ -63,6 +68,7 @@ fn every_variant_emits_kit_style_storage_gitignores() {
         };
         assert!(find("storage/app/.gitignore").contains("!public/"));
         assert!(find("storage/app/public/.gitignore").contains("!.gitignore"));
+        assert!(find("storage/app/private/.gitignore").contains("!.gitignore"));
         assert!(find("storage/logs/.gitignore").contains("!.gitignore"));
         assert!(find("storage/archive/.gitignore").contains("!.gitignore"));
         // `framework/` uses the same self-contained pattern as the other dirs:
@@ -70,6 +76,18 @@ fn every_variant_emits_kit_style_storage_gitignores() {
         assert!(find("storage/framework/.gitignore").contains("MAINTENANCE_MARKER"));
         assert!(find("storage/framework/.gitignore").contains("*"));
         assert!(find("storage/framework/.gitignore").contains("!.gitignore"));
+        // The framework runtime subdirectories each carry their own ignore.
+        for path in [
+            "storage/framework/cache/data/.gitignore",
+            "storage/framework/sessions/.gitignore",
+            "storage/framework/testing/.gitignore",
+            "storage/framework/views/.gitignore",
+        ] {
+            assert!(
+                find(path).contains("!.gitignore"),
+                "missing ignore in {path}"
+            );
+        }
     }
 }
 
