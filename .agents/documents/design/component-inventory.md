@@ -10,7 +10,7 @@
 
 ## 1. Inventory — Workspace Crates (Umbrella + Milestone Crates)
 
-The [canonical crate inventory](../application/modules/manifest.md#canonical-crate-inventory-source-of-truth) defines the current set: **21 crates under `crates/` + `xtask`**. This table records design responsibilities, not implementation status.
+The [canonical crate inventory](../application/modules/manifest.md#canonical-crate-inventory-source-of-truth) defines the current set: **43 crates under `crates/` + `xtask` (44 workspace packages total)**. This table records design responsibilities, not implementation status. The 22 rows below are the original M0 to M6 planning set; the ADOPT adoption wave and starter-kit programme added the remaining crates enumerated in the canonical inventory.
 
 Reuse levels: `P0 shared` (used by ≥3 milestones) · `P1 domain` (1–2 milestones) · `P2 feature-flagged` (opt-in).
 

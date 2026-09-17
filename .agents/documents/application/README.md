@@ -42,7 +42,7 @@ This tree is the **application-level deep documentation** produced at P8. It tur
 
 ## 3. Module Index (7 modules)
 
-The [canonical crate inventory](modules/manifest.md#canonical-crate-inventory-source-of-truth) lists **21 crates under `crates/` + `xtask` (22 workspace packages total)**; the module mappings below are a navigation aid.
+The [canonical crate inventory](modules/manifest.md#canonical-crate-inventory-source-of-truth) lists **43 crates under `crates/` + `xtask` (44 workspace packages total)**; the module mappings below are a navigation aid.
 
 | # | Module slug | Crate(s) | Milestone | BR | Overview |
 |---|-------------|----------|-----------|----|----------|

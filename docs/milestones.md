@@ -32,7 +32,7 @@ section records the reason.
 - Commit-reference policy: [`docs/documentation-conventions.md`](documentation-conventions.md) — milestones, task IDs, and `path:line` only; no raw commit SHAs.
 - Task registry: `DOC-001`, `DOC-002`, `DOC-ROOT`, `GAP-ROOT`, `GAP-P0`…`GAP-P5`.
 - Prior research: [`docs/laravel-13-research.md`](laravel-13-research.md).
-- Workspace inventory: **29 crates under `crates/` + `xtask` (30 workspace packages total)**, per `Cargo.toml:2`. The [canonical crate inventory](../.agents/documents/application/modules/manifest.md#canonical-crate-inventory-source-of-truth) still records the older **21 + `xtask`** count; that drift is flagged for reconciliation under `GAP-021`, with the workspace `members` glob as the mechanical source of truth.
+- Workspace inventory: **43 crates under `crates/` + `xtask` (44 workspace packages total)**, verified 2026-09-17 with `cargo metadata --format-version 1 --no-deps` and per `Cargo.toml:2` (`members = ["crates/*", "xtask"]`). The [canonical crate inventory](../.agents/documents/application/modules/manifest.md#canonical-crate-inventory-source-of-truth) enumerates all 44 members by milestone and adoption layer; the workspace `members` glob is the mechanical source of truth. Reconciled under `GAP-022`.
 
 ---
 

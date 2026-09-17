@@ -16,7 +16,7 @@ Constraints: workspace `resolver = "2"` with `[workspace.dependencies]` as singl
 
 **One crate per milestone domain, plus shared foundation and umbrella — with a strict DAG and umbrella re-export.**
 
-Inventory clarification (TASK-006): the current workspace has **21 crates under `crates/` + `xtask`**. The [canonical crate inventory](../../.agents/documents/application/modules/manifest.md#canonical-crate-inventory-source-of-truth) supersedes the original count and optional crate splits; the boundary decision remains unchanged.
+Inventory clarification (GAP-022, verified 2026-09-17 via `cargo metadata --format-version 1 --no-deps`): the current workspace has **43 crates under `crates/` + `xtask` (44 workspace packages total)**. The original decision named one crate per milestone domain; the ADOPT adoption wave (ADOPT-001..031) and the starter-kit programme (ADR-0002) subsequently added the audit, i18n, timezone, openapi, debugbar, queue-dashboard, excel, image, google, modules, action, logging, and presentation/scaffolder crates. Each addition keeps the same one-crate-per-concern boundary and joins the existing DAG without a cycle. The [canonical crate inventory](../../.agents/documents/application/modules/manifest.md#canonical-crate-inventory-source-of-truth) enumerates all 44 members by milestone and adoption layer, and supersedes the original count and optional crate splits; the boundary decision itself remains unchanged.
 
 Structure (see `architecture.md §3`):
 
@@ -29,7 +29,18 @@ Structure (see `architecture.md §3`):
 - M5: `rustasea-cli`, `rustasea-testing`
 - M6: `rustasea-broadcast`, `rustasea-storage`, `rustasea-search`, `rustasea-ai`, `rustasea-jsonapi` (separate crate)
 - `rustasea-app` (runnable example; `publish = false`)
+- `cargo-rustasea` (cargo subcommand binary; `cargo rustasea new`)
 - `xtask` (workspace dev tooling, outside `crates/`)
+
+The original per-domain plan above is extended by the ADOPT adoption wave and the starter-kit programme (ADR-0002), each crate still mapping to a single concern and a single milestone:
+
+- M0/M1/M2 additions: `rustasea-openapi` (ADOPT-011, M1), `rustasea-activitylog` (ADOPT-002, M2), `rustasea-mongo` (ADR-0010, feature-gated)
+- M3 additions: `rustasea-i18n` (ADOPT-005), `rustasea-authlog` (ADOPT-003), `rustasea-timezone` (ADOPT-006)
+- M4 additions: `rustasea-queue-dashboard` (ADOPT-021), `rustasea-debugbar` (ADOPT-009)
+- M5 additions: `rustasea-logging` (ADOPT-004/014), `rustasea-action` (ADOPT-028), `rustasea-modules` (ADOPT-027), `rustasea-scaffold` (ADR-0002)
+- M6 additions: `rustasea-mail`, `rustasea-excel` (ADOPT-023), `rustasea-image` (ADOPT-024), `rustasea-google` (ADOPT-026), and the presentation family `rustasea-view`, `rustasea-inertia`, `rustasea-inertia-client`, `rustasea-inertia-adapters`, `rustasea-livewire` (ADR-0002)
+
+All additions remain feature-gated where they would otherwise couple compilation across milestones, preserving the pay-for-crates-you-use rule (BR-08, NFR-Sca-02).
 
 Edges are compile-time `depends on`; acyclicity validated by `xtask check-cycles` over `cargo metadata`. Cross-context communication is via domain events (`Dispatcher`) or shared kernel types from `rustasea-foundation`.
 

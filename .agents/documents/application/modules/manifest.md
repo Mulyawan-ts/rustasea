@@ -6,35 +6,74 @@
 
 ## Canonical Crate Inventory (Source of Truth)
 
-> **Verified 2026-09-11** against `Cargo.toml` (`members = ["crates/*", "xtask"]`) and the `crates/` tree.
-> **Count: 21 crates under `crates/` + `xtask` (22 workspace packages total).** Every crate count or list in any other document MUST agree with this table.
+> **Verified 2026-09-17** against `cargo metadata --format-version 1 --no-deps` and the `crates/` tree, with `Cargo.toml` declaring `members = ["crates/*", "xtask"]`.
+> **Count: 43 crates under `crates/` + `xtask` (44 workspace packages total).** Every crate count or list in any other document MUST agree with this table.
 
-| # | Crate | Kind | Milestone | Owning module |
-|---|-------|------|-----------|---------------|
-| 1 | `rustasea` | umbrella (re-exports only) | M0+ | foundation |
-| 2 | `rustasea-foundation` | framework (contains the `Container` type) | M0 | foundation |
-| 3 | `rustasea-config` | framework | M0 | foundation |
-| 4 | `rustasea-router` | framework | M1 | http-routing |
-| 5 | `rustasea-http` | framework | M1 | http-routing |
-| 6 | `rustasea-orm` | framework | M2 | data-orm |
-| 7 | `rustasea-macros` | proc-macro | M2/M5 | http-routing · data-orm · developer-platform |
-| 8 | `rustasea-auth` | framework | M3 | identity-access |
-| 9 | `rustasea-validation` | framework | M3 | identity-access |
-| 10 | `rustasea-queue` | framework | M4 | async-workloads |
-| 11 | `rustasea-cache` | framework | M4 | async-workloads |
-| 12 | `rustasea-events` | framework | M4 | async-workloads |
-| 13 | `rustasea-schedule` | framework | M4 | async-workloads |
-| 14 | `rustasea-cli` | framework | M5 | developer-platform |
-| 15 | `rustasea-testing` | framework | M5 | developer-platform |
-| 16 | `rustasea-broadcast` | framework | M6 | intelligence-delivery |
-| 17 | `rustasea-storage` | framework | M6 | intelligence-delivery |
-| 18 | `rustasea-search` | framework | M6 | intelligence-delivery |
-| 19 | `rustasea-ai` | framework (feature-gated) | M6 | intelligence-delivery |
-| 20 | `rustasea-jsonapi` | framework | M6 | intelligence-delivery |
-| 21 | `rustasea-app` | runnable example app (not published) | — | — |
-| — | `xtask` | workspace dev tooling (not a framework crate) | — | developer-platform |
+The table is ordered by milestone (M0 to M6) and then by owning module. The `Adopted via` column records the ADOPT programme item (or ADR) that introduced the crate; a dash means the crate predates the ADOPT wave and belongs to the original M0 to M6 plan.
 
-**Note:** `rustasea-container` is **not** a crate — `Container` is a type inside `rustasea-foundation` (`crates/rustasea-foundation/src/lib.rs:35-41`).
+| # | Crate | Kind | Milestone | Adopted via | Owning module |
+|---|-------|------|-----------|-------------|---------------|
+| 1 | `rustasea` | umbrella (re-exports only) | M0+ | - | foundation |
+| 2 | `rustasea-foundation` | framework (contains the `Container` type) | M0 | - | foundation |
+| 3 | `rustasea-config` | framework | M0 | - | foundation |
+| 4 | `cargo-rustasea` | binary (`cargo rustasea new` scaffolder) | M0 | - | developer-platform |
+| 5 | `rustasea-router` | framework | M1 | - | http-routing |
+| 6 | `rustasea-http` | framework | M1 | ADOPT-010 (dev error renderers) | http-routing |
+| 7 | `rustasea-openapi` | framework (feature-gated) | M1 | ADOPT-011 | http-routing |
+| 8 | `rustasea-orm` | framework | M2 | ADOPT-016..020 | data-orm |
+| 9 | `rustasea-macros` | proc-macro | M2/M5 | - | http-routing · data-orm · developer-platform |
+| 10 | `rustasea-activitylog` | framework (feature-gated) | M2 | ADOPT-002 | data-orm |
+| 11 | `rustasea-mongo` | framework (feature-gated) | M2/M7 | ADR-0010 | data-orm |
+| 12 | `rustasea-auth` | framework | M3 | ADOPT-001 (RBAC) | identity-access |
+| 13 | `rustasea-validation` | framework | M3 | - | identity-access |
+| 14 | `rustasea-i18n` | framework | M3 | ADOPT-005 | identity-access |
+| 15 | `rustasea-authlog` | framework (feature-gated) | M3 | ADOPT-003 | identity-access |
+| 16 | `rustasea-timezone` | framework | M3 | ADOPT-006 | identity-access |
+| 17 | `rustasea-queue` | framework | M4 | - | async-workloads |
+| 18 | `rustasea-cache` | framework | M4 | - | async-workloads |
+| 19 | `rustasea-events` | framework | M4 | - | async-workloads |
+| 20 | `rustasea-schedule` | framework | M4 | - | async-workloads |
+| 21 | `rustasea-queue-dashboard` | framework (feature-gated) | M4 | ADOPT-021 | async-workloads |
+| 22 | `rustasea-debugbar` | framework (feature-gated) | M4 | ADOPT-009 | developer-platform |
+| 23 | `rustasea-cli` | framework | M5 | ADOPT-005/008/014/015 | developer-platform |
+| 24 | `rustasea-testing` | framework | M5 | ADOPT-012/013/029 | developer-platform |
+| 25 | `rustasea-logging` | framework (feature-gated) | M5 | ADOPT-004/014 | developer-platform |
+| 26 | `rustasea-action` | framework (feature-gated) | M5 | ADOPT-028 | developer-platform |
+| 27 | `rustasea-modules` | framework (feature-gated) | M5 | ADOPT-027 | developer-platform |
+| 28 | `rustasea-scaffold` | framework (feature-gated) | M5/M6 | ADR-0002 | developer-platform |
+| 29 | `rustasea-broadcast` | framework | M6 | ADOPT-022 | intelligence-delivery |
+| 30 | `rustasea-storage` | framework | M6 | ADOPT-025 (SFTP) | intelligence-delivery |
+| 31 | `rustasea-search` | framework | M6 | - | intelligence-delivery |
+| 32 | `rustasea-ai` | framework (feature-gated) | M6 | ADOPT-015 (MCP) | intelligence-delivery |
+| 33 | `rustasea-jsonapi` | framework | M6 | - | intelligence-delivery |
+| 34 | `rustasea-mail` | framework | M6 | - | intelligence-delivery |
+| 35 | `rustasea-excel` | framework (feature-gated) | M6 | ADOPT-023 | intelligence-delivery |
+| 36 | `rustasea-image` | framework (feature-gated) | M6 | ADOPT-024 | intelligence-delivery |
+| 37 | `rustasea-google` | framework (feature-gated) | M6 | ADOPT-026 | intelligence-delivery |
+| 38 | `rustasea-view` | framework (feature-gated) | M6 | ADR-0002 | intelligence-delivery |
+| 39 | `rustasea-inertia` | framework (feature-gated) | M6 | ADR-0002 | intelligence-delivery |
+| 40 | `rustasea-inertia-client` | framework (feature-gated) | M6 | ADR-0002 | intelligence-delivery |
+| 41 | `rustasea-inertia-adapters` | framework (feature-gated) | M6 | ADR-0002 | intelligence-delivery |
+| 42 | `rustasea-livewire` | framework (feature-gated) | M6 | ADR-0002 | intelligence-delivery |
+| 43 | `rustasea-app` | runnable example app (not published) | - | - | - |
+| 44 | `xtask` | workspace dev tooling (not a framework crate) | M0 | ADOPT-007/031 | developer-platform |
+
+**Milestone totals:** umbrella 1; M0 3 crates + `xtask`; M1 3; M2 4; M3 5; M4 6; M5 6; M6 14; runnable example 1. This is 43 crates under `crates/` plus `xtask`, for 44 workspace packages.
+
+### Starter-Kit Adoption Layers
+
+The starter-kit architecture (`.agents/documents/design/starter-kit-architecture.md` §3, ADR-0002) groups the crates into four adoption layers. The shared layers are identical across the blade/react/vue/livewire variants; only the presentation layer varies.
+
+| Adoption layer | Shared? | Crates |
+|----------------|---------|--------|
+| Domain / auth core | Yes | `rustasea-foundation`, `rustasea-config`, `rustasea-orm`, `rustasea-auth`, `rustasea-validation` |
+| HTTP / routing | Yes | `rustasea-router`, `rustasea-http`, `rustasea-openapi` |
+| Presentation (variant-specific) | No | `rustasea-view`, `rustasea-inertia`, `rustasea-inertia-client`, `rustasea-inertia-adapters`, `rustasea-livewire` |
+| Infra / DX | Yes | `rustasea-cli`, `rustasea-scaffold`, `cargo-rustasea`, `rustasea-testing`, `xtask` |
+
+The ADOPT adoption wave (ADOPT-001..031) added the following crates on top of the original M0 to M6 plan: `rustasea-activitylog`, `rustasea-authlog`, `rustasea-i18n`, `rustasea-timezone`, `rustasea-openapi`, `rustasea-debugbar`, `rustasea-queue-dashboard`, `rustasea-excel`, `rustasea-image`, `rustasea-google`, `rustasea-modules`, `rustasea-action`, `rustasea-logging`, and the presentation/scaffolder family (`rustasea-view`, `rustasea-inertia`, `rustasea-inertia-client`, `rustasea-inertia-adapters`, `rustasea-livewire`, `rustasea-scaffold`).
+
+**Note:** `rustasea-container` is **not** a crate - `Container` is a type inside `rustasea-foundation` (`crates/rustasea-foundation/src/lib.rs:35-41`).
 
 ## 1. Module Index
 
