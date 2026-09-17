@@ -69,6 +69,16 @@ Per the same section, each tag is expected to pass `cargo xtask ci` and
   reconciled to 17 (`GAP-025`); Laravel parity and milestone status aligned with
   all 31 ADOPT implementations (`GAP-026`); ADOPT crates and umbrella features
   documented in the README (`GAP-027`).
+- 2026-09-17 - Source-level `show:model {name} [--json]` introspection of a
+  model's attributes, casts, soft-delete/timestamp flags, and relations
+  (`GAP-029`, `feat(cli): [GAP-029] implement source-level show:model
+  introspection with JSON output`).
+- 2026-09-17 - Per-chunk HTTP idle-timeout enforcement on streamed response
+  bodies (`GAP-030`, `feat(http): [GAP-030] enforce per-chunk idle timeout on
+  streamed response bodies`).
+- 2026-09-17 - `cargo xtask lines:check` 500-line linter wired into `cargo
+  xtask ci` (`GAP-031`, `feat(xtask): [GAP-031] add lines:check 500-line linter
+  and enforce in xtask ci`).
 
 ### Added (governance)
 
