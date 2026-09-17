@@ -38,6 +38,7 @@ pub fn entries() -> Vec<TemplateFile> {
         ("resources/views/settings/layout.html", SETTINGS_LAYOUT),
         ("resources/views/settings/profile.html", SETTINGS_PROFILE),
         ("resources/views/settings/password.html", SETTINGS_PASSWORD),
+        ("resources/views/settings/security.html", SETTINGS_SECURITY),
         ("resources/css/app.css", APP_CSS),
     ]
 }
@@ -251,6 +252,39 @@ const SETTINGS_PASSWORD: &str = r##"{% extends "settings/layout.html" %}
   <label>Confirm <input type="password" name="password_confirmation" required /></label>
   <button type="submit">Update password</button>
 </form>
+{% endblock %}
+"##;
+
+/// Security settings screen: two-factor authentication and passkey management.
+///
+/// Both sections post to the kit's real management endpoints — 2FA to
+/// `/user/two-factor-authentication` (enable/disable) and passkeys to
+/// `/user/passkeys` (register). The recovery-code screen is linked rather than
+/// inlined so the one-time codes are only shown on their dedicated page.
+const SETTINGS_SECURITY: &str = r##"{% extends "settings/layout.html" %}
+{% block settings %}
+<h2>Security</h2>
+
+<section>
+  <h3>Two-Factor Authentication</h3>
+  <p>Add an extra layer of security to your account using a TOTP authenticator app.</p>
+  <form method="post" action="/user/two-factor-authentication">
+    <button type="submit">Enable two-factor authentication</button>
+  </form>
+  <form method="post" action="/user/two-factor-authentication">
+    <input type="hidden" name="_method" value="DELETE" />
+    <button type="submit">Disable two-factor authentication</button>
+  </form>
+  <p><a href="/user/two-factor-recovery-codes">View recovery codes</a></p>
+</section>
+
+<section>
+  <h3>Passkeys</h3>
+  <p>Sign in without a password using a passkey stored on your device.</p>
+  <form method="post" action="/user/passkeys">
+    <button type="submit">Register a passkey</button>
+  </form>
+</section>
 {% endblock %}
 "##;
 

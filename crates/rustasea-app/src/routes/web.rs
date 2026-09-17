@@ -82,7 +82,14 @@ struct ViewContext {
 }
 
 /// Render `template` with the optional authenticated principal as `user`.
-fn render_view(template: &str, user: Option<AuthUser>) -> Result<ViewResponse, ViewError> {
+///
+/// Shared with the sibling settings table ([`super::settings`]) so the profile,
+/// password, and security screens render through the same engine and expose the
+/// identical `user` context the app shell expects.
+pub(crate) fn render_view(
+    template: &str,
+    user: Option<AuthUser>,
+) -> Result<ViewResponse, ViewError> {
     let context = ViewContext {
         user: user.map(NavUser::from),
     };

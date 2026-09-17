@@ -92,10 +92,27 @@ pub fn mount(_props: &Value) -> Result<(), ClientError> {
     Ok(())
 }
 
-/// Dashboard screen.
+/// Dashboard screen: header, greeting, a summary card, settings links, and a
+/// logout form. Mirrors the blade `dashboard.html` semantics.
 #[component]
 fn Dashboard() -> Element {
-    rsx! { h1 { "Dashboard" } }
+    rsx! {
+        header {
+            h1 { "Dashboard" }
+            p { "Welcome back. Here is a summary of your account." }
+        }
+        section { class: "card",
+            h2 { "Summary" }
+            p { "Your recent activity and key metrics appear here." }
+        }
+        nav {
+            a { href: "/settings/profile", "Profile settings" }
+            a { href: "/settings/password", "Password settings" }
+        }
+        form { method: "post", action: "/logout",
+            button { r#type: "submit", "Log out" }
+        }
+    }
 }
 "##;
 
@@ -110,10 +127,30 @@ pub fn mount(_props: &Value) -> Result<(), ClientError> {
     Ok(())
 }
 
-/// Login screen.
+/// Login screen: an interactive credential form plus links to register and to
+/// the forgot-password flow.
 #[component]
 fn Login() -> Element {
-    rsx! { h1 { "Log in" } }
+    rsx! {
+        h1 { "Log in" }
+        form { method: "post", action: "/login",
+            label {
+                "Email"
+                input { r#type: "email", name: "email", required: true }
+            }
+            label {
+                "Password"
+                input { r#type: "password", name: "password", required: true }
+            }
+            label {
+                input { r#type: "checkbox", name: "remember" }
+                "Remember me"
+            }
+            button { r#type: "submit", "Log in" }
+        }
+        p { a { href: "/register", "Don't have an account? Register" } }
+        p { a { href: "/forgot-password", "Forgot your password?" } }
+    }
 }
 "##;
 
@@ -128,10 +165,33 @@ pub fn mount(_props: &Value) -> Result<(), ClientError> {
     Ok(())
 }
 
-/// Registration screen.
+/// Registration screen: a name/email/password form with confirmation and a
+/// link back to the login screen.
 #[component]
 fn Register() -> Element {
-    rsx! { h1 { "Register" } }
+    rsx! {
+        h1 { "Register" }
+        form { method: "post", action: "/register",
+            label {
+                "Name"
+                input { r#type: "text", name: "name", required: true }
+            }
+            label {
+                "Email"
+                input { r#type: "email", name: "email", required: true }
+            }
+            label {
+                "Password"
+                input { r#type: "password", name: "password", required: true }
+            }
+            label {
+                "Confirm password"
+                input { r#type: "password", name: "password_confirmation", required: true }
+            }
+            button { r#type: "submit", "Register" }
+        }
+        p { a { href: "/login", "Already registered? Log in" } }
+    }
 }
 "##;
 
@@ -146,10 +206,29 @@ pub fn mount(_props: &Value) -> Result<(), ClientError> {
     Ok(())
 }
 
-/// Profile settings screen.
+/// Profile settings screen: a `PATCH`-tunnelled form for name/email plus links
+/// to the password screen and the dashboard.
 #[component]
 fn Profile() -> Element {
-    rsx! { h1 { "Profile" } }
+    rsx! {
+        h1 { "Profile" }
+        form { method: "post", action: "/settings/profile",
+            input { r#type: "hidden", name: "_method", value: "PATCH" }
+            label {
+                "Name"
+                input { r#type: "text", name: "name", required: true }
+            }
+            label {
+                "Email"
+                input { r#type: "email", name: "email", required: true }
+            }
+            button { r#type: "submit", "Save" }
+        }
+        nav {
+            a { href: "/settings/password", "Password settings" }
+            a { href: "/dashboard", "Dashboard" }
+        }
+    }
 }
 "##;
 
@@ -164,9 +243,32 @@ pub fn mount(_props: &Value) -> Result<(), ClientError> {
     Ok(())
 }
 
-/// Password settings screen.
+/// Password settings screen: a `PUT`-tunnelled form for the current and new
+/// password plus links to the profile screen and the dashboard.
 #[component]
 fn Password() -> Element {
-    rsx! { h1 { "Password" } }
+    rsx! {
+        h1 { "Password" }
+        form { method: "post", action: "/settings/password",
+            input { r#type: "hidden", name: "_method", value: "PUT" }
+            label {
+                "Current password"
+                input { r#type: "password", name: "current_password", required: true }
+            }
+            label {
+                "New password"
+                input { r#type: "password", name: "password", required: true }
+            }
+            label {
+                "Confirm password"
+                input { r#type: "password", name: "password_confirmation", required: true }
+            }
+            button { r#type: "submit", "Update password" }
+        }
+        nav {
+            a { href: "/settings/profile", "Profile settings" }
+            a { href: "/dashboard", "Dashboard" }
+        }
+    }
 }
 "##;

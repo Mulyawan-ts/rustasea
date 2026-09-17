@@ -1,0 +1,20 @@
+{% extends "settings/layout.html" %}
+
+{% block title %}Profile settings — RustaSea{% endblock %}
+
+{% block settings %}
+<h2>Profile</h2>
+<p class="muted">Update your account's name and email address.</p>
+
+<form method="post" action="/settings/profile">
+  <input type="hidden" name="_method" value="PATCH" />
+  <label>Name <input type="text" name="name" required /></label>
+  <label>Email <input type="email" name="email" {% if user %}value="{{ user.email }}" {% endif %}required /></label>
+  <button type="submit" class="btn">Save</button>
+</form>
+
+<nav>
+  <a href="/settings/password">Password settings</a>
+  <a href="/dashboard">Dashboard</a>
+</nav>
+{% endblock %}

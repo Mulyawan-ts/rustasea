@@ -21,27 +21,39 @@ use rustasea::validation::serde_json::{Map, Value};
 use rustasea::validation::{ErrorBag, PasswordPolicy, Rules, ValidationContext, ValidationError};
 
 use super::helpers::{field, fortify_config, json_error, parse_form, see_other, user_provider};
-use super::{LOGIN_PATH, PASSWORD_CONFIRM};
+use super::{web, LOGIN_PATH, PASSWORD_CONFIRM};
 
-/// Profile settings page markup (placeholder).
+/// Profile settings page markup.
+///
+/// Fallback only: [`profile_page`] renders `resources/views/settings/profile.html`
+/// through the shared minijinja engine and serves this structured document when
+/// the template is unavailable (a missing file or a render error).
 const PROFILE_HTML: &str = r#"<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>Profile settings</title></head>
 <body><main><h1>Profile settings</h1>
 <p>Update your name and email address here.</p>
 </main></body></html>"#;
 
-/// Password settings page markup (placeholder).
+/// Password settings page markup.
+///
+/// Fallback only: [`password_page`] renders `resources/views/settings/password.html`
+/// through the shared minijinja engine and serves this structured document when
+/// the template is unavailable.
 const PASSWORD_HTML: &str = r#"<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>Password settings</title></head>
 <body><main><h1>Password settings</h1>
 <p>Change your account password here.</p>
 </main></body></html>"#;
 
-/// Security settings page markup (placeholder, gated).
+/// Security settings page markup (gated).
+///
+/// Fallback only: [`security_page`] renders `resources/views/settings/security.html`
+/// through the shared minijinja engine and serves this structured document when
+/// the template is unavailable.
 const SECURITY_HTML: &str = r#"<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>Security settings</title></head>
 <body><main><h1>Security settings</h1>
-<p>Two-factor authentication and sessions appear here.</p>
+<p>Two-factor authentication and passkeys appear here.</p>
 </main></body></html>"#;
 
 /// Redirect target after a successful profile update (`303 See Other`).
@@ -83,8 +95,19 @@ pub fn register(table: &mut RouteTable) {
 }
 
 /// GET /settings/profile — render the profile form.
-async fn profile_page() -> Html<&'static str> {
-    Html(PROFILE_HTML)
+///
+/// Renders `resources/views/settings/profile.html` through the shared engine
+/// ([`web::render_view`]) so the page carries the app shell and the optional
+/// authenticated principal is exposed to the template as `user`. When the
+/// template cannot be loaded or rendered the structured [`PROFILE_HTML`]
+/// fallback is served instead, so the route always answers HTML rather than a
+/// `500`.
+async fn profile_page(user: Option<Extension<AuthUser>>) -> Response {
+    render_or_fallback(
+        "settings/profile.html",
+        user.map(|Extension(user)| user),
+        PROFILE_HTML,
+    )
 }
 
 /// PATCH /settings/profile — validate and persist name/email changes.
@@ -201,8 +224,16 @@ async fn profile_update(user: Option<Extension<AuthUser>>, body: axum::body::Byt
 }
 
 /// GET /settings/password — render the password form.
-async fn password_page() -> Html<&'static str> {
-    Html(PASSWORD_HTML)
+///
+/// Renders `resources/views/settings/password.html` through the shared engine
+/// ([`web::render_view`]); when the template is unavailable the structured
+/// [`PASSWORD_HTML`] fallback is served instead.
+async fn password_page(user: Option<Extension<AuthUser>>) -> Response {
+    render_or_fallback(
+        "settings/password.html",
+        user.map(|Extension(user)| user),
+        PASSWORD_HTML,
+    )
 }
 
 /// PUT /settings/password — validate the current password and a
@@ -275,8 +306,30 @@ async fn password_update(user: Option<Extension<AuthUser>>, body: axum::body::By
 }
 
 /// GET /settings/security — render the security page behind the gate.
-async fn security_page() -> Html<&'static str> {
-    Html(SECURITY_HTML)
+///
+/// Renders `resources/views/settings/security.html` through the shared engine
+/// ([`web::render_view`]); when the template is unavailable the structured
+/// [`SECURITY_HTML`] fallback is served instead.
+async fn security_page(user: Option<Extension<AuthUser>>) -> Response {
+    render_or_fallback(
+        "settings/security.html",
+        user.map(|Extension(user)| user),
+        SECURITY_HTML,
+    )
+}
+
+/// Render `template` with the optional authenticated principal, falling back to
+/// `fallback` when the template cannot be loaded or rendered.
+///
+/// The fallback keeps the route total: a deployment that ships without the
+/// runtime views directory still answers a structured HTML document rather than
+/// surfacing the engine's `500`. The `user` projection and engine selection are
+/// shared with [`web::render_view`], so the fallback is the only divergence.
+fn render_or_fallback(template: &str, user: Option<AuthUser>, fallback: &'static str) -> Response {
+    match web::render_view(template, user) {
+        Ok(response) => response.into_response(),
+        Err(_) => Html(fallback).into_response(),
+    }
 }
 
 /// Build a `302 Found` redirect to `location` (the unauthenticated case); an

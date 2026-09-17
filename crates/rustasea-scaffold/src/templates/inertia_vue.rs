@@ -92,10 +92,27 @@ pub fn mount(_props: &Value) -> Result<(), ClientError> {
     Ok(())
 }
 
-/// Dashboard screen.
+/// Dashboard screen: header, greeting, a summary card, settings links, and a
+/// logout form. Mirrors the blade `dashboard.html` semantics.
 #[component]
 fn Dashboard() -> impl IntoView {
-    view! { <h1>"Dashboard"</h1> }
+    view! {
+        <header>
+            <h1>"Dashboard"</h1>
+            <p>"Welcome back. Here is a summary of your account."</p>
+        </header>
+        <section class="card">
+            <h2>"Summary"</h2>
+            <p>"Your recent activity and key metrics appear here."</p>
+        </section>
+        <nav>
+            <a href="/settings/profile">"Profile settings"</a>
+            <a href="/settings/password">"Password settings"</a>
+        </nav>
+        <form method="post" action="/logout">
+            <button type="submit">"Log out"</button>
+        </form>
+    }
 }
 "##;
 
@@ -110,10 +127,30 @@ pub fn mount(_props: &Value) -> Result<(), ClientError> {
     Ok(())
 }
 
-/// Login screen.
+/// Login screen: an interactive credential form plus links to register and to
+/// the forgot-password flow.
 #[component]
 fn Login() -> impl IntoView {
-    view! { <h1>"Log in"</h1> }
+    view! {
+        <h1>"Log in"</h1>
+        <form method="post" action="/login">
+            <label>
+                "Email"
+                <input type="email" name="email" required/>
+            </label>
+            <label>
+                "Password"
+                <input type="password" name="password" required/>
+            </label>
+            <label>
+                <input type="checkbox" name="remember"/>
+                "Remember me"
+            </label>
+            <button type="submit">"Log in"</button>
+        </form>
+        <p><a href="/register">"Don't have an account? Register"</a></p>
+        <p><a href="/forgot-password">"Forgot your password?"</a></p>
+    }
 }
 "##;
 
@@ -128,10 +165,33 @@ pub fn mount(_props: &Value) -> Result<(), ClientError> {
     Ok(())
 }
 
-/// Registration screen.
+/// Registration screen: a name/email/password form with confirmation and a
+/// link back to the login screen.
 #[component]
 fn Register() -> impl IntoView {
-    view! { <h1>"Register"</h1> }
+    view! {
+        <h1>"Register"</h1>
+        <form method="post" action="/register">
+            <label>
+                "Name"
+                <input type="text" name="name" required/>
+            </label>
+            <label>
+                "Email"
+                <input type="email" name="email" required/>
+            </label>
+            <label>
+                "Password"
+                <input type="password" name="password" required/>
+            </label>
+            <label>
+                "Confirm password"
+                <input type="password" name="password_confirmation" required/>
+            </label>
+            <button type="submit">"Register"</button>
+        </form>
+        <p><a href="/login">"Already registered? Log in"</a></p>
+    }
 }
 "##;
 
@@ -146,10 +206,29 @@ pub fn mount(_props: &Value) -> Result<(), ClientError> {
     Ok(())
 }
 
-/// Profile settings screen.
+/// Profile settings screen: a `PATCH`-tunnelled form for name/email plus links
+/// to the password screen and the dashboard.
 #[component]
 fn Profile() -> impl IntoView {
-    view! { <h1>"Profile"</h1> }
+    view! {
+        <h1>"Profile"</h1>
+        <form method="post" action="/settings/profile">
+            <input type="hidden" name="_method" value="PATCH"/>
+            <label>
+                "Name"
+                <input type="text" name="name" required/>
+            </label>
+            <label>
+                "Email"
+                <input type="email" name="email" required/>
+            </label>
+            <button type="submit">"Save"</button>
+        </form>
+        <nav>
+            <a href="/settings/password">"Password settings"</a>
+            <a href="/dashboard">"Dashboard"</a>
+        </nav>
+    }
 }
 "##;
 
@@ -164,9 +243,32 @@ pub fn mount(_props: &Value) -> Result<(), ClientError> {
     Ok(())
 }
 
-/// Password settings screen.
+/// Password settings screen: a `PUT`-tunnelled form for the current and new
+/// password plus links to the profile screen and the dashboard.
 #[component]
 fn Password() -> impl IntoView {
-    view! { <h1>"Password"</h1> }
+    view! {
+        <h1>"Password"</h1>
+        <form method="post" action="/settings/password">
+            <input type="hidden" name="_method" value="PUT"/>
+            <label>
+                "Current password"
+                <input type="password" name="current_password" required/>
+            </label>
+            <label>
+                "New password"
+                <input type="password" name="password" required/>
+            </label>
+            <label>
+                "Confirm password"
+                <input type="password" name="password_confirmation" required/>
+            </label>
+            <button type="submit">"Update password"</button>
+        </form>
+        <nav>
+            <a href="/settings/profile">"Profile settings"</a>
+            <a href="/dashboard">"Dashboard"</a>
+        </nav>
+    }
 }
 "##;
