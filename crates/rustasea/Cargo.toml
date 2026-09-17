@@ -120,6 +120,12 @@ wasm-leptos = [
     "dep:rustasea-inertia-adapters",
     "rustasea-inertia-adapters/vue",
 ]
+# Inertia WASM presentation adapter — Svelte variant mapped to Sycamore (ADR-0002 §4).
+wasm-sycamore = [
+    "inertia-client",
+    "dep:rustasea-inertia-adapters",
+    "rustasea-inertia-adapters/svelte",
+]
 # Livewire analogue: askama components, HTMX swaps, broadcast realtime (ADR-0002 §5).
 livewire = ["view", "dep:rustasea-livewire"]
 # Starter-kit scaffolder behind `cargo rustasea new` (ADR-0002 §6).

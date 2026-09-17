@@ -3364,6 +3364,10 @@ name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
+dependencies = [
+ "ahash",
+ "allocator-api2",
+]
 
 [[package]]
 name = "hashbrown"
@@ -7206,7 +7210,9 @@ dependencies = [
  "rustasea-inertia",
  "rustasea-inertia-client",
  "serde_json",
+ "sycamore",
  "thiserror 1.0.69",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -8762,6 +8768,89 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
+name = "sycamore"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11c735201526de5147ac6d600dad8c9be2431a70f3cb0366138b5bdb66455d20"
+dependencies = [
+ "hashbrown 0.14.5",
+ "indexmap 2.14.2",
+ "paste",
+ "sycamore-core",
+ "sycamore-macro",
+ "sycamore-reactive",
+ "sycamore-web",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "sycamore-core"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6339fc8b0981e0ffdf567ceeaffe8265f9eb2e21bc3d2ca2999e42e5ddcfd3"
+dependencies = [
+ "hashbrown 0.14.5",
+ "paste",
+ "sycamore-reactive",
+]
+
+[[package]]
+name = "sycamore-macro"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bb6450058019bdbe2752e94ee2c8e41b985f2e8d516a1c837f974f03a50d5a3"
+dependencies = [
+ "once_cell",
+ "proc-macro2",
+ "quote",
+ "rand 0.8.8",
+ "sycamore-view-parser",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "sycamore-reactive"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e0b9b9e906ca671417482538e49dcdd49ac47bd874dc43dba0b38e39014af80"
+dependencies = [
+ "paste",
+ "slotmap",
+ "smallvec",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "sycamore-view-parser"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42fb4604d20af47e1cdfd4aa5287170e64c33ab5a6b03724c28a42d2d0cd7be1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "sycamore-web"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9ce2889120d7e8c2365afa3dfb5d5edb457c3c8f40086d633f57ff448640b9d"
+dependencies = [
+ "html-escape",
+ "js-sys",
+ "once_cell",
+ "paste",
+ "smallvec",
+ "sycamore-core",
+ "sycamore-macro",
+ "sycamore-reactive",
+ "wasm-bindgen",
+ "web-sys",
+]
 
 [[package]]
 name = "symlink"

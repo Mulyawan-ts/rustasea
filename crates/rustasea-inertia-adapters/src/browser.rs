@@ -1,4 +1,4 @@
-//! Browser transport shared by the Dioxus and Leptos adapters.
+//! Browser transport shared by the Dioxus, Leptos, and Sycamore adapters.
 
 use http::{HeaderMap, HeaderName, HeaderValue};
 use rustasea_inertia::{X_INERTIA, X_INERTIA_LOCATION};

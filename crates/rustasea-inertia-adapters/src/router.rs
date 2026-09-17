@@ -9,9 +9,9 @@ use crate::registry::{mount_page, InstalledRegistry};
 
 /// The current Inertia page plus the asset version used for navigations.
 ///
-/// The state is `Send + Sync` and holds only owned JSON, so both Dioxus
-/// `Signal` and Leptos `RwSignal` can wrap it. Mounting is delegated to the
-/// registry installed through [`crate::install_registry`].
+/// The state is `Send + Sync` and holds only owned JSON, so the Dioxus
+/// `Signal`, Leptos `RwSignal`, and Sycamore `Signal` can all wrap it. Mounting
+/// is delegated to the registry installed through [`crate::install_registry`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct RouterState {
     page: Option<Page<Value>>,

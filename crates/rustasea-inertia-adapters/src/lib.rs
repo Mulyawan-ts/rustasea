@@ -6,7 +6,8 @@
 //! This crate turns that protocol into concrete presentation adapters:
 //!
 //! - the **`react`** feature maps the React starter-kit variant to **Dioxus**;
-//! - the **`vue`** feature maps the Vue variant to **Leptos**.
+//! - the **`vue`** feature maps the Vue variant to **Leptos**;
+//! - the **`svelte`** feature maps the Svelte variant to **Sycamore**.
 //!
 //! Both adapters share the same core:
 //!
@@ -27,6 +28,7 @@
 //! ```text
 //! cargo check -p rustasea-inertia-adapters --no-default-features --features react
 //! cargo check -p rustasea-inertia-adapters --no-default-features --features vue
+//! cargo check -p rustasea-inertia-adapters --no-default-features --features svelte
 //! ```
 //!
 //! # Build tooling
@@ -61,14 +63,14 @@ mod error;
 mod registry;
 mod router;
 
-#[cfg(any(feature = "react", feature = "vue"))]
+#[cfg(any(feature = "react", feature = "vue", feature = "svelte"))]
 mod browser;
 
 pub use error::AdapterError;
 pub use registry::{install_registry, mount_installed, mount_page};
 pub use router::RouterState;
 
-#[cfg(any(feature = "react", feature = "vue"))]
+#[cfg(any(feature = "react", feature = "vue", feature = "svelte"))]
 pub use browser::{fetch_page, hard_navigate};
 
 // Re-export the client surface so a generated app depends on a single crate.
@@ -90,4 +92,12 @@ mod leptos_adapter;
 pub use leptos_adapter::{
     use_router as use_leptos_router, Link as LeptosLink, RouterContext as LeptosRouterContext,
     RouterProvider as LeptosRouterProvider,
+};
+
+#[cfg(feature = "svelte")]
+mod sycamore_adapter;
+#[cfg(feature = "svelte")]
+pub use sycamore_adapter::{
+    use_router as use_sycamore_router, Link as SycamoreLink,
+    RouterContext as SycamoreRouterContext, RouterProvider as SycamoreRouterProvider,
 };
