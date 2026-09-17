@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use rustasea::http::AppState;
 
+mod app;
 mod bootstrap;
 mod routes;
 

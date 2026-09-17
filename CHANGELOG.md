@@ -53,6 +53,14 @@ Per the same section, each tag is expected to pass `cargo xtask ci` and
 
 ### Added
 
+- 2026-09-17 - Example application domain in the runnable `rustasea-app` crate:
+  a scaffold-style `app/` tree with a `Post` model plus in-memory
+  `PostRepository`, a JSON CRUD `PostController` implementing the base
+  `Controller` trait, `StorePostRequest`/`UpdatePostRequest` validatable form
+  requests, and a `CreatePostAction` demonstrating the `Action` pattern; served
+  as a demo JSON API at `/examples/posts` and wired into the route table
+  (`feat(app): [TASK-097] add example app domain module (models, controllers,
+  requests, actions) to rustasea-app`).
 - 2026-09-17 - Generated-app boot parity: the scaffold's `bootstrap/commands.rs`
   registers the framework command surface (and queue migrations) via
   `rustasea::cli::load_default_commands()` plus the application's nine own

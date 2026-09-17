@@ -181,8 +181,8 @@ pub(crate) fn json_error(status: StatusCode, code: &str, detail: &str) -> Respon
 /// routes and can never leak onto unrelated routes — the guard runs as a global
 /// axum layer (see [`super::with_csrf`]), so this predicate *is* the scope.
 /// Covers the implemented writes (`/login`, `/logout`, the settings
-/// `PATCH`/`PUT`, the password-reset writes) and the still-`501` POST stubs, for
-/// consistency.
+/// `PATCH`/`PUT`, the password-reset writes), the still-`501` POST stubs, and
+/// the example posts resource (`/examples/posts`) for consistency.
 pub(crate) fn csrf_protected(method: &axum::http::Method, path: &str) -> bool {
     // The passkey delete route is parameterised (`/user/passkeys/{id}`), so it
     // is matched by prefix rather than the exact `(method, path)` allow-list.
@@ -200,6 +200,11 @@ pub(crate) fn csrf_protected(method: &axum::http::Method, path: &str) -> bool {
     }
     if method == axum::http::Method::DELETE && path.starts_with("/queue/failed/") {
         return true;
+    }
+    // The example posts resource (`/examples/posts/{id}`) is parameterised, so
+    // the mutating verbs are matched by prefix too.
+    if path.starts_with("/examples/posts") {
+        return matches!(method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE");
     }
     matches!(
         (method.as_str(), path),

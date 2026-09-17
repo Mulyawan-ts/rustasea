@@ -20,6 +20,10 @@ pub mod debugbar;
 pub mod docs;
 /// Request-error middleware — dev page + prod JSON envelope (ADOPT-010).
 pub mod errors;
+/// Example domain routes (`/examples/posts`) - the scaffold-style
+/// [`PostController`](crate::app::http::controllers::PostController) JSON CRUD
+/// surface.
+pub mod examples;
 mod helpers;
 /// Dev-only log viewer surface (`/_logs`, `/_logs/json`) — ADOPT-014, compiled
 /// only with the `log-viewer` feature.
@@ -83,6 +87,9 @@ pub fn table() -> RouteTable {
     settings::register(&mut table);
     console::register(&mut table);
     docs::register(&mut table);
+    // Example application domain (`/examples/posts`) - the scaffold-style
+    // `app/{models,http,actions}` tree, served as a JSON CRUD API.
+    examples::register(&mut table);
     // Dev-only profiler surface (`/_debugbar`, `/_debugbar/json`). Registered
     // only when the feature is compiled in; the handlers answer `404` unless
     // `AppState::debug` is set (the same runtime gate `docs` uses).

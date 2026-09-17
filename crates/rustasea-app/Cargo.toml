@@ -42,8 +42,9 @@ log-viewer = []
 [dependencies]
 # `view` exposes the view layer (`ViewResponse`, `ViewEngine`); the forwarded
 # `view-runtime-templates` feature enables the runtime minijinja engine the app
-# renders `resources/views/*.html` with.
-rustasea = { path = "../rustasea", features = ["view", "view-runtime-templates"] }
+# renders `resources/views/*.html` with. `action` exposes the `Action` pattern
+# (ADOPT-028) the example `CreatePostAction` implements.
+rustasea = { path = "../rustasea", features = ["view", "view-runtime-templates", "action"] }
 # `/openapi.json` generates the spec from the live route table; `/docs` serves
 # the Scalar UI over it (both dev-only).
 rustasea-openapi = { path = "../rustasea-openapi" }

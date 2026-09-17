@@ -629,6 +629,18 @@ verified 2026-09-17 with `cargo metadata --format-version 1 --no-deps`. The
 directory tree above mirrors the current tree; `Cargo.toml`
 (`members = ["crates/*", "xtask"]`) is the mechanical source of truth.
 
+### Example application domain (`crates/rustasea-app/src/app/`)
+
+The runnable `rustasea-app` binary ships a small, compiling example of the
+scaffold's `app/` layout under `crates/rustasea-app/src/app/`: an Eloquent-style
+`Post` model with an in-memory `PostRepository` (`app/models/`), a JSON CRUD
+`PostController` implementing the base `Controller` trait (`app/http/`), the
+`StorePostRequest` / `UpdatePostRequest` validatable form requests
+(`app/http/requests/`), and a `CreatePostAction` demonstrating the `Action`
+pattern (`app/actions/`). The routes are registered in
+`crates/rustasea-app/src/routes/examples.rs` and served as a JSON API at
+`/examples/posts` (index, show, store, update, destroy).
+
 ## Roadmap
 
 | Milestone | Focus | Target | Depends On |

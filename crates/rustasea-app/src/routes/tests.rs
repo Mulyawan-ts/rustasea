@@ -86,6 +86,10 @@ mod log_viewer;
 #[cfg(feature = "broadcasting")]
 mod broadcasting;
 
+/// Example domain (`/examples/posts`) JSON CRUD tests, split into a sibling
+/// module so `tests.rs` stays under the cap.
+mod examples;
+
 /// Build the served router with a throwaway state.
 fn app() -> Router {
     compile(table(), Arc::new(AppState::new("testing", true)))
