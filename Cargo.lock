@@ -859,14 +859,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb1307f12aa967b5a58416e87b3653360e0fd614a016b6e970db08fecbb1b80d"
 
 [[package]]
-name = "cargo-rustasea"
-version = "0.1.0"
-dependencies = [
- "clap",
- "rustasea-scaffold",
-]
-
-[[package]]
 name = "cbc"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6820,6 +6812,7 @@ name = "rustasea"
 version = "0.1.0"
 dependencies = [
  "axum 0.7.9",
+ "clap",
  "rustasea-action",
  "rustasea-activitylog",
  "rustasea-ai",
