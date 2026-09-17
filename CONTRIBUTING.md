@@ -176,6 +176,20 @@ cargo test -p rustasea --features integration -- --ignored
   (blueprint, architecture, API contracts, module manifests).
 - `docs/gap-analysis/` - the gap analysis and traceability matrix.
 
+## Code of Conduct
+
+In order to ensure that the RustaSea community is welcoming to all, please
+review and abide by the following expectations:
+
+- Be respectful. Disagreement is welcome; personal attacks are not.
+- Assume good faith and keep technical discussions focused on the work.
+- Harassment, discrimination, and exclusionary behaviour are not tolerated in
+  issues, pull requests, discussions, or any other project space.
+
+Report unacceptable behaviour to the maintainers via the repository's Issues or
+the contact listed in `SECURITY.md`. Reports are reviewed promptly and
+confidentially.
+
 ## License
 
 By contributing, you agree that your contributions are licensed under the MIT

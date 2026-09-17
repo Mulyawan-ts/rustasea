@@ -291,13 +291,44 @@ const STORAGE_ARCHIVE_GITIGNORE: &str = r##"*
 !.gitignore
 "##;
 
-const README: &str = r##"# @@app_pascal@@
+const README: &str = r##"<p align="center"><img src="https://raw.githubusercontent.com/rustasea/framework/master/art/logo.svg" width="460" alt="RustaSea Logo"></p>
 
-A RustaSea starter kit generated with:
+<p align="center">
+<a href="https://github.com/rustasea/framework/actions/workflows/ci.yml"><img src="https://github.com/rustasea/framework/actions/workflows/ci.yml/badge.svg" alt="Framework Build Status"></a>
+<a href="https://github.com/rustasea/framework/blob/master/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+</p>
+
+## About @@app_pascal@@
+
+@@app_pascal@@ is a RustaSea application — a web application framework for Rust with expressive, elegant syntax. The framework takes the pain out of development by easing common tasks used in many web projects, such as:
+
+- Simple, fast routing engine.
+- Powerful dependency injection container.
+- Multiple back-ends for session and cache storage.
+- Expressive, intuitive database ORM.
+- Database agnostic schema migrations.
+- Robust background job processing.
+- Real-time event broadcasting.
+
+This application was generated with:
 
 ```sh
 cargo rustasea new @@app_name@@ --variant @@variant@@
 ```
+
+The framework itself lives at [`rustasea/framework`](https://github.com/rustasea/framework) (analog `laravel/framework`).
+
+## Prerequisites
+
+The RustaSea framework crates are not yet published to crates.io. Until the first release, `cargo build` will not resolve the `rustasea = "0.1"` and `rustasea-view = "0.1"` dependencies declared in `Cargo.toml`. For local development, point those dependencies at the framework repository with a `[patch.crates-io]` block:
+
+```toml
+[patch.crates-io]
+rustasea = { git = "https://github.com/rustasea/framework.git" }
+rustasea-view = { git = "https://github.com/rustasea/framework.git" }
+```
+
+Rust 1.88 or newer is required. Install the toolchain via [rustup](https://rustup.rs) and confirm `cargo --version` reports 1.88 or newer.
 
 ## Layout
 
@@ -319,6 +350,23 @@ cargo run
 
 The server binds `0.0.0.0:3000` by default (`APP_URL` overrides it).
 
+Console commands are run through the Artisan-style CLI:
+
+```sh
+cargo artisan migrate              # run the database migrations
+cargo artisan route:list           # inspect the registered route table
+cargo artisan make:controller Post # scaffold a controller
+cargo artisan show:model User      # inspect a model's source metadata
+```
+
+Quality gate — the same checks that run in CI:
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
 ## Docker
 
 A container stack with laravel/sail parity is generated alongside the app:
@@ -339,6 +387,32 @@ docker-compose down                                           # tear down
 
 App: <http://localhost:3000> · Mailpit UI: <http://localhost:8025> ·
 MinIO console: <http://localhost:9001>.
+
+## Agentic Development
+
+RustaSea's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Every project exposes its knowledge surface over the Model Context Protocol:
+
+```bash
+cargo artisan mcp:serve   # requires the `ai-mcp` feature on the `rustasea` crate
+```
+
+The MCP server gives agents 15+ tools and resources — route tables, model introspection, documentation, configuration, and `make:plan` scaffold planning — so agents build RustaSea applications while following best practices.
+
+## Contributing
+
+Thank you for considering contributing to the RustaSea framework! The contribution guide can be found in the [framework repository](https://github.com/rustasea/framework/blob/master/CONTRIBUTING.md).
+
+## Code of Conduct
+
+In order to ensure that the RustaSea community is welcoming to all, please review and abide by the [Code of Conduct](https://github.com/rustasea/framework/blob/master/CONTRIBUTING.md#code-of-conduct).
+
+## Security Vulnerabilities
+
+If you discover a security vulnerability within RustaSea, please review the disclosure process in [SECURITY.md](https://github.com/rustasea/framework/blob/master/SECURITY.md). All security vulnerabilities will be promptly addressed.
+
+## License
+
+This application is open-sourced software licensed under the [MIT license](LICENSE).
 "##;
 
 const LIB_RS: &str = r##"//! @@app_pascal@@ — RustaSea application library.

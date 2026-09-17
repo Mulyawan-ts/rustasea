@@ -1,18 +1,25 @@
-# RustaSea
+<p align="center"><img src="art/logo.svg" width="460" alt="RustaSea Logo"></p>
 
-> A Rust framework with Laravel ergonomics — expressive syntax, convention over configuration, and Rust-grade safety and performance.
+<p align="center">
+<a href="https://github.com/rustasea/framework/actions/workflows/ci.yml"><img src="https://github.com/rustasea/framework/actions/workflows/ci.yml/badge.svg" alt="Build Status"></a>
+<a href="https://github.com/rustasea/framework/blob/master/rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.88%2B-orange.svg" alt="Rust Version"></a>
+<a href="https://github.com/rustasea/framework/blob/master/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+<a href="docs/milestones.md"><img src="https://img.shields.io/badge/status-alpha-yellow.svg" alt="Status"></a>
+</p>
 
-[![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
-[![Status](https://img.shields.io/badge/status-alpha-yellow.svg)](#roadmap)
+## About RustaSea
 
-> **Last updated:** 2026-09-17
+RustaSea is a web application framework for Rust with expressive, elegant syntax — the developer experience that made Laravel the most loved PHP framework, without sacrificing what makes Rust great. We believe development must be an enjoyable and creative experience to be truly fulfilling. RustaSea takes the pain out of development by easing common tasks used in many web projects, such as:
 
----
+- [Simple, fast routing engine](crates/rustasea-router) with typed extractors and proc-macro attributes.
+- [Powerful dependency injection container](crates/rustasea-foundation) with DAG-ordered service providers.
+- Multiple back-ends for [session](crates/rustasea-auth) and [cache](crates/rustasea-cache) storage.
+- Expressive, intuitive [database ORM](crates/rustasea-orm) backed by `sqlx`.
+- Database agnostic [schema migrations](crates/rustasea-orm/src/migration.rs).
+- [Robust background job processing](crates/rustasea-queue) on the `tokio` runtime.
+- [Real-time event broadcasting](crates/rustasea-broadcast) over WebSocket, SSE, Pusher, and Redis.
 
-## Vision
-
-RustaSea brings the developer experience that made Laravel the most loved PHP framework to Rust — without sacrificing what makes Rust great. Route definitions that read like prose, Eloquent-inspired query builders with compile-time safety, Artisan-like code generation via proc-macros, and a service container that leverages Rust's type system instead of fighting it.
+RustaSea is accessible, powerful, and provides tools required for large, robust applications.
 
 **Core thesis:** Laravel proves ergonomics and velocity win hearts; Rust proves safety and performance win production. RustaSea proves you can have both.
 
@@ -37,6 +44,42 @@ RustaSea is split across two repositories, mirroring the `laravel/framework` and
   application you build on top of the framework.
 
 ---
+
+## Learning RustaSea
+
+RustaSea is documented in this repository and the companion repositories:
+
+- [`docs/milestones.md`](docs/milestones.md) — authoritative, evidence-backed M0–M6 status.
+- [`docs/laravel-parity.md`](docs/laravel-parity.md) — the Laravel 13.x API adoption mapping.
+- [`docs/laravel-13-research.md`](docs/laravel-13-research.md) — the Laravel 13.0.0 research brief.
+- [`docs/adr/`](docs/adr) — architecture decision records.
+- [`.agents/documents/`](.agents/documents) — requirements, design, testing, and module blueprints.
+- [`rustasea/rustasea`](https://github.com/rustasea/rustasea) — the application skeleton template; the fastest way to start a project.
+
+New to the framework? Scaffold an application and read the generated `README.md`:
+
+```bash
+cargo install cargo-rustasea
+cargo rustasea new example-app --variant blade
+cd example-app && cargo run
+```
+
+---
+
+## Agentic Development
+
+RustaSea's predictable structure and conventions make it ideal for AI coding
+agents like Claude Code, Cursor, and GitHub Copilot. Every project exposes its
+knowledge surface over the Model Context Protocol:
+
+```bash
+cargo artisan mcp:serve   # requires the `ai-mcp` feature on the `rustasea` crate
+```
+
+The MCP server gives agents 15+ tools and resources — route tables, model
+introspection (`show:model`), documentation, configuration, and `make:plan`
+scaffold planning — so agents build RustaSea applications while following best
+practices. See [ADOPT-015](docs/milestones.md) for the parity notes.
 
 ## Why Rust × Laravel Ergonomics
 
@@ -689,18 +732,18 @@ gantt
 
 ## Contributing
 
+Thank you for considering contributing to the RustaSea framework! The contribution guide can be found in [`CONTRIBUTING.md`](CONTRIBUTING.md) — prerequisites, setup, the full development workflow, and coding standards. Release and program history is recorded in [`CHANGELOG.md`](CHANGELOG.md).
+
 > Early stage — M2 (ORM & Database) is complete; M0, M1, and M3–M6 are partial. See [`docs/milestones.md`](docs/milestones.md) for the authoritative, evidence-backed status. Contributions to research, RFCs, and prototype crates are welcome.
 
 1. **Read the research** — [`docs/laravel-13-research.md`](docs/laravel-13-research.md) and `TASK-002` Goravel study.
-2. **Pick a milestone** — check the [Issues](https://github.com/vheins/rustasea/issues) for `milestone:M0` … `milestone:M6` labels.
+2. **Pick a milestone** — check the [Issues](https://github.com/rustasea/framework/issues) for `milestone:M0` … `milestone:M6` labels.
 3. **Open an RFC** — for any cross-crate design decision, open a discussion/issue before coding.
 4. **Conventions** — `rustfmt` + `clippy -- -D warnings` must pass; generated code must be `rustfmt`-clean; workspace `Cargo.toml` is the source of truth for versions.
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for prerequisites, setup, the full development workflow, and coding standards. Release and program history is recorded in [`CHANGELOG.md`](CHANGELOG.md), and the vulnerability disclosure process is in [`SECURITY.md`](SECURITY.md).
-
 ```bash
 # local setup
-cargo xtask ci       # fmt + clippy + check-cycles
+cargo xtask ci       # fmt + clippy + deps:check + lines:check + check-cycles
 cargo test --workspace
 cargo deny check     # license + advisory + ban gate (install: cargo install cargo-deny)
 cargo xtask migrate  # run migrations
@@ -716,17 +759,24 @@ The lint configuration lives in [`clippy.toml`](clippy.toml) /
 advisory exceptions) lives in [`deny.toml`](deny.toml) and
 [`.cargo/audit.toml`](.cargo/audit.toml).
 
-The full xtask surface is `ci`, `fmt`, `clippy`, `check-cycles` (real workspace
-DAG cycle detection — `xtask/src/cycles.rs:32`), and `migrate`
+The full xtask surface is `ci`, `fmt`, `clippy`, `deps:check`, `lines:check`,
+`check-cycles` (real workspace DAG cycle detection — `xtask/src/cycles.rs:32`),
+`migrate`, and `docker:up` / `docker:down` / `docker:logs`
 (`xtask/src/main.rs:22-43`).
 
-Questions? Open a [Discussion](https://github.com/vheins/rustasea/discussions) or reach out via Issues.
+Questions? Open a [Discussion](https://github.com/rustasea/framework/discussions) or reach out via Issues.
 
----
+## Code of Conduct
+
+In order to ensure that the RustaSea community is welcoming to all, please review and abide by the [Code of Conduct](CONTRIBUTING.md#code-of-conduct).
+
+## Security Vulnerabilities
+
+If you discover a security vulnerability within RustaSea, please review the disclosure process in [`SECURITY.md`](SECURITY.md). All security vulnerabilities will be promptly addressed.
 
 ## License
 
-Licensed under the [MIT License](LICENSE-MIT).
+The RustaSea framework is open-sourced software licensed under the [MIT license](LICENSE-MIT).
 
 ---
 

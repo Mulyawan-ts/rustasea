@@ -16,6 +16,7 @@ const REQUIRED_CORE: &[&str] = &[
     ".gitignore",
     "LICENSE",
     "Cargo.toml",
+    "README.md",
     "rustasea.toml",
     "rustfmt.toml",
     ".github/workflows/ci.yml",
