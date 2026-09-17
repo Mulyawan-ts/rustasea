@@ -108,6 +108,52 @@ trait Shutdownable { async fn shutdown(&self, handle: ShutdownHandle) -> Result<
 | Security | `security-audit` — hidden enum leak |
 | Chaos | `non-functional-testing` — `Shutdownable` drain under `SIGTERM` |
 
+## 12. Command Surface
+
+Beyond `list` and the `make:*` generators, the CLI registers the inspection and
+operation commands below. Each usage string is the command's exact `usage()`
+line, verified against its parser in `crates/rustasea-cli/src/commands/`.
+
+| Command | Usage | Source | Description |
+|---------|-------|--------|-------------|
+| `show:model` | `show:model {name} [--json]` | `inspect.rs` | Source-level model introspection: attributes, casts, soft-delete and timestamp flags, and relations parsed from `app/models/{snake}.rs` (`GAP-029`). |
+| `module:list` | `module:list [--json]` | `modules.rs` | List discovered `modules/<name>/` crates with status, version, and path (`ADOPT-027`). |
+| `module:enable` | `module:enable {name}` | `modules.rs` | Mark an existing module enabled in the `[modules]` manifest table (`ADOPT-027`). |
+| `module:disable` | `module:disable {name}` | `modules.rs` | Mark an existing module disabled in the `[modules]` manifest table (`ADOPT-027`). |
+| `lang:check` | `lang:check [--locale=xx] [--path=resources/lang] [--json]` | `langcheck.rs` | Report missing, unused, and duplicate translation entries; missing and duplicate findings fail the command (`ADOPT-005`). |
+| `log:show` | `log:show [--level=error] [--channel=daily] [--since=2026-09-15T00:00:00Z] [--grep=text] [--limit=200] [--follow] [--json]` | `log_show.rs` | Filter, print, and optionally tail the configured log file (`ADOPT-014`). |
+| `tinker` | `tinker` | `tinker.rs` | Interactive REPL over a booted application; piped stdin scripts the session (`ADOPT-008`). |
+| `mcp:serve` | `mcp:serve` | `mcp_serve.rs` | Serve project knowledge (routes, docs, commands, redacted config) over MCP stdio; feature-gated behind the `mcp` cargo feature (`ADOPT-015`). |
+
+### 12.1 Flag Notes
+
+- `show:model` resolves the project root, parses `app/models/{snake}.rs`, and
+  renders a human summary or, with `--json`, the contract shape
+  `{ model, table, soft_delete, timestamps, attributes[], casts{}, relations[] }`.
+- `module:list --json` emits a name-sorted array of
+  `{ name, status, version, path }`; enable/disable reject a name that is not
+  present on disk before writing the manifest.
+- `lang:check` accepts both `--flag=value` and `--flag value`; `--locale`
+  defaults to the configured `app_locale`, `--path` to `resources/lang`. Unused
+  keys are informational and never fail the command.
+- `log:show` accepts both `--flag=value` and `--flag value`; `--level` is an
+  inclusive minimum severity, `--since` is an RFC 3339 lower bound, `--grep` is
+  a case-insensitive substring, `--limit` defaults to 200, and `--follow` polls
+  every 250 ms until `Ctrl-C`.
+- `tinker` and `mcp:serve` stream straight to the process stdio and leave the
+  `Io` buffer empty; `mcp:serve` is registered only when the `mcp` feature is
+  enabled.
+
+### 12.2 xtask Tasks
+
+The `cargo xtask` entrypoint (`xtask/src/main.rs`) dispatches the CI-facing
+tasks:
+
+| Task | Source | Description |
+|------|--------|-------------|
+| `cargo xtask deps:check` | `xtask/src/deps.rs` | Fail when a member manifest pins an inline version for a crate already managed by `[workspace.dependencies]` (`ADOPT-031`). |
+| `cargo xtask lines:check` | `xtask/src/lines.rs` | Fail when any `crates/**` or `xtask/src/**` Rust source exceeds the 500-line limit (ADR-0009); wired into `cargo xtask ci` (`GAP-031`). |
+
 ---
 
 > **Archive note (rebrand 2026-09-09):** project renamed from Rustavel to **RustaSea**.
