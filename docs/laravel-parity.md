@@ -1,6 +1,6 @@
 # RustaSea × Laravel 13.x — API-Surface Parity Map
 
-> **Last updated:** 2026-09-12
+> **Last updated:** 2026-09-17
 > **Scope:** Maps the Laravel 13.x **API surface** (namespaces, contracts/interfaces, traits, notable classes) to RustaSea crates/modules, with an adoption status per row.
 > **Companion docs:** [`docs/laravel-13-research.md`](laravel-13-research.md) (feature-level research) · [`docs/milestones.md`](milestones.md) (M0–M6 implementation status).
 
@@ -60,7 +60,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Database\Migrations` | `rustasea-orm` (`Migration`, `Migrator`, `MigrationRecord`) | **Adopted** | Runner executes against the live pool — `run`/`rollback`/`fresh`/`seed` (`crates/rustasea-orm/src/migration.rs:190`). |
 | `Illuminate\Database\Query` | `rustasea-orm` (`QueryBuilder`, `Value`, `JsonFilter`) | **Adopted** | Fluent builder + async execution real (`crates/rustasea-orm/src/builder/exec.rs:105`). |
 | `Illuminate\Events` | `rustasea-events` (`Dispatcher`, `Event`, `Listener`) | **Partial** | Inline dispatch real; queue-backed listeners unwired. |
-| `Illuminate\Routing` | `rustasea-router` (`Router`, `RouteEntry`, `ControllerRef`) | **Partial** | DSL + controller dispatch real; `route:list` introspection empty. |
+| `Illuminate\Routing` | `rustasea-router` (`Router`, `RouteEntry`, `ControllerRef`) | **Partial** | DSL + controller dispatch real; `route:list` introspection live (6-column table published at boot via `RouteSource`: `crates/rustasea-cli/src/routes.rs:19`, `:33`; `crates/rustasea-app/src/bootstrap/app.rs:57`; `crates/rustasea-cli/src/commands/inspect.rs:44`). |
 | `Illuminate\Http` | `rustasea-http` (`AppState`, `JsonResponse`, `HttpError`) | **Partial** | Request/response + CORS real; idle timeout declared, not enforced. |
 | `Illuminate\Http\Client` | `rustasea-http` (`HttpClient`) | **Adopted** | reqwest wrapper with `throw` / `try_throw` semantics. |
 | `Illuminate\Http\Resources\JsonApi` | `rustasea-jsonapi` (`JsonApiResource`, `Document`, `ResourceBuilder`) | **Adopted** | Sparse fieldsets, links, JSON:API content type real. |
@@ -69,11 +69,11 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Bus` | `rustasea-queue` (`BatchHandle`, `BatchId`) | **Partial** | Batch handles exist; no durable batch repository. |
 | `lorisleiva/laravel-actions` | `rustasea-action` (`Action`, `ActionController`, `ActionJob`, `ActionCommand`, `ActionListener`) | **Partial** | One action unit invoked from HTTP/queue/CLI/events with validate/authorize hooks; `make:action` generator; scaffold auth actions demonstrate the pattern (ADOPT-028). |
 | `Laravel\Horizon` | `rustasea-queue-dashboard` (`DashboardConfig`, `sampler`, `QueueMetricsHistory`) | **Partial** | Queue dashboard (`/queue`): live depth/age, `queue_metrics` history + retention, failed-job retry/forget, worker heartbeats; feature `queue-dashboard` (ADOPT-021). No supervisor/balancing/auto-scaling yet. |
-| `Illuminate\Auth` | `rustasea-auth` (`AuthManager`, `Guard`, `JwtGuard`, `SessionGuard`) | **Partial** | JWT/CSRF/throttle real; session guard placeholder. |
-| `Illuminate\Auth\Access` | `rustasea-macros` (`#[authorize]` metadata) | **Planned** | No runtime Gate/Policy evaluation (GAP-003). |
+| `Illuminate\Auth` | `rustasea-auth` (`AuthManager`, `Guard`, `JwtGuard`, `SessionGuard`) | **Partial** | JWT/CSRF/throttle real; session guard real over `tower-sessions` (`crates/rustasea-auth/src/session.rs:99`); default store is in-memory. |
+| `Illuminate\Auth\Access` | `rustasea-router` (`AuthorizeRegistry`, `AuthorizeResource`, `#[authorize]` metadata) | **Adopted** | `#[authorize]` metadata is resolved and enforced at dispatch: `Router::authorize_meta` consumes the macro-emitted tuple (`crates/rustasea-router/src/authorize.rs:216`), and `apply_authorize` wraps the route in a fail-closed authorization layer (`crates/rustasea-router/src/dispatch.rs:135`). |
 | `Illuminate\Validation` | `rustasea-validation` (`Validatable`, `Rules`, `ErrorBag`, `FormRequest`) | **Partial** | Rules + ErrorBag + form requests real; DB presence verifier absent. |
 | `Illuminate\Hashing` | `rustasea-auth` (`PasswordVerifier`, `Argon2Verifier`) | **Partial** | Argon2 verifier real; no hasher manager / rehash policy. |
-| `Illuminate\Session` | `rustasea-auth` (`SessionGuard`, `SessionPolicy`) | **Partial** | `tower-sessions` declared but session store not wired (GAP-007). |
+| `Illuminate\Session` | `rustasea-auth` (`SessionGuard`, `SessionPolicy`) | **Partial** | `tower-sessions`-backed session guard real (`crates/rustasea-auth/src/session.rs:99`); default store is in-memory, inject a shared store via `with_store` (`:187`). |
 | `Illuminate\Cookie` | `rustasea-http` (CORS + `SecurityConfig`) | **Partial** | No queued-cookie jar / cookie encryption layer yet. |
 | `Illuminate\Filesystem` | `rustasea-storage` (`Storage`, `StorageManager`, `LocalDisk`, `ObjectDisk`, `ReadThrough`) | **Adopted** | `object_store`-backed disks + read-through with path confinement. |
 | `Maatwebsite\Excel` | `rustasea-excel` (`Excel`, `ImportBuilder`, `ExportBuilder`, `ExportJob`) | **Partial** | Streaming CSV/xlsx import with row-level validation reports; chunked export to storage; queued `ExportJob` + signed download URLs (ADOPT-023). Formula/style/format parity absent. |
@@ -150,7 +150,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Contracts\Routing\UrlRoutable` | `rustasea-router::{ModelBinder, BindingRegistry}` | **Partial** | Implicit model binding for `{post:slug}` selector routes via registered binders (`crates/rustasea-router/src/binding.rs`); no named-route URL generation. |
 | `Illuminate\Routing\Contracts\ControllerDispatcher` | `rustasea-router::dispatch` | **Adopted** | Real controller dispatch landed in GAP-002. |
 | `Illuminate\Routing\Contracts\CallableDispatcher` | `rustasea-router::Handler` | **Partial** | Handler trait real; closure/callable dispatch breadth narrower. |
-| `Illuminate\Routing\Controllers\HasMiddleware` | `rustasea-macros::#[middleware]` | **Partial** | Attribute metadata emitted; runtime consumer pending (GAP-003). |
+| `Illuminate\Routing\Controllers\HasMiddleware` | `rustasea-router::MiddlewareRegistry` + `rustasea-macros::#[middleware]` | **Adopted** | `#[middleware]` emits a doc-hidden spec list consumed by `Router::middleware_meta` (`crates/rustasea-router/src/metadata.rs:237`) and enforced by `apply_middleware` at dispatch (`crates/rustasea-router/src/dispatch.rs:109`). |
 | `Illuminate\Contracts\Http\Kernel` | `rustasea-http::AppState` | **Partial** | Middleware stack assembled via axum/tower; no single Kernel contract. |
 | `Illuminate\Http\Client\Factory` | `rustasea-http::HttpClient` | **Partial** | Client real; no fake/record-replay factory. |
 | `Illuminate\Http\Resources\JsonApi\Concerns\ResolvesJsonApiElements` | `rustasea-jsonapi::ResourceBuilder` | **Adopted** | Element resolution + document shaping implemented. |
@@ -177,12 +177,12 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | Laravel interface/trait | RustaSea equivalent | Status | Rationale |
 |---|---|---|---|
 | `Illuminate\Contracts\Auth\Guard` | `rustasea-auth::Guard` | **Adopted** | Guard trait + JWT implementation real. |
-| `Illuminate\Contracts\Auth\StatefulGuard` | `rustasea-auth::SessionGuard` | **Partial** | Session guard is a placeholder (GAP-007). |
+| `Illuminate\Contracts\Auth\StatefulGuard` | `rustasea-auth::SessionGuard` | **Partial** | `tower-sessions`-backed session guard real (`crates/rustasea-auth/src/session.rs:99`); default store is in-memory. |
 | `Illuminate\Contracts\Auth\Authenticatable` | `rustasea-auth::AuthUser` | **Adopted** | User identity type implemented. |
 | `Illuminate\Contracts\Auth\UserProvider` | `rustasea-auth::UserLookup` | **Partial** | Lookup trait real; DB/Eloquent providers thinner. |
 | `Illuminate\Contracts\Auth\Factory` | `rustasea-auth::AuthManager` | **Adopted** | Named guard registration + `Auth::extend` real. |
-| `Illuminate\Contracts\Auth\Access\Gate` | — | **Planned** | No policy/gate evaluator (GAP-003). |
-| `Illuminate\Contracts\Auth\Access\Authorizable` | `rustasea-macros::#[authorize]` | **Planned** | Attribute metadata only; no runtime enforcement. |
+| `Illuminate\Contracts\Auth\Access\Gate` | `rustasea-router::AuthorizeRegistry` | **Partial** | Record-level authorization enforced at dispatch: `#[authorize]` metadata resolves through `Router::authorize_meta` (`crates/rustasea-router/src/authorize.rs:216`) and `apply_authorize` fails closed on an unregistered resource (`crates/rustasea-router/src/dispatch.rs:135`). No general-purpose ability/`Gate::allows` surface yet. |
+| `Illuminate\Contracts\Auth\Access\Authorizable` | `rustasea-router::{AuthorizeRegistry, AuthorizeResource}` | **Partial** | `#[authorize]` metadata is enforced at runtime (`crates/rustasea-router/src/authorize.rs:216`, `dispatch.rs:135`); no `Authorizable` trait on models yet. |
 | `Illuminate\Contracts\Auth\CanResetPassword` | — | **Planned** | No password-reset broker. |
 | `Illuminate\Contracts\Auth\MustVerifyEmail` | `rustasea-auth::EmailVerification` | **Partial** | Verification trait + memory impl real; mail transport absent. |
 | `Illuminate\Contracts\Auth\PasswordBroker` | — | **Planned** | No token broker. |
@@ -254,9 +254,9 @@ The dominant pattern: **RustaSea already has the shape of most Laravel surfaces 
 | Order | Milestone | Gap to close | Target Laravel surface |
 |---|---|---|---|
 | 1 | **M0** Bootstrap & Core | Contextual bindings + provider DAG + auto-construction; populate provider/command registries | `Contracts\Container\ContextualBindingBuilder`, `SelfBuilding`, `Contracts\Foundation\Application` |
-| 2 | **M1** Routing & HTTP | Wire `route:list` to the live router; enforce idle timeout; add URL generation + implicit binding | `Contracts\Routing\Registrar`, `UrlGenerator`, `UrlRoutable`, `Contracts\Http\Kernel` |
-| 3 | **M2** ORM & Database | Attribute casts; ORM introspection wiring (`route:list` / `show:model`) | `CastsAttributes`, `Castable` |
-| 4 | **M3** Auth, Middleware & Validation | Runtime `#[authorize]`/Gate; store-backed session guard; password broker/reset | `Contracts\Auth\Access\Gate`, `Authorizable`, `StatefulGuard`, `PasswordBroker` |
+| 2 | **M1** Routing & HTTP | Enforce idle timeout; add URL generation + implicit binding (`route:list` introspection is live) | `Contracts\Routing\Registrar`, `UrlGenerator`, `UrlRoutable`, `Contracts\Http\Kernel` |
+| 3 | **M2** ORM & Database | Attribute casts; `show:model` ORM introspection wiring | `CastsAttributes`, `Castable` |
+| 4 | **M3** Auth, Middleware & Validation | General-purpose `Gate`; store-backed session guard; password broker/reset (runtime `#[authorize]` enforcement landed) | `Contracts\Auth\Access\Gate`, `Authorizable`, `StatefulGuard`, `PasswordBroker` |
 | 5 | **M4** Queue, Cache, Scheduling & Events | Cache/queue factory depth; `ShouldBeUnique`; lock owner/force-release surface | `Contracts\Queue\Factory`, `ShouldBeUnique`, `Contracts\Cache\Lock` |
 | 6 | **M5** DX, CLI & Testing | `make:middleware`/`make:request`, `artisan new`, real cycle detection; DB refresh test traits | `Contracts\Console\Kernel`, `Foundation\Testing\RefreshDatabase`, `WithFaker` |
 | 7 | **M6** Advanced | Real AI adapters; pgvector index; template engine; encryption/translation/mail surfaces | `rustasea-ai` adapters; `Illuminate\Encryption`, `Translation`, `View`, `Mail` analogues |

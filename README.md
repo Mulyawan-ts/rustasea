@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Status](https://img.shields.io/badge/status-alpha-yellow.svg)](#roadmap)
 
-> **Last updated:** 2026-09-13
+> **Last updated:** 2026-09-17
 
 ---
 
@@ -126,7 +126,7 @@ Milestones are **dependency-ordered**: each builds only on predecessors. No circ
 | **Success Criteria** | Define `Route::get("/users", [UserController, "index"])` equivalent in Rust, hit it with `cargo test` HTTP assertions, see it in `route:list` with middleware and binding fields. Domain catch-all routes do not shadow non-domain routes. |
 | **Laravel 13 features** | #18 HTTP Client & Process, #19 domain-route priority, #20 `route:list` binding fields. |
 
-> **Status (2026-09-12):** Partial. The router DSL and controller dispatch are real, but `route:list` still prints an empty table (`crates/rustasea-cli/src/commands/inspect.rs:33`) and the HTTP idle timeout is declared but unenforced (`crates/rustasea-http/src/lib.rs:241`, `:364`).
+> **Status (2026-09-17):** Partial. The router DSL and controller dispatch are real, and `route:list` renders the live 6-column route table (Method, URI, Name, Action, Middleware, Binding) published by the application at boot through the process-wide `RouteSource` closure (`crates/rustasea-cli/src/routes.rs:19`, `:33`; `crates/rustasea-app/src/bootstrap/app.rs:57`; read back at `crates/rustasea-cli/src/commands/inspect.rs:44`). The HTTP idle timeout is still declared but unenforced (`crates/rustasea-http/src/lib.rs:241`, `:364`).
 
 ### M2 — ORM & Database
 
@@ -148,7 +148,7 @@ Milestones are **dependency-ordered**: each builds only on predecessors. No circ
 | **Success Criteria** | Guard mismatch returns typed `Error::GuardMismatch`; CSRF rejects cross-site `POST` without valid `Sec-Fetch-Site`; `#[validate]` rejects strict-mismatch payloads; session cookie uses JSON serialization and hyphenated cache prefix. |
 | **Laravel 13 features** | #11 origin-aware CSRF, #12 cache/session hardening, #19 strict validation + `ErrorBag`. |
 
-> **Status (2026-09-12):** Partial. JWT, CSRF, throttle, validation, and the `tower-sessions`-backed `SessionGuard` are real (`crates/rustasea-auth/src/session.rs:160`, login/parse/refresh/logout at `:279`–`:375`), but the declarative attributes (`#[middleware]`, `#[authorize]`, `#[tries]`, `#[backoff]`, `#[timeout]`) still emit metadata consts that nothing consumes at runtime (`crates/rustasea-macros/src/lib.rs:74`, `:111`, `:247`–`:265`). See [`docs/milestones.md`](docs/milestones.md) for the `GAP-003` reconciliation note.
+> **Status (2026-09-17):** Partial. JWT, CSRF, throttle, validation, and the `tower-sessions`-backed `SessionGuard` are real (`crates/rustasea-auth/src/session.rs:99`, login/parse/refresh/logout at `:296`–`:408`), and the declarative attributes are now consumed at runtime: `#[middleware]` resolves through `MiddlewareRegistry` (`crates/rustasea-router/src/metadata.rs:237`, applied in `dispatch.rs:109`) and `#[authorize]` resolves through `AuthorizeRegistry` (`crates/rustasea-router/src/authorize.rs:216`, applied in `dispatch.rs:135`), while the job-policy attributes `#[tries]`/`#[backoff]`/`#[timeout]` bind through `JobPolicy` (`crates/rustasea-queue/src/policy.rs:21`, `crates/rustasea-queue/src/driver/worker.rs:66`). See [`docs/milestones.md`](docs/milestones.md) for the `GAP-003` reconciliation note.
 
 ### M4 — Queue, Cache, Scheduling & Events
 
@@ -167,7 +167,7 @@ Milestones are **dependency-ordered**: each builds only on predecessors. No circ
 | Field | Detail |
 |---|---|
 | **Goal** | First-class developer experience: CLI, code generation, and a testing story that feels like Laravel. |
-| **Scope** | `cargo artisan` CLI (via `clap` + `cargo xtask`): `list`, `make:*` (controller, middleware, request, model, provider, command, job, event, listener, observer, test, seeder, migration, agent, tool — 15 kinds), typed command args/flags, `ask`/`secret`/`confirm`/`choice`/`multiSelect` prompts, `table`/`progressBar`/`spinner`, graceful shutdown (`Shutdownable`), programmatic `Artisan::call()`. Declarative attributes: `#[middleware]`, `#[authorize]`, `#[tries]`, `#[backoff]`, `#[timeout]`, `#[usage]`/`#[help]`/`#[hidden]` for commands (metadata only — see M3 status). Testing: `cargo test` integration, `TestCase` harness, `testcontainers`-backed isolated Postgres fixture (`PostgresTestDb`, `crates/rustasea-testing/src/fixtures.rs:49`), `Factory::create`, `Str` factory resets between tests, paginator views. |
+| **Scope** | `cargo artisan` CLI (via `clap` + `cargo xtask`): `list`, `make:*` (controller, middleware, request, model, provider, command, job, event, listener, observer, test, seeder, migration, agent, tool — 15 kinds), typed command args/flags, `ask`/`secret`/`confirm`/`choice`/`multiSelect` prompts, `table`/`progressBar`/`spinner`, graceful shutdown (`Shutdownable`), programmatic `Artisan::call()`. Declarative attributes: `#[middleware]`, `#[authorize]`, `#[tries]`, `#[backoff]`, `#[timeout]`, `#[usage]`/`#[help]`/`#[hidden]` for commands (`#[middleware]`/`#[authorize]` are consumed at runtime through the router registries and `#[tries]`/`#[backoff]`/`#[timeout]` bind through `JobPolicy`; see M3 status). Testing: `cargo test` integration, `TestCase` harness, `testcontainers`-backed isolated Postgres fixture (`PostgresTestDb`, `crates/rustasea-testing/src/fixtures.rs:49`), `Factory::create`, `Str` factory resets between tests, paginator views. |
 | **Deliverables** | `rustasea-cli` + `rustasea-macros` + `rustasea-testing` crates, `bootstrap/commands.rs` (populated — `:12`), `crates/rustasea/tests/feature/` integration suite, `cargo artisan make:test` generator, `#[test]` helpers. |
 | **Success Criteria** | `cargo artisan make:controller UserController` scaffolds a controller (route registration stays manual — see status note); all generated `make:*` commands produce `rustfmt`-clean code that compiles; `cargo test` spins up an isolated Postgres via `testcontainers` and tears it down. |
 | **Laravel 13 features** | #7 expanded attributes (all `#[Tries]`/`#[Backoff]`/`#[Timeout]`/`#[WithoutBroadcasting]` etc.), #20 `ModelInspector`/`route:list`/`Str` factory resets. |

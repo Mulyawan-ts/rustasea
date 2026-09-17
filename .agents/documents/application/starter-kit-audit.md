@@ -73,7 +73,7 @@ re-verified from this tree. Legend: **COVERED** / **PARTIAL** / **MISSING**.
 | `tests/{Feature,Unit}` | `tests/feature`, `tests/unit` | **PARTIAL** | `tests/feature/` present (`.gitkeep`); `tests/unit/` absent |
 | Auth (session + CSRF) | `rustasea-auth` JWT real, session guard placeholder | **PARTIAL** | `crates/rustasea-auth/src/session.rs:117,147`; `docs/milestones.md:43,172` |
 | Artisan CLI (`make:*`) | `cargo rustasea list` + 13 `make:*` generators | **COVERED** | `crates/rustasea-cli/src/generators/mod.rs:19`; `docs/milestones.md:239` |
-| `route:list` introspection | `route:list` CLI | **PARTIAL** | empty table — `crates/rustasea-cli/src/commands/inspect.rs:33` (`docs/milestones.md:103`) |
+| `route:list` introspection | `route:list` CLI | **COVERED** | live 6-column table published at boot via `RouteSource`: `crates/rustasea-cli/src/routes.rs:19,33`; `crates/rustasea-app/src/bootstrap/app.rs:57`; `crates/rustasea-cli/src/commands/inspect.rs:44` (`docs/milestones.md:103`) |
 | `laravel new` / `composer create-project` | `cargo rustasea new <app>` | **MISSING** | `docs/milestones.md:74,247`; design `docs/adr/ADR-0002-...:24` |
 
 ### 3.2 Presentation variants

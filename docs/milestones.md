@@ -1,6 +1,6 @@
 # RustaSea Milestone Status
 
-> **Last updated:** 2026-09-12
+> **Last updated:** 2026-09-17
 > **Scope:** Authoritative done / partial / missing status for milestones **M0–M6**, plus the **gap-closure program** progress (P0–P5).
 
 ## Purpose
@@ -27,8 +27,8 @@ section records the reason.
 ## Sources
 
 - Current source tree at the repository root (workspace `Cargo.toml:2` — `members = ["crates/*", "xtask"]`), read directly to verify every claim below.
-- P0 gap-closure work: `GAP-001` (sqlx pool, async execution, transactions) and `GAP-002` (router → controller dispatch).
-- Gap-closure program completions: `GAP-004` (Redis cache store), `GAP-005`–`GAP-006` (queue drivers, worker, failed jobs), `GAP-007` (session guard), `GAP-008`–`GAP-009` (async listeners, metrics), `GAP-010`–`GAP-013` (migrations, CRUD, pgvector, eager loading), `GAP-014`–`GAP-015` (AI HTTP providers, AI queueing + MCP), `GAP-016`–`GAP-018` (CLI generators, testcontainers, xtask), `GAP-019`–`GAP-020` (config/DAG/bootstrap, templating + mail + storage facade), `GAP-021` (this documentation sync).
+- P0 gap-closure work: `GAP-001` (sqlx pool, async execution, transactions), `GAP-002` (router → controller dispatch), and `GAP-003` (runtime consumer for the declarative attributes).
+- Gap-closure program completions: `GAP-004` (Redis cache store), `GAP-005`–`GAP-006` (queue drivers, worker, failed jobs), `GAP-007` (session guard), `GAP-008`–`GAP-009` (async listeners, metrics), `GAP-010`–`GAP-013` (migrations, CRUD, pgvector, eager loading), `GAP-014`–`GAP-015` (AI HTTP providers, AI queueing + MCP), `GAP-016`–`GAP-018` (CLI generators, testcontainers, xtask), `GAP-019`–`GAP-020` (config/DAG/bootstrap, templating + mail + storage facade), `GAP-021` (documentation sync), `GAP-022` (crate inventory), `GAP-023` (this route:list + attribute-consumption reconciliation).
 - Commit-reference policy: [`docs/documentation-conventions.md`](documentation-conventions.md) — milestones, task IDs, and `path:line` only; no raw commit SHAs.
 - Task registry: `DOC-001`, `DOC-002`, `DOC-ROOT`, `GAP-ROOT`, `GAP-P0`…`GAP-P5`.
 - Prior research: [`docs/laravel-13-research.md`](laravel-13-research.md).
@@ -41,10 +41,10 @@ section records the reason.
 | Milestone | Goal | Status | Headline evidence |
 |---|---|---|---|
 | **M0** | Bootstrap & Core | **Partial** | Container, provider DAG, and config auto-discovery real (`crates/rustasea-foundation/src/lib.rs:275`, `:296`; `crates/rustasea-config/src/lib.rs:89`); bootstrap registries populated (`bootstrap/providers.rs:35`, `bootstrap/commands.rs:12`) but `AppServiceProvider` stays a no-op (`bootstrap/providers.rs:17`) and the config loader is not mounted in app boot |
-| **M1** | Routing & HTTP | **Partial** | Router DSL + controller dispatch real (`crates/rustasea-router/src/dispatch.rs:23`, `:62`); `route:list` prints an empty table (`crates/rustasea-cli/src/commands/inspect.rs:33`) and the idle timeout is declared but unenforced (`crates/rustasea-http/src/lib.rs:364`) |
+| **M1** | Routing & HTTP | **Partial** | Router DSL + controller dispatch real (`crates/rustasea-router/src/dispatch.rs:23`, `:62`); `route:list` renders the live 6-column table published at boot via `RouteSource` (`crates/rustasea-cli/src/routes.rs:19`, `:33`; `crates/rustasea-app/src/bootstrap/app.rs:57`; `crates/rustasea-cli/src/commands/inspect.rs:44`); `show:model` still emits placeholder output (`crates/rustasea-cli/src/commands/inspect.rs:123`) and the idle timeout is declared but unenforced (`crates/rustasea-http/src/lib.rs:364`) |
 | **M2** | ORM & Database | **Done** | Real sqlx pool + async execution (`crates/rustasea-orm/src/db.rs:24`, `db/exec.rs:72`); model CRUD (`model_ops.rs:28`), transactions (`tx.rs:67`), custom `Migrator` (`migration.rs:131`, `:189`), eager loading (`eager.rs:59`), pgvector (`vector.rs:100`); `raw`/`raw_sql` remain display-only fragments (`execution.rs:239`, `:247`) |
-| **M3** | Auth, Middleware & Validation | **Partial** | JWT/CSRF/throttle/validation real; session guard now real via `tower-sessions` (`crates/rustasea-auth/src/session.rs:160`, login `:279`, parse `:326`, refresh `:347`, logout `:375`); declarative attributes still emit metadata only (`crates/rustasea-macros/src/lib.rs:74`, `:111`) with no runtime consumer in the tree (see P0 note) |
-| **M4** | Queue, Cache, Scheduling & Events | **Partial** | Database/Redis queue drivers + worker + persistent failed jobs real (`crates/rustasea-queue/src/driver/database.rs:36`, `driver/worker.rs:75`); `queue:work`/`queue:failed`/`queue:retry` CLI real (`crates/rustasea-cli/src/commands/queue.rs:18`, `ops.rs:21`, `:72`); Redis cache store real behind the `redis` feature (`crates/rustasea-cache/src/redis.rs:155`); async listeners enqueue (`crates/rustasea-events/src/dispatcher.rs:82`); remaining: `SyncDriver` in-memory failed jobs (`crates/rustasea-queue/src/driver.rs:171`) and unconsumed declarative job metadata |
+| **M3** | Auth, Middleware & Validation | **Partial** | JWT/CSRF/throttle/validation real; session guard now real via `tower-sessions` (`crates/rustasea-auth/src/session.rs:99`, `impl Guard` `:291`, login `:296`, parse `:352`, refresh `:380`, logout `:408`); declarative attributes are consumed at runtime through `MiddlewareRegistry` (`crates/rustasea-router/src/metadata.rs:237`, `dispatch.rs:109`) and `AuthorizeRegistry` (`crates/rustasea-router/src/authorize.rs:216`, `dispatch.rs:135`); remaining: in-memory default session store and fail-closed static user lookup (see section) |
+| **M4** | Queue, Cache, Scheduling & Events | **Partial** | Database/Redis queue drivers + worker + persistent failed jobs real (`crates/rustasea-queue/src/driver/database.rs:36`, `driver/worker.rs:75`); `queue:work`/`queue:failed`/`queue:retry` CLI real (`crates/rustasea-cli/src/commands/queue.rs:18`, `ops.rs:21`, `:72`); Redis cache store real behind the `redis` feature (`crates/rustasea-cache/src/redis.rs:155`); async listeners enqueue (`crates/rustasea-events/src/dispatcher.rs:82`); declarative job attributes bind through `JobPolicy` at registration (`crates/rustasea-queue/src/policy.rs:21`, `driver/worker.rs:66`); remaining: `SyncDriver` in-memory failed jobs (`crates/rustasea-queue/src/driver.rs:171`) |
 | **M5** | DX, CLI & Testing | **Partial** | CLI + 16 `make:*` generators real (`crates/rustasea-cli/src/commands/mod.rs:17-31`); `cargo rustasea new --variant` real (`crates/cargo-rustasea/src/main.rs:46`); real `xtask` cycle detection (`xtask/src/cycles.rs:32`) and `xtask migrate` (`xtask/src/main.rs:37`); testcontainers-backed `PostgresTestDb` (`crates/rustasea-testing/src/fixtures.rs:49`) with a Docker-gated suite (`crates/rustasea/tests/feature/`); remaining: integration tests are opt-in and generated controllers still need manual route registration (`crates/rustasea-cli/src/generators/kinds/controller.rs:32`) |
 | **M6** | Advanced (Broadcast, Search, FS, AI) | **Partial** | Broadcast WS/SSE, `object_store` storage + `config/storage.toml` facade, JSON:API, `rustasea-mail`, `rustasea-view`/`rustasea-inertia`/`rustasea-livewire`/`rustasea-scaffold`, real AI HTTP providers (`crates/rustasea-ai/src/providers/mod.rs:27`), AI queueing (`crates/rustasea-ai/src/queue.rs:41`), MCP client (`crates/rustasea-ai/src/mcp/client.rs:40`), and feature-gated pgvector (`crates/rustasea-search/src/pgvector.rs:24`) all real; remaining: Gemini/Bedrock unsupported (`crates/rustasea-ai/src/providers/client.rs:223`), deterministic stub embeddings (`crates/rustasea-search/src/embeddings.rs:97`), and `InProcessProvider` kept for tests (`crates/rustasea-ai/src/adapters.rs:50`) |
 
@@ -91,32 +91,31 @@ is not mounted in the application boot path.
 **Goal recap:** Expressive HTTP layer with routing, middleware, request/response
 ergonomics, and an HTTP client.
 
-**Status: Partial** — the router DSL and real controller dispatch landed in
-GAP-002, and the HTTP client `throw` semantics are implemented, but
-CLI introspection (`route:list`, `show:model`) and idle-timeout enforcement are
-not wired.
+**Status: Partial**: the router DSL, real controller dispatch (GAP-002), and the
+HTTP client `throw` semantics are implemented, and `route:list` now renders the
+live application route table. Remaining: the `show:model` inspector is still a
+placeholder and idle-timeout enforcement is not wired.
 
 **Done**
 - Router DSL: `get`/`post`/`put`/`delete`/`patch`/`options`/`any`, `group`, prefix/name/domain/resource — `crates/rustasea-router/src/router.rs:46` (`prefix`), `:61` (`domain`), `:73` (`get`), `:288` (`group`), `:317` (`resource`).
 - Controller dispatch to real handlers (`GAP-002`) — `crates/rustasea-router/src/dispatch.rs:23` (`into_axum_router`), `:62` (`resolve`).
 - `#[route]` metadata consumed at registration — `crates/rustasea-router/src/router.rs:218` (`route_meta`); route table introspection surface — `:358` (`get_routes`).
+- `route:list` renders the live 6-column table (Method, URI, Name, Action, Middleware, Binding). The application publishes a `RouteSource` closure at boot (`crates/rustasea-app/src/bootstrap/app.rs:57`), stored process-wide (`crates/rustasea-cli/src/routes.rs:19` `RouteSource`, `:33` `set_route_source`, `:52` `routes`) and read back by the command (`crates/rustasea-cli/src/commands/inspect.rs:44`, rendered at `:49-67`). Covered by `crates/rustasea-cli/src/commands/inspect.rs:182-274` and `crates/rustasea-app/src/bootstrap/app.rs:347-356`.
 - HTTP client `throw` / `try_throw` callbacks and typed `HttpError` — `crates/rustasea-http/src/lib.rs:286`, `:298`, `:207`.
 - Runnable app serves real handlers from `routes/web.rs` (welcome page rendered through `rustasea::view::MinijinjaEngine`).
 
 **Partial (reason)**
-- `route:list` renders an **empty** table with a "until the router is wired" comment — `crates/rustasea-cli/src/commands/inspect.rs:33`.
-- `show:model` emits placeholder output — `crates/rustasea-cli/src/commands/inspect.rs:67`.
+- `show:model` emits placeholder output: `crates/rustasea-cli/src/commands/inspect.rs:123`, `:139`.
 - HTTP idle (inter-byte) timeout is declared but not enforced — `crates/rustasea-http/src/lib.rs:241`, `:364-366`.
 
 **Missing**
-- Real route-table introspection feeding `route:list` with middleware + binding fields.
+- A real `show:model` inspector backed by `Model` metadata.
 
-**Evidence:** `crates/rustasea-router/src/router.rs:46-358`; `crates/rustasea-router/src/dispatch.rs:23-83`; `crates/rustasea-http/src/lib.rs:241-379`; `crates/rustasea-cli/src/commands/inspect.rs:33`, `:67`; task `GAP-002` (completed).
+**Evidence:** `crates/rustasea-router/src/router.rs:46-358`; `crates/rustasea-router/src/dispatch.rs:23-83`; `crates/rustasea-http/src/lib.rs:241-379`; `crates/rustasea-cli/src/routes.rs:19-57`; `crates/rustasea-cli/src/commands/inspect.rs:44-67`; `crates/rustasea-app/src/bootstrap/app.rs:57`; task `GAP-002` (completed).
 
 **Next actions**
-- Wire `route:list` to the live router registry (`inspect.rs`).
-- Implement the `show:model` inspector.
-- Enforce `TimeoutKind::Idle` in the HTTP client.
+- Implement the `show:model` inspector (`GAP-029`).
+- Enforce `TimeoutKind::Idle` in the HTTP client (`GAP-030`).
 
 ---
 
@@ -152,7 +151,7 @@ Tracked by `GAP-001`, `GAP-010`–`GAP-013`.
 **Evidence:** `crates/rustasea-orm/src/db.rs:24-130`; `crates/rustasea-orm/src/db/exec.rs:72-138`; `crates/rustasea-orm/src/model_ops.rs:28-143`; `crates/rustasea-orm/src/tx.rs:67-192`; `crates/rustasea-orm/src/migration.rs:131-296`; `crates/rustasea-orm/src/eager.rs:18-59`; `crates/rustasea-orm/src/vector.rs:100-152`; tasks `GAP-001`, `GAP-010`–`GAP-013`.
 
 **Next actions**
-- Wire `route:list` / `show:model` ORM introspection (M1).
+- Wire `show:model` ORM introspection (M1, `GAP-029`).
 - Extend pgvector index management surfaces (M6).
 
 ---
@@ -162,10 +161,11 @@ Tracked by `GAP-001`, `GAP-010`–`GAP-013`.
 **Goal recap:** Complete auth, authorization, and validation with hardened
 security defaults.
 
-**Status: Partial** — JWT, CSRF, throttling, and validation are real, and the
-session guard is now a working `tower-sessions`-backed guard (GAP-007);
-declarative attributes still emit metadata consts with no runtime consumer in
-the tree.
+**Status: Partial**: JWT, CSRF, throttling, and validation are real, the
+session guard is a working `tower-sessions`-backed guard (GAP-007), and the
+declarative attributes are consumed at runtime through the router registries.
+Remaining: the default session store is in-memory and the default user lookup is
+the fail-closed static lookup.
 
 **Done**
 - JWT guard — `crates/rustasea-auth/src/jwt.rs`.
@@ -173,21 +173,21 @@ the tree.
 - Rate limiter / throttle — `crates/rustasea-auth/src/throttle/`.
 - Validation crate (rules, ErrorBag, form requests) — `crates/rustasea-validation/`.
 - Guard manager with typed `GuardMismatch` errors — `crates/rustasea-auth/src/guard.rs:197`, `:302`.
-- Real session guard over `tower-sessions` (`GAP-007`) — `crates/rustasea-auth/src/session.rs:160` (`SessionGuard<S: SessionStore = MemoryStore>`), `:274` (`impl Guard`), `:279` (`login`, fresh session id on login), `:307` (`login_using_id`, opt-in via `:211`), `:326` (`parse`), `:347` (`refresh`, id cycling), `:375` (`logout`, flushes the store), `:394` (`user`), `:409` (`id`); dependency `crates/rustasea-auth/Cargo.toml:20`.
+- Real session guard over `tower-sessions` (`GAP-007`): `crates/rustasea-auth/src/session.rs:99` (`SessionGuard<S: SessionStore = MemoryStore>`), `:291` (`impl Guard`), `:296` (`login`, fresh session id on login), `:331` (`login_using_id`, opt-in via `:194`), `:352` (`parse`), `:380` (`refresh`, id cycling), `:408` (`logout`, flushes the store), `:427` (`user`), `:442` (`id`); dependency `crates/rustasea-auth/Cargo.toml:20`.
+- Declarative attributes consumed at runtime: `#[middleware]` emits a doc-hidden `__RUSTASEA_MIDDLEWARE_<Fn>` spec list consumed by `Router::middleware_meta` (`crates/rustasea-router/src/metadata.rs:237`) and enforced by `apply_middleware` (`crates/rustasea-router/src/dispatch.rs:109`); `#[authorize]` emits `__RUSTASEA_AUTHORIZE_<Fn>` tuples consumed by `Router::authorize_meta` (`crates/rustasea-router/src/authorize.rs:216`) and enforced by `apply_authorize` (`crates/rustasea-router/src/dispatch.rs:135`), a missing/ambiguous resource failing closed with `RouteError::UnknownAuthorization`.
 
 **Partial (reason)**
-- Default session store is in-memory (`MemoryStore`); a shared store (Redis/SQLx) must be injected via `SessionGuard::with_store` (`crates/rustasea-auth/src/session.rs:186`).
-- Default user lookup is the fail-closed `StaticLookup` (`crates/rustasea-auth/src/session.rs:193`); replace via `with_lookup` (`:205`) where a real user source exists.
-- `#[authorize]` / `#[middleware]` emit metadata consts that nothing consumes at runtime — `crates/rustasea-macros/src/lib.rs:74`, `:111`, `:247`–`:265`.
+- Default session store is in-memory (`MemoryStore`); a shared store (Redis/SQLx) must be injected via `SessionGuard::with_store` (`crates/rustasea-auth/src/session.rs:187`).
+- Default user lookup is the fail-closed `StaticLookup` (`crates/rustasea-auth/src/session.rs:194`); replace via `with_lookup` (`:217`) where a real user source exists.
 
 **Missing**
-- Runtime enforcement of `#[middleware]` / `#[authorize]` / `#[tries]` / `#[backoff]` / `#[timeout]` in the tree (see the P0 note below on `GAP-003`).
+- A store-backed default session store and a database-backed default user lookup.
 
-**Evidence:** `crates/rustasea-auth/src/{jwt,csrf,guard,session}.rs`; `crates/rustasea-auth/Cargo.toml:20`; `crates/rustasea-macros/src/lib.rs:74-265`; tasks `GAP-003`, `GAP-007`.
+**Evidence:** `crates/rustasea-auth/src/{jwt,csrf,guard,session}.rs`; `crates/rustasea-auth/Cargo.toml:20`; `crates/rustasea-router/src/{metadata.rs:237,authorize.rs:216,dispatch.rs:109,135}`; tasks `GAP-003`, `GAP-007`.
 
 **Next actions**
-- Add the attribute registration + runtime consumer (`GAP-003`).
 - Provide a store-backed default session store for multi-process deployments.
+- Provide a database-backed default user lookup.
 
 ---
 
@@ -199,9 +199,10 @@ observable queue metrics.
 **Status: Partial** — in-memory cache, the sync queue driver, inline events, and
 the scheduler exist; the gap-closure program added real `database`/`redis` queue
 drivers with a worker loop, persistent failed jobs, `queue:work`/
-`queue:failed`/`queue:retry` CLI, a real feature-gated Redis cache store, and
-queue-backed async listeners. Remaining: the in-process `SyncDriver` still
-tracks failed jobs in memory, and declarative job metadata is not consumed.
+`queue:failed`/`queue:retry` CLI, a real feature-gated Redis cache store,
+queue-backed async listeners, and a runtime consumer for the declarative job
+attributes. Remaining: the in-process `SyncDriver` still tracks failed jobs in
+memory.
 
 **Done**
 - In-memory cache store (lock-guarded map; no `moka` dependency) — `crates/rustasea-cache/src/memory.rs:35`.
@@ -210,22 +211,21 @@ tracks failed jobs in memory, and declarative job metadata is not consumed.
 - Real `database` queue driver (`GAP-005`) — `crates/rustasea-queue/src/driver/database.rs:36` (`push`/`pop`/`ack`/`release`/`dead_letter` over a `jobs` table), with DB-backed failed jobs at `:23` (`FAILED_JOBS_TABLE`), `:71` (`failed_jobs`), `:95` (`retry_failed`).
 - Real `redis` queue driver (feature-gated) — `crates/rustasea-queue/src/driver/redis.rs:33` (`RedisDriver`), `:43` (`from_url`; disabled when no URL), `:329` (`dead_letter`).
 - Queue worker loop + handler registry (`GAP-006`) — `crates/rustasea-queue/src/driver/worker.rs:75` (`run_worker`), `:36` (`register_job`).
+- Declarative job policy consumed at runtime: the macros emit `__RUSTASEA_TRIES_<Type>` / `__RUSTASEA_BACKOFF_SECS_<Type>` / `__RUSTASEA_TIMEOUT_SECS_<Type>` consts bound through `JobPolicy` (`crates/rustasea-queue/src/policy.rs:21`, `from_seconds` at `:44`) and registered with `register_job_with_policy` (`crates/rustasea-queue/src/driver/worker.rs:66`); the worker reads the per-job policy and drives retry/backoff/timeout (`crates/rustasea-queue/src/driver/worker.rs:198`).
 - Queue migrations for `jobs`/`failed_jobs` — `crates/rustasea-queue/src/migrations.rs:16`, `:48`, `:82`, `:90`; `queue:work` CLI — `crates/rustasea-cli/src/commands/queue.rs:18`; `queue:failed`/`queue:retry` CLI — `crates/rustasea-cli/src/commands/ops.rs:21`, `:72`.
 - Inline event dispatch + `dispatchAfterResponse` — `crates/rustasea-events/src/dispatcher.rs:182`; async listeners enqueue a `ListenerJob` through the queue facade (`GAP-008`) — `crates/rustasea-events/src/dispatcher.rs:82-100`, `crates/rustasea-events/src/job.rs:15`.
 - Scheduler with pause/resume — `crates/rustasea-schedule/src/lib.rs:20` (`SchedulePaused`/`ScheduleResumed` re-exports).
 
 **Partial (reason)**
 - The in-process `SyncDriver` still tracks failed jobs in a `OnceLock<Mutex<Vec<FailedJob>>>` — `crates/rustasea-queue/src/driver.rs:171`.
-- Declarative job attributes (`#[tries]`/`#[backoff]`/`#[timeout]`) emit metadata only; job-declared retry/timeout loops exist (`crates/rustasea-queue/src/job.rs:498`), but attribute metadata has no runtime consumer (see the P0 note below).
 
 **Missing**
-- Attribute-driven policy enforcement for queue jobs (GAP-003 consumer).
+- A persistent failed-job sink for the in-process `SyncDriver`.
 
-**Evidence:** `crates/rustasea-cache/src/{memory,redis}.rs`; `crates/rustasea-queue/src/driver.rs:115-197`; `crates/rustasea-queue/src/driver/{database,redis,worker}.rs`; `crates/rustasea-queue/src/migrations.rs`; `crates/rustasea-events/src/dispatcher.rs:82-182`; `crates/rustasea-schedule/src/lib.rs:20`; tasks `GAP-004`–`GAP-009`.
+**Evidence:** `crates/rustasea-cache/src/{memory,redis}.rs`; `crates/rustasea-queue/src/driver.rs:115-197`; `crates/rustasea-queue/src/driver/{database,redis,worker}.rs`; `crates/rustasea-queue/src/policy.rs:21-55`; `crates/rustasea-queue/src/migrations.rs`; `crates/rustasea-events/src/dispatcher.rs:82-182`; `crates/rustasea-schedule/src/lib.rs:20`; tasks `GAP-004`–`GAP-009`.
 
 **Next actions**
 - Move `SyncDriver` failed-job tracking to a persistent sink (or delegate to `DatabaseDriver`).
-- Add the attribute-driven job policy consumer (`GAP-003`).
 
 ---
 
@@ -327,19 +327,19 @@ to a deterministic stub, and the in-process AI provider is kept for tests.
 |---|---|---|---|
 | **GAP-001** | Wire sqlx DB backend + connection pool into `rustasea-orm` | **Done** | `crates/rustasea-orm/src/db.rs:24`, `crates/rustasea-orm/src/db/exec.rs:72` |
 | **GAP-002** | Router → controller dispatch (real handler binding) | **Done** | `crates/rustasea-router/src/dispatch.rs:23-83` |
-| **GAP-003** | Runtime consumer for declarative attributes (`#[middleware]`, `#[authorize]`, `#[tries]`, `#[backoff]`, `#[timeout]`) | **Registry: completed — partial in tree** | Job-declared retry/timeout loops are real (`crates/rustasea-queue/src/job.rs:498`, `crates/rustasea-queue/src/driver/worker.rs:154`); attribute metadata consts still have no router/auth consumer in the tree (`crates/rustasea-macros/src/lib.rs:74`, `:111`, `:247`–`:265`) |
+| **GAP-003** | Runtime consumer for declarative attributes (`#[middleware]`, `#[authorize]`, `#[tries]`, `#[backoff]`, `#[timeout]`) | **Done** | `#[middleware]` resolves through `MiddlewareRegistry` (`crates/rustasea-router/src/metadata.rs:237`, `dispatch.rs:109`); `#[authorize]` resolves through `AuthorizeRegistry` (`crates/rustasea-router/src/authorize.rs:216`, `dispatch.rs:135`); job policy binds through `JobPolicy` (`crates/rustasea-queue/src/policy.rs:21`, `driver/worker.rs:66`) |
 
 **Other gap phases (all completed):** `GAP-004`–`GAP-009` (P1), `GAP-010`–`GAP-013`
 (P2), `GAP-014`–`GAP-015` (P3), `GAP-016`–`GAP-018` (P4), `GAP-019`–`GAP-020`
-(P5); `GAP-021` (P5, this documentation sync) in progress. See `GAP-ROOT` for
+(P5); `GAP-021` (P5, this documentation sync) completed. See `GAP-ROOT` for
 the full program.
 
-> **Note (2026-09-12):** `GAP-P0` closed with `GAP-001`/`GAP-002` verified in the
-> tree. `GAP-003` is marked completed in the task registry, but this document
-> records what the current tree actually contains: the queue retry/timeout loop
-> is real, while `#[middleware]`/`#[authorize]` attribute metadata still has no
-> runtime consumer. This discrepancy is flagged for reconciliation under
-> `GAP-021`.
+> **Note (2026-09-17):** `GAP-P0` closed with `GAP-001`/`GAP-002` verified in the
+> tree. The `GAP-003` registry consumer has since landed: `#[middleware]` and
+> `#[authorize]` metadata are resolved and enforced at dispatch, and the
+> `#[tries]`/`#[backoff]`/`#[timeout]` job policy is bound at registration. This
+> document now matches the registry; the reconciliation discrepancy recorded
+> earlier is resolved under `GAP-023`.
 
 ---
 
