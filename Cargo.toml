@@ -14,6 +14,18 @@ authors = ["RustaSea Team"]
 [profile.dev]
 incremental = false
 
+# Release profile for distributed binaries. `thin` LTO balances link time against
+# size (faster than `fat`, still removes cross-crate dead code); `codegen-units = 1`
+# lets the optimizer inline across the whole crate; `strip = "debuginfo"` drops
+# debug sections to shrink the artifact. `panic = "abort"` is intentionally NOT set:
+# `rustasea_http::panic::catch_panic_layer` (tower-http's `CatchPanicLayer`, wired
+# into the app router by `rustasea-app`) converts handler panics into 5xx responses
+# via `catch_unwind`, which abort-on-panic would disable.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+
 [workspace.dependencies]
 # Async + HTTP (M0/M1)
 tokio = { version = "1", features = ["fs", "io-util", "io-std", "macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "time"] }
