@@ -58,7 +58,7 @@ It is the API-surface parity layer. It is intentionally **not** a 1:1 inventory 
 | `Illuminate\Console` | `rustasea-cli` (`Artisan`, `Command`, `CommandRegistry`) | **Adopted** | `cargo artisan` registry + generators are real. |
 | `Illuminate\Console\Scheduling` | `rustasea-schedule` (`Schedule`, `Scheduler`, `ScheduleCommand`) | **Partial** | Pause/resume + ticks real; cron-cache mutexes / background tasks absent. |
 | `Illuminate\Database` | `rustasea-orm` (`DbPool`, `Executor`, `Migrator`) | **Adopted** | Real sqlx pool + async query execution + transactions + migrations/seeders/factories (`crates/rustasea-orm/src/db.rs:24`, `db/exec.rs:70`, `migration.rs:190`). |
-| `Illuminate\Database\Eloquent` | `rustasea-orm` (`Model`, `QueryBuilder`, `Relation`, `SoftDeletes`, `Timestamps`) | **Partial** | `#[derive(Model)]` + eager loading and relation serde round-trip real (`crates/rustasea-orm/src/eager.rs:59`); attribute casting pending. |
+| `Illuminate\Database\Eloquent` | `rustasea-orm` (`Model`, `QueryBuilder`, `Relation`, `SoftDeletes`, `Timestamps`) | **Partial** | `#[derive(Model)]` + eager loading and relation serde round-trip real (`crates/rustasea-orm/src/eager.rs:59`); `show:model` source-level introspection (attributes/casts/soft-delete/relations, both `#[derive(Model)]` and hand-written `impl Model`) real (`crates/rustasea-cli/src/model_inspect.rs:123`); live DB column reflection pending. |
 | `Illuminate\Database\Migrations` | `rustasea-orm` (`Migration`, `Migrator`, `MigrationRecord`) | **Adopted** | Runner executes against the live pool — `run`/`rollback`/`fresh`/`seed` (`crates/rustasea-orm/src/migration.rs:190`). |
 | `Illuminate\Database\Query` | `rustasea-orm` (`QueryBuilder`, `Value`, `JsonFilter`) | **Adopted** | Fluent builder + async execution real (`crates/rustasea-orm/src/builder/exec.rs:105`). |
 | `Illuminate\Events` | `rustasea-events` (`Dispatcher`, `Event`, `Listener`) | **Partial** | Inline dispatch real; queue-backed listeners unwired. |
@@ -274,7 +274,7 @@ The dominant pattern: **RustaSea already has the shape of most Laravel surfaces 
 |---|---|---|---|
 | 1 | **M0** Bootstrap & Core | Contextual bindings + provider DAG + auto-construction; populate provider/command registries | `Contracts\Container\ContextualBindingBuilder`, `SelfBuilding`, `Contracts\Foundation\Application` |
 | 2 | **M1** Routing & HTTP | Enforce idle timeout; add URL generation + implicit binding (`route:list` introspection is live) | `Contracts\Routing\Registrar`, `UrlGenerator`, `UrlRoutable`, `Contracts\Http\Kernel` |
-| 3 | **M2** ORM & Database | Attribute casts; `show:model` ORM introspection wiring | `CastsAttributes`, `Castable` |
+| 3 | **M2** ORM & Database | Attribute casts; reflect live DB column types in `show:model` (source-level `show:model` introspection landed) | `CastsAttributes`, `Castable` |
 | 4 | **M3** Auth, Middleware & Validation | General-purpose `Gate`; store-backed session guard; password broker/reset (runtime `#[authorize]` enforcement landed) | `Contracts\Auth\Access\Gate`, `Authorizable`, `StatefulGuard`, `PasswordBroker` |
 | 5 | **M4** Queue, Cache, Scheduling & Events | Cache/queue factory depth; `ShouldBeUnique`; lock owner/force-release surface | `Contracts\Queue\Factory`, `ShouldBeUnique`, `Contracts\Cache\Lock` |
 | 6 | **M5** DX, CLI & Testing | `make:middleware`/`make:request`, `artisan new`, real cycle detection; DB refresh test traits | `Contracts\Console\Kernel`, `Foundation\Testing\RefreshDatabase`, `WithFaker` |

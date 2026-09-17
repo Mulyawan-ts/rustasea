@@ -244,7 +244,7 @@ disabling an unknown name is rejected before the manifest is written
 |---|---|
 | `list [--json] [--all]` | List available commands (`--all` includes hidden) |
 | `route:list [--json]` | Render the live route table (Method, URI, Name, Action, Middleware, Binding) |
-| `show:model {name}` | Show a model's file path and derived table name |
+| `show:model {name} [--json]` | Inspect a model's source metadata (attributes, casts, soft-delete/timestamps, relations) |
 | `openapi:generate [--output=openapi.json] [--pretty]` | Emit an OpenAPI 3.1 spec from the live route table |
 
 ### Database & migrations

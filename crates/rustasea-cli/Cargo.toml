@@ -65,6 +65,12 @@ rustasea-openapi = { path = "../rustasea-openapi", optional = true }
 # `lang:check` reads translation dictionaries through the i18n loader; optional
 # so a core build that never checks locales does not link the i18n tree.
 rustasea-i18n = { path = "../rustasea-i18n", optional = true }
+# `show:model` parses `app/models/{snake}.rs` with `syn` for source-level model
+# introspection (attributes, casts, soft-delete/timestamps, best-effort
+# relations); `quote`/`proc-macro2` walk the `relations()` body token stream.
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
 # `mcp:serve` runs the MCP server engine (protocol + backend trait); optional so
 # a build without the `mcp` feature never links the AI tree.
 rustasea-ai = { path = "../rustasea-ai", optional = true }
@@ -85,6 +91,3 @@ rustasea-ai = { path = "../rustasea-ai", features = ["mcp"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 # `log:show` tests build fixture log files in throwaway temp directories.
 tempfile = { workspace = true }
-# `make:module` tests parse the generated Rust with `syn` so "compiles" is
-# checked by an independent oracle rather than a substring match.
-syn = { workspace = true }

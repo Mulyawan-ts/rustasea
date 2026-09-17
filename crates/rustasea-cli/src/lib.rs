@@ -23,6 +23,8 @@ pub mod generator;
 #[cfg(feature = "cli")]
 pub mod generators;
 #[cfg(feature = "cli")]
+pub mod model_inspect;
+#[cfg(feature = "cli")]
 pub mod output;
 #[cfg(feature = "cli")]
 pub mod prompt;

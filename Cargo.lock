@@ -7037,6 +7037,8 @@ dependencies = [
  "console",
  "dialoguer",
  "indicatif",
+ "proc-macro2",
+ "quote",
  "rustasea-ai",
  "rustasea-config",
  "rustasea-foundation",
