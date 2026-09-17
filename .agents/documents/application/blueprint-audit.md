@@ -118,7 +118,7 @@
 | Milestone DAG across `brd.md` §4, `prd.md` §3, `fsd.md` §5, `tdd.md` §5, `architecture.md` §3, `domain.md` §5, `roadmap.md` §2 | ✅ No cycles; `M0 → M1/M2 → M3 → M4 → M5 → M6` consistent everywhere |
 | Tech stack (`tokio`, `axum`, `sqlx`, `deadpool`, `pgvector`, `testcontainers`, etc.) | ✅ Identical in `brd.md` §4, `brief.md`, `architecture.md` §3, `tdd.md` §2, `test-plan.md` §3 |
 | Laravel 13 feature #1–#20 mapping | ✅ 20/20 traced in `prd.md` §8, mirrored in `fsd.md` §6, `user-stories.md` Coverage Checklist, `bdd-scenarios.md` §3, `test-cases.md` Traceability Summary, `allocation-audit.md` §4 |
-| Crate inventory (GAP-022 reconciliation, 2026-09-17) | 43 crates under `crates/` + `xtask` (44 workspace packages total), verified against `cargo metadata --format-version 1 --no-deps` and `Cargo.toml:2`; see the [canonical crate inventory](modules/manifest.md#canonical-crate-inventory-source-of-truth). Earlier planning diagrams are not complete inventories. |
+| Crate inventory (GAP-022 reconciliation, 2026-09-17) | 42 crates under `crates/` + `xtask` (43 workspace packages total), verified against `cargo metadata --format-version 1 --no-deps` and `Cargo.toml:2`; see the [canonical crate inventory](modules/manifest.md#canonical-crate-inventory-source-of-truth). Earlier planning diagrams are not complete inventories. |
 | `vector` feature flag (M2 initial vs M6 full) | ✅ Split FR-207 (M2) / FR-602 (M6) documented in `prd.md` §8, `allocation-audit.md` Note A, `tdd.md` BC-2/BC-6 |
 | Error codes `E####` | ✅ `flows.md` §5.4 + `design-system.md` §4 consistent (20 codes) |
 | NFR targets (Per-01..04, Sec-01.., Rel-01..) | ✅ Same values in `prd.md` §4, `tdd.md` §4, `capacity.md` §2, `test-plan.md` §7 |

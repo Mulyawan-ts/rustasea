@@ -185,7 +185,7 @@ Behavior:
 
 ### D6 — Scaffolder: `cargo rustasea new <app> --variant <v>`
 
-**Chosen:** a cargo subcommand binary named `cargo-rustasea` (so `cargo rustasea new ...` resolves via cargo's PATH subcommand discovery) that delegates to the `rustasea-scaffold` library. Templates are embedded and parameterized by app name + variant.
+**Chosen:** a cargo subcommand binary named `cargo-rustasea` (so `cargo rustasea new ...` resolves via cargo's PATH subcommand discovery) that ships inside the `rustasea` facade package (install with `cargo install rustasea`) and delegates to the `rustasea-scaffold` library. Templates are embedded and parameterized by app name + variant.
 
 **Rationale:** `cargo <name>` is the idiomatic Rust equivalent of `composer create-project` / `laravel new`; the library split makes scaffolding unit-testable with golden-file snapshots.
 
@@ -378,7 +378,7 @@ impl Scaffold {
 }
 ```
 
-- **Binary:** `cargo-rustasea` (cargo subcommand) → `cargo rustasea new <app> --variant {blade|react|vue|livewire} [--force] [--no-git]`.
+- **Binary:** `cargo-rustasea` (cargo subcommand, shipped in the `rustasea` facade package) → `cargo rustasea new <app> --variant {blade|react|vue|livewire} [--force] [--no-git]`.
 - **Templates:** embedded via `include_str!`, parameterized by app name; shared templates emitted for every variant, variant templates merged in.
 - **Validation:** golden-file snapshot tests per variant (tree + file contents), plus a CI job that runs `cargo check` on each generated app to prove it compiles.
 - **Reuse:** shares `Generator`/`Generated` primitives with `rustasea-cli` (`crates/rustasea-cli/src/generator.rs`) so `make:*` and `new` never diverge.

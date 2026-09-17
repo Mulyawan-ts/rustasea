@@ -103,6 +103,13 @@ Per the same section, each tag is expected to pass `cargo xtask ci` and
 
 ### Changed
 
+- 2026-09-17 - `cargo install rustasea` now installs the application scaffolder:
+  the `cargo-rustasea` binary moved into the `rustasea` facade package (ships
+  behind the `scaffold` feature, enabled by default) so `cargo rustasea new`
+  works from a single install, and the standalone `cargo-rustasea` package was
+  removed. The workspace is now 42 crates under `crates/` + `xtask`
+  (43 workspace packages) (`refactor(scaffold): [TASK-103] fold cargo-rustasea
+  bin into the rustasea facade package`).
 - 2026-09-17 - App scaffold now emits Laravel-parity port 8000: the generated
   `.env.example`, README, `Dockerfile` (`EXPOSE`/healthcheck), and
   `docker-compose.yml` all use 8000 (matching `php artisan serve` and
@@ -114,11 +121,11 @@ Per the same section, each tag is expected to pass `cargo xtask ci` and
 - 2026-09-17 - Repository renamed to `rustasea/framework` (analog
   `laravel/framework`); the application skeleton lives at `rustasea/rustasea`
   (analog `laravel/laravel`). In-repo URLs, `Cargo.toml` `repository` metadata
-  (workspace-inherited across all 44 packages), and the README repository layout
+  (workspace-inherited across all 43 packages), and the README repository layout
   section were updated (`chore(repo): [TASK-098] rename to rustasea/framework
   and add repository metadata`).
 - 2026-09-17 - Documentation reconciliation: canonical crate inventory
-  synchronized to the 44 workspace packages (`GAP-022`); stale `route:list` and
+  synchronized to the 43 workspace packages (`GAP-022`); stale `route:list` and
   attribute-consumption documentation corrected (`GAP-023`); complete artisan
   CLI command surface documented (`GAP-024`); `make:*` generator count
   reconciled to 17 (`GAP-025`); Laravel parity and milestone status aligned with

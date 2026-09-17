@@ -21,7 +21,7 @@ The design must satisfy: (a) a single security-critical auth path shared by all 
 3. **Inertia analogue: `rustasea-inertia`.** A `Page<T>` envelope (`component`, `props`, `url`, `version`), the full `X-Inertia*` header contract, partial reloads filtered on the wire prop map, per-request shared props, and `409` + `X-Inertia-Location` on version mismatch. A WASM `rustasea-inertia-client` mounts components via a generated registry.
 4. **WASM mapping: `react` → Dioxus, `vue` → Leptos**, both on the shared Inertia contract.
 5. **Livewire analogue: askama + HTMX + `rustasea-broadcast`** (WS/SSE, already real at `crates/rustasea-broadcast/src/lib.rs:36`).
-6. **Scaffolder: `rustasea-scaffold` library behind a `cargo-rustasea` subcommand** — `cargo rustasea new <app> --variant {blade|react|vue|livewire}`. `cargo artisan new` is retained only as an in-app alias.
+6. **Scaffolder: `rustasea-scaffold` library behind a `cargo-rustasea` subcommand** — `cargo rustasea new <app> --variant {blade|react|vue|livewire}`. The `cargo-rustasea` binary ships inside the `rustasea` facade package (install with `cargo install rustasea`), not as a standalone crate. `cargo artisan new` is retained only as an in-app alias.
 7. **Auth: complete the existing `rustasea-auth` session guard on `tower-sessions`** (declared at `Cargo.toml:28`) — real `store`, real `logout` (destroy + rotate), session-id rotation on login, and Fortify-like generated `app/actions/auth`.
 8. **Config: auto-discover all `config/*.toml`** in `rustasea-config`, preserving the layered merge.
 

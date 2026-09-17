@@ -16,11 +16,11 @@ Constraints: workspace `resolver = "2"` with `[workspace.dependencies]` as singl
 
 **One crate per milestone domain, plus shared foundation and umbrella — with a strict DAG and umbrella re-export.**
 
-Inventory clarification (GAP-022, verified 2026-09-17 via `cargo metadata --format-version 1 --no-deps`): the current workspace has **43 crates under `crates/` + `xtask` (44 workspace packages total)**. The original decision named one crate per milestone domain; the ADOPT adoption wave (ADOPT-001..031) and the starter-kit programme (ADR-0002) subsequently added the audit, i18n, timezone, openapi, debugbar, queue-dashboard, excel, image, google, modules, action, logging, and presentation/scaffolder crates. Each addition keeps the same one-crate-per-concern boundary and joins the existing DAG without a cycle. The [canonical crate inventory](../../.agents/documents/application/modules/manifest.md#canonical-crate-inventory-source-of-truth) enumerates all 44 members by milestone and adoption layer, and supersedes the original count and optional crate splits; the boundary decision itself remains unchanged.
+Inventory clarification (GAP-022, verified 2026-09-17 via `cargo metadata --format-version 1 --no-deps`): the current workspace has **42 crates under `crates/` + `xtask` (43 workspace packages total)**. The original decision named one crate per milestone domain; the ADOPT adoption wave (ADOPT-001..031) and the starter-kit programme (ADR-0002) subsequently added the audit, i18n, timezone, openapi, debugbar, queue-dashboard, excel, image, google, modules, action, logging, and presentation/scaffolder crates. Each addition keeps the same one-crate-per-concern boundary and joins the existing DAG without a cycle. The [canonical crate inventory](../../.agents/documents/application/modules/manifest.md#canonical-crate-inventory-source-of-truth) enumerates all 43 members by milestone and adoption layer, and supersedes the original count and optional crate splits; the boundary decision itself remains unchanged.
 
 Structure (see `architecture.md §3`):
 
-- `rustasea` (umbrella, re-exports only, no logic)
+- `rustasea` (umbrella, re-exports only, no logic; also ships the `cargo-rustasea` scaffolder binary behind the `scaffold` feature, installed via `cargo install rustasea`)
 - M0: `rustasea-foundation` (includes `Container`; no separate container crate), `rustasea-config`, `rustasea-macros` (proc-macro)
 - M1: `rustasea-router`, `rustasea-http`
 - M2: `rustasea-orm`
@@ -29,7 +29,7 @@ Structure (see `architecture.md §3`):
 - M5: `rustasea-cli`, `rustasea-testing`
 - M6: `rustasea-broadcast`, `rustasea-storage`, `rustasea-search`, `rustasea-ai`, `rustasea-jsonapi` (separate crate)
 - `rustasea-app` (runnable example; `publish = false`)
-- `cargo-rustasea` (cargo subcommand binary; `cargo rustasea new`)
+- the `cargo-rustasea` scaffolder binary (`cargo rustasea new`) now ships in the `rustasea` umbrella package, not as a standalone crate
 - `xtask` (workspace dev tooling, outside `crates/`)
 
 The original per-domain plan above is extended by the ADOPT adoption wave and the starter-kit programme (ADR-0002), each crate still mapping to a single concern and a single milestone:

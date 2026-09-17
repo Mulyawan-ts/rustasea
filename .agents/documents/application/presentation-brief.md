@@ -15,7 +15,7 @@
 
 | Dimension | Answer |
 |-----------|--------|
-| **What** | Workspace framework: 43 crates under `crates/` (including umbrella `rustasea` and example `rustasea-app`) + `xtask` (44 workspace packages total) — see the [canonical crate inventory](modules/manifest.md#canonical-crate-inventory-source-of-truth); incremental adoption, pay-for-crates-you-use |
+| **What** | Workspace framework: 42 crates under `crates/` (including umbrella `rustasea` and example `rustasea-app`) + `xtask` (43 workspace packages total) — see the [canonical crate inventory](modules/manifest.md#canonical-crate-inventory-source-of-truth); incremental adoption, pay-for-crates-you-use |
 | **Why now** | Laravel 13 shipped AI SDK + vector + declarative attributes as headlines (2026-03-17, 20 features); `tokio`/`axum`/`sqlx`/`pgvector` stabilized; Goravel v1.18 proves Laravel→compiled-language thesis |
 | **Scope** | 7 dependency-ordered milestones M0–M6; 76 FRs (FR-000–FR-612), 9 BRs, 20/20 Laravel 13 features traced; 37 blueprint docs + 6 ADRs + 134 test cases |
 | **Horizon** | Q4 2026 → Q4 2027 · 7 sprints (1:1 with milestones) · ~13–18 weeks wall-clock @2 devs +20% contingency (30–40% M6) |
