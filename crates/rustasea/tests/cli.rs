@@ -50,12 +50,12 @@ fn assert_success(output: &Output) {
 #[test]
 fn unknown_variant_exits_non_zero_with_clear_error() {
     let dir = temp_dir("unknown-variant");
-    let output = run(&dir, &["new", "demo", "--variant", "svelte"]);
+    let output = run(&dir, &["new", "demo", "--variant", "angular"]);
 
     assert!(!output.status.success(), "must exit non-zero");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("svelte"),
+        stderr.contains("angular"),
         "error must name the bad variant:\n{stderr}"
     );
     assert!(
@@ -63,6 +63,27 @@ fn unknown_variant_exits_non_zero_with_clear_error() {
         "error must list supported variants:\n{stderr}"
     );
     assert!(!dir.join("demo").exists(), "no tree on failure");
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn generates_svelte_app_with_sycamore_frontend() {
+    let dir = temp_dir("svelte");
+    let output = run(
+        &dir,
+        &["new", "demo-app", "--variant", "svelte", "--no-git"],
+    );
+    assert_success(&output);
+
+    let app = dir.join("demo-app");
+    assert!(app.join("Cargo.toml").exists());
+    assert!(app.join("resources/js/main.rs").exists());
+    assert!(app.join("resources/js/pages/dashboard.rs").exists());
+    assert!(!app.join("askama.toml").exists());
+    let manifest = std::fs::read_to_string(app.join("Cargo.toml")).expect("read manifest");
+    assert!(manifest.contains("wasm-sycamore"));
+    assert!(manifest.contains("features = [\"svelte\"]"));
 
     std::fs::remove_dir_all(&dir).ok();
 }

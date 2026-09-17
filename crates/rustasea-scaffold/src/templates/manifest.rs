@@ -22,6 +22,7 @@ fn cargo_toml(variant: StarterKitVariant) -> &'static str {
         StarterKitVariant::Blade => BLADE_CARGO,
         StarterKitVariant::React => REACT_CARGO,
         StarterKitVariant::Vue => VUE_CARGO,
+        StarterKitVariant::Svelte => SVELTE_CARGO,
         StarterKitVariant::Livewire => LIVEWIRE_CARGO,
     }
 }
@@ -178,6 +179,57 @@ tokio = { version = "1", features = ["macros", "rt"] }
 tower = { version = "0.5", features = ["util"] }
 "##;
 
+const SVELTE_CARGO: &str = r##"[package]
+name = "@@app_name@@"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+description = "@@app_pascal@@ — a RustaSea svelte (Sycamore + Inertia) starter kit"
+
+[lib]
+name = "@@app_snake@@"
+path = "lib.rs"
+
+[[bin]]
+name = "@@app_name@@"
+path = "main.rs"
+
+# `tests/feature/mod.rs` and `tests/unit/mod.rs` are the suite crate roots;
+# cargo does not auto-discover `tests/<dir>/mod.rs`, so both targets are
+# declared explicitly.
+[[test]]
+name = "feature"
+path = "tests/feature/mod.rs"
+
+[[test]]
+name = "unit"
+path = "tests/unit/mod.rs"
+
+[dependencies]
+rustasea = { version = "0.1", features = ["inertia", "wasm-sycamore", "action"] }
+rustasea-inertia = "0.1"
+rustasea-inertia-adapters = { version = "0.1", features = ["svelte"] }
+axum = "0.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# The generated session guard is generic over any `tower-sessions` store, and
+# `app/actions/auth/attempt_to_authenticate.rs` names the `SessionStore` trait
+# directly; the app therefore declares the dependency itself.
+tower-sessions = "0.15"
+
+[features]
+default = []
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }
+# `tower::ServiceExt::oneshot` drives the route-table smoke tests.
+tower = { version = "0.5", features = ["util"] }
+"##;
+
 const LIVEWIRE_CARGO: &str = r##"[package]
 name = "@@app_name@@"
 version = "0.1.0"
@@ -254,6 +306,10 @@ mod tests {
         let vue = cargo_toml(StarterKitVariant::Vue);
         assert!(vue.contains("wasm-leptos"));
         assert!(vue.contains("features = [\"inertia\", \"wasm-leptos\", \"action\"]"));
+        let svelte = cargo_toml(StarterKitVariant::Svelte);
+        assert!(svelte.contains("wasm-sycamore"));
+        assert!(svelte.contains("features = [\"inertia\", \"wasm-sycamore\", \"action\"]"));
+        assert!(svelte.contains("features = [\"svelte\"]"));
         let livewire = cargo_toml(StarterKitVariant::Livewire);
         assert!(livewire.contains("features = [\"view\", \"action\"]"));
         assert!(!livewire.contains("\"view\", \"broadcast\""));

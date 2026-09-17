@@ -1,15 +1,16 @@
-//! Inertia variant resources shared by react and vue.
+//! Inertia variant resources shared by react, vue, and svelte.
 //!
 //! The HTML shell is rendered by the app's `RootView` (default `HtmlShell`);
 //! Trunk compiles the WASM frontend in `resources/js` and bundles it with the
 //! shell. The framework-specific entrypoint and page registry live in
-//! [`super::inertia_react`] (Dioxus) and [`super::inertia_vue`] (Leptos).
+//! [`super::inertia_react`] (Dioxus), [`super::inertia_vue`] (Leptos), and
+//! [`super::inertia_svelte`] (Sycamore).
 
 use crate::variant::StarterKitVariant;
 
 use super::TemplateFile;
 
-/// Inertia templates for `variant` (react or vue).
+/// Inertia templates for `variant` (react, vue, or svelte).
 pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
     let mut files = vec![
         ("resources/views/app.html", APP_SHELL),
@@ -19,6 +20,7 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
     match variant {
         StarterKitVariant::React => files.extend(super::inertia_react::entries()),
         StarterKitVariant::Vue => files.extend(super::inertia_vue::entries()),
+        StarterKitVariant::Svelte => files.extend(super::inertia_svelte::entries()),
         StarterKitVariant::Blade | StarterKitVariant::Livewire => {}
     }
     files

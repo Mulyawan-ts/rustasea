@@ -8,7 +8,7 @@
 //! `fortify`, the standalone `mongo` connection, plus the framework's typed
 //! `broadcasting` and `cors` surfaces. Long explanatory comment blocks are
 //! trimmed, but every default a generated app needs to parse is preserved.
-//! `inertia.toml` is emitted only for the react/vue variants.
+//! `inertia.toml` is emitted only for the Inertia (react/vue/svelte) variants.
 
 use crate::variant::StarterKitVariant;
 
@@ -442,7 +442,7 @@ allowed_origins = []
 allow_credentials = false
 "##;
 
-/// Inertia asset contract for the react/vue variants.
+/// Inertia asset contract for the react/vue/svelte variants.
 const INERTIA: &str = r##"[inertia]
 # Asset version used for cache-busting and the 409 hard-navigation flow.
 version = "1"

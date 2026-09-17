@@ -17,6 +17,7 @@ mod database;
 mod docker;
 mod inertia;
 mod inertia_react;
+mod inertia_svelte;
 mod inertia_vue;
 mod livewire;
 mod manifest;
@@ -38,7 +39,7 @@ pub struct Placeholders<'a> {
     pub app_snake: &'a str,
     /// PascalCase application name (`MyApp`).
     pub app_pascal: &'a str,
-    /// Lowercase variant token (`blade`, `react`, `vue`, `livewire`).
+    /// Lowercase variant token (`blade`, `react`, `vue`, `svelte`, `livewire`).
     pub variant: &'a str,
 }
 
@@ -121,7 +122,7 @@ pub fn entries(variant: StarterKitVariant) -> Vec<TemplateFile> {
     match variant {
         StarterKitVariant::Blade => files.extend(blade::entries()),
         StarterKitVariant::Livewire => files.extend(livewire::entries()),
-        StarterKitVariant::React | StarterKitVariant::Vue => {
+        StarterKitVariant::React | StarterKitVariant::Vue | StarterKitVariant::Svelte => {
             files.extend(inertia::entries(variant))
         }
     }

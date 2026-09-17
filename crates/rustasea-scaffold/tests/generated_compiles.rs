@@ -29,7 +29,7 @@
 //!
 //! The first run cold-compiles the generated app's dependency tree (a few
 //! minutes); later variants reuse the same target dir and check in seconds.
-//! All four variants share one target dir so the cost is paid once.
+//! All five variants share one target dir so the cost is paid once.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

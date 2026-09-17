@@ -227,6 +227,28 @@ fn vue_variant_generates_leptos_inertia_layout() {
 }
 
 #[test]
+fn svelte_variant_generates_sycamore_inertia_layout() {
+    let root = temp_dir("svelte");
+    Scaffold::new("demo-app", StarterKitVariant::Svelte)
+        .generate(&root)
+        .expect("generate svelte");
+
+    assert_core_layout(&root);
+    assert!(root.join("resources/js/main.rs").exists());
+    assert!(root.join("resources/js/pages/mod.rs").exists());
+    assert!(root.join("resources/js/pages/dashboard.rs").exists());
+    assert!(root
+        .join("app/http/middleware/handle_inertia_requests.rs")
+        .exists());
+    assert!(root.join("config/inertia.toml").exists());
+    assert!(!root.join("askama.toml").exists());
+    assert_manifest_contains(&root, "wasm-sycamore");
+    assert_manifest_contains(&root, "features = [\"svelte\"]");
+
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
 fn livewire_variant_generates_htmx_layout() {
     let root = temp_dir("livewire");
     Scaffold::new("demo-app", StarterKitVariant::Livewire)
@@ -355,10 +377,10 @@ fn placeholder_substitution_uses_all_three_name_forms() {
 
 #[test]
 fn unknown_variant_is_rejected() {
-    let error = StarterKitVariant::from_str("svelte").expect_err("must reject");
+    let error = StarterKitVariant::from_str("angular").expect_err("must reject");
     assert!(matches!(error, ScaffoldError::UnknownVariant { .. }));
     let message = error.to_string();
-    assert!(message.contains("svelte"));
+    assert!(message.contains("angular"));
     assert!(message.contains("blade"));
     assert!(message.contains("livewire"));
 }

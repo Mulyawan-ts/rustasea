@@ -17,21 +17,24 @@ pub enum StarterKitVariant {
     React,
     /// Leptos WASM + Inertia (`resources/js`), umbrella features `inertia`, `wasm-leptos`.
     Vue,
+    /// Sycamore WASM + Inertia (`resources/js`), umbrella features `inertia`, `wasm-sycamore`.
+    Svelte,
     /// askama + HTMX starter kit (`resources/views`), umbrella feature `view`.
     Livewire,
 }
 
 impl StarterKitVariant {
     /// Every variant, in CLI help order.
-    pub const ALL: [StarterKitVariant; 4] = [
+    pub const ALL: [StarterKitVariant; 5] = [
         StarterKitVariant::Blade,
         StarterKitVariant::React,
         StarterKitVariant::Vue,
+        StarterKitVariant::Svelte,
         StarterKitVariant::Livewire,
     ];
 
     /// Comma-separated list of accepted variant tokens.
-    pub const SUPPORTED: &'static str = "blade, react, vue, livewire";
+    pub const SUPPORTED: &'static str = "blade, react, vue, svelte, livewire";
 
     /// Lowercase token used on the command line and in generated files.
     pub const fn as_str(self) -> &'static str {
@@ -39,6 +42,7 @@ impl StarterKitVariant {
             StarterKitVariant::Blade => "blade",
             StarterKitVariant::React => "react",
             StarterKitVariant::Vue => "vue",
+            StarterKitVariant::Svelte => "svelte",
             StarterKitVariant::Livewire => "livewire",
         }
     }
@@ -53,6 +57,7 @@ impl StarterKitVariant {
             StarterKitVariant::Blade => &["view"],
             StarterKitVariant::React => &["inertia", "wasm-dioxus"],
             StarterKitVariant::Vue => &["inertia", "wasm-leptos"],
+            StarterKitVariant::Svelte => &["inertia", "wasm-sycamore"],
             StarterKitVariant::Livewire => &["view"],
         }
     }
@@ -64,7 +69,10 @@ impl StarterKitVariant {
 
     /// Whether the variant uses the Inertia server/WASM contract.
     pub const fn uses_inertia(self) -> bool {
-        matches!(self, StarterKitVariant::React | StarterKitVariant::Vue)
+        matches!(
+            self,
+            StarterKitVariant::React | StarterKitVariant::Vue | StarterKitVariant::Svelte
+        )
     }
 
     /// Whether the variant enhances views with HTMX partial swaps.
@@ -77,6 +85,7 @@ impl StarterKitVariant {
         match self {
             StarterKitVariant::React => Some("react"),
             StarterKitVariant::Vue => Some("vue"),
+            StarterKitVariant::Svelte => Some("svelte"),
             StarterKitVariant::Blade | StarterKitVariant::Livewire => None,
         }
     }
@@ -85,12 +94,13 @@ impl StarterKitVariant {
 impl FromStr for StarterKitVariant {
     type Err = ScaffoldError;
 
-    /// Parse a variant token, rejecting anything outside the four kits.
+    /// Parse a variant token, rejecting anything outside the five kits.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
             "blade" => Ok(StarterKitVariant::Blade),
             "react" => Ok(StarterKitVariant::React),
             "vue" => Ok(StarterKitVariant::Vue),
+            "svelte" => Ok(StarterKitVariant::Svelte),
             "livewire" => Ok(StarterKitVariant::Livewire),
             _ => Err(ScaffoldError::UnknownVariant {
                 variant: value.to_string(),
@@ -124,10 +134,18 @@ mod tests {
 
     #[test]
     fn rejects_unknown_variant() {
-        let err = StarterKitVariant::from_str("svelte").expect_err("must reject");
+        let err = StarterKitVariant::from_str("angular").expect_err("must reject");
         let message = err.to_string();
-        assert!(message.contains("svelte"));
+        assert!(message.contains("angular"));
         assert!(message.contains("blade"));
+    }
+
+    #[test]
+    fn parses_svelte_token() {
+        assert_eq!(
+            StarterKitVariant::from_str("svelte").expect("svelte is a supported variant"),
+            StarterKitVariant::Svelte
+        );
     }
 
     #[test]
@@ -140,6 +158,10 @@ mod tests {
         assert_eq!(
             StarterKitVariant::Vue.cargo_features(),
             &["inertia", "wasm-leptos"]
+        );
+        assert_eq!(
+            StarterKitVariant::Svelte.cargo_features(),
+            &["inertia", "wasm-sycamore"]
         );
         assert_eq!(StarterKitVariant::Livewire.cargo_features(), &["view"]);
     }

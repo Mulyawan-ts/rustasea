@@ -73,6 +73,8 @@ enum Variant {
     React,
     /// Leptos WASM + Inertia.
     Vue,
+    /// Sycamore WASM + Inertia.
+    Svelte,
     /// askama + HTMX + broadcast.
     Livewire,
 }
@@ -84,6 +86,7 @@ impl From<Variant> for StarterKitVariant {
             Variant::Blade => StarterKitVariant::Blade,
             Variant::React => StarterKitVariant::React,
             Variant::Vue => StarterKitVariant::Vue,
+            Variant::Svelte => StarterKitVariant::Svelte,
             Variant::Livewire => StarterKitVariant::Livewire,
         }
     }

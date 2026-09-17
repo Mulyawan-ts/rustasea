@@ -115,7 +115,7 @@ fn every_variant_emits_all_fourteen_configs() {
         let files = Scaffold::new("my-app", variant).render().expect("render");
         assert_config_surface(&files, variant.as_str());
 
-        // Fourteen `config/*.toml` files, plus `inertia.toml` for react/vue.
+        // Fourteen `config/*.toml` files, plus `inertia.toml` for react/vue/svelte.
         let config_count = files
             .iter()
             .filter(|file| file.path.starts_with("config/") && file.path.ends_with(".toml"))
