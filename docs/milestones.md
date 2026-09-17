@@ -175,6 +175,10 @@ the fail-closed static lookup.
 - Guard manager with typed `GuardMismatch` errors — `crates/rustasea-auth/src/guard.rs:197`, `:302`.
 - Real session guard over `tower-sessions` (`GAP-007`): `crates/rustasea-auth/src/session.rs:99` (`SessionGuard<S: SessionStore = MemoryStore>`), `:291` (`impl Guard`), `:296` (`login`, fresh session id on login), `:331` (`login_using_id`, opt-in via `:194`), `:352` (`parse`), `:380` (`refresh`, id cycling), `:408` (`logout`, flushes the store), `:427` (`user`), `:442` (`id`); dependency `crates/rustasea-auth/Cargo.toml:20`.
 - Declarative attributes consumed at runtime: `#[middleware]` emits a doc-hidden `__RUSTASEA_MIDDLEWARE_<Fn>` spec list consumed by `Router::middleware_meta` (`crates/rustasea-router/src/metadata.rs:237`) and enforced by `apply_middleware` (`crates/rustasea-router/src/dispatch.rs:109`); `#[authorize]` emits `__RUSTASEA_AUTHORIZE_<Fn>` tuples consumed by `Router::authorize_meta` (`crates/rustasea-router/src/authorize.rs:216`) and enforced by `apply_authorize` (`crates/rustasea-router/src/dispatch.rs:135`), a missing/ambiguous resource failing closed with `RouteError::UnknownAuthorization`.
+- Role-based access control (ADOPT-001, `spatie/laravel-permission` parity): `crates/rustasea-auth/src/rbac/` (`Role`, `RbacRegistry`, `HasRoles`, `PermissionResolver`): roles hold permissions, permission checks are the union over a user's roles, lookups are cache-backed, and the ability `Gate` consults an optional `PermissionResolver` after its defined abilities (`crates/rustasea-auth/src/rbac/{mod,role,registry,has_roles}.rs`).
+- Model-change audit trail (ADOPT-002, `spatie/laravel-activitylog` parity): `crates/rustasea-activitylog` (`ActivityLogger`, `ActivityEvent`): `#[logs_activity]` opts a model in, the ORM write path builds a diff event, and the logger persists it to the `audit_log` table with an optional `batch_uuid` (`crates/rustasea-activitylog/src/{lib,recorder,model}.rs`).
+- Authentication log (ADOPT-003, `rappasoft/laravel-authentication-log` parity): `crates/rustasea-authlog` (`AuthenticationLogLogger`, `NewDeviceNotifier`): one row per login/failed/lockout/logout with client IP and `User-Agent`, plus a queued new-device notification on an unknown IP (`crates/rustasea-authlog/src/{lib,recorder,notifier}.rs`).
+- Sentry error tracking (ADOPT-004): opt-in `sentry` feature forwarding a request-context middleware (`crates/rustasea-http/src/sentry.rs`) and a logging layer with a `before_send` secret-scrubbing hook (`crates/rustasea-logging/src/sentry/mod.rs`); inert until a DSN is bound (`crates/rustasea/Cargo.toml:128`).
 
 **Partial (reason)**
 - Default session store is in-memory (`MemoryStore`); a shared store (Redis/SQLx) must be injected via `SessionGuard::with_store` (`crates/rustasea-auth/src/session.rs:187`).
@@ -183,7 +187,7 @@ the fail-closed static lookup.
 **Missing**
 - A store-backed default session store and a database-backed default user lookup.
 
-**Evidence:** `crates/rustasea-auth/src/{jwt,csrf,guard,session}.rs`; `crates/rustasea-auth/Cargo.toml:20`; `crates/rustasea-router/src/{metadata.rs:237,authorize.rs:216,dispatch.rs:109,135}`; tasks `GAP-003`, `GAP-007`.
+**Evidence:** `crates/rustasea-auth/src/{jwt,csrf,guard,session}.rs`; `crates/rustasea-auth/src/rbac/`; `crates/rustasea-activitylog/`; `crates/rustasea-authlog/`; `crates/rustasea-http/src/sentry.rs`; `crates/rustasea-logging/src/sentry/`; `crates/rustasea-auth/Cargo.toml:20`; `crates/rustasea-router/src/{metadata.rs:237,authorize.rs:216,dispatch.rs:109,135}`; tasks `GAP-003`, `GAP-007`, `ADOPT-001`–`ADOPT-004`.
 
 **Next actions**
 - Provide a store-backed default session store for multi-process deployments.
@@ -215,6 +219,8 @@ memory.
 - Queue migrations for `jobs`/`failed_jobs` — `crates/rustasea-queue/src/migrations.rs:16`, `:48`, `:82`, `:90`; `queue:work` CLI — `crates/rustasea-cli/src/commands/queue.rs:18`; `queue:failed`/`queue:retry` CLI — `crates/rustasea-cli/src/commands/ops.rs:21`, `:72`.
 - Inline event dispatch + `dispatchAfterResponse` — `crates/rustasea-events/src/dispatcher.rs:182`; async listeners enqueue a `ListenerJob` through the queue facade (`GAP-008`) — `crates/rustasea-events/src/dispatcher.rs:82-100`, `crates/rustasea-events/src/job.rs:15`.
 - Scheduler with pause/resume — `crates/rustasea-schedule/src/lib.rs:20` (`SchedulePaused`/`ScheduleResumed` re-exports).
+- Queue dashboard (ADOPT-021, `laravel/horizon` parity): `crates/rustasea-queue-dashboard` (`DashboardConfig`, `sampler`, `QueueMetricsHistory`): `/queue` live depth/age, `queue_metrics` history with retention, failed-job retry/forget, and worker heartbeats; feature `queue-dashboard` (`crates/rustasea-queue-dashboard/src/{lib,sampler}.rs`, `crates/rustasea-app/src/routes/queue_dashboard.rs`).
+- Broadcast fan-out (ADOPT-022): Pusher HTTP driver (HMAC-SHA256 request signing + MD5 body digest, `pusher`/`private-`/`presence-` channel auth) and a Redis Pub/Sub driver for cross-process fan-out behind the `pusher`/`redis` features (`crates/rustasea-broadcast/src/`, `crates/rustasea-app/src/routes/broadcasting.rs`).
 
 **Partial (reason)**
 - The in-process `SyncDriver` still tracks failed jobs in a `OnceLock<Mutex<Vec<FailedJob>>>` — `crates/rustasea-queue/src/driver.rs:171`.
@@ -222,7 +228,7 @@ memory.
 **Missing**
 - A persistent failed-job sink for the in-process `SyncDriver`.
 
-**Evidence:** `crates/rustasea-cache/src/{memory,redis}.rs`; `crates/rustasea-queue/src/driver.rs:115-197`; `crates/rustasea-queue/src/driver/{database,redis,worker}.rs`; `crates/rustasea-queue/src/policy.rs:21-55`; `crates/rustasea-queue/src/migrations.rs`; `crates/rustasea-events/src/dispatcher.rs:82-182`; `crates/rustasea-schedule/src/lib.rs:20`; tasks `GAP-004`–`GAP-009`.
+**Evidence:** `crates/rustasea-cache/src/{memory,redis}.rs`; `crates/rustasea-queue/src/driver.rs:115-197`; `crates/rustasea-queue/src/driver/{database,redis,worker}.rs`; `crates/rustasea-queue/src/policy.rs:21-55`; `crates/rustasea-queue/src/migrations.rs`; `crates/rustasea-events/src/dispatcher.rs:82-182`; `crates/rustasea-schedule/src/lib.rs:20`; `crates/rustasea-queue-dashboard/`; `crates/rustasea-broadcast/`; tasks `GAP-004`–`GAP-009`, `ADOPT-021`, `ADOPT-022`.
 
 **Next actions**
 - Move `SyncDriver` failed-job tracking to a persistent sink (or delegate to `DatabaseDriver`).
@@ -254,6 +260,20 @@ route registration.
 - Action pattern (ADOPT-028) — `crates/rustasea-action` (`Action` trait + HTTP/queue/CLI/event adapters, `make:action` generator); scaffold auth actions demonstrate the pattern (`crates/rustasea-scaffold/src/templates/app_auth.rs`).
 - Log viewer (ADOPT-014) — `rustasea-logging::reader` (parse/filter/resolve/tail), `cargo artisan log:show` (`crates/rustasea-cli/src/commands/log_show.rs`: `--level`/`--channel`/`--since`/`--grep`/`--limit`/`--follow`/`--json`), and a dev-only `/_logs` surface behind the `log-viewer` feature (`crates/rustasea-app/src/routes/log_viewer.rs`).
 - Browser (WebDriver) e2e harness (ADOPT-029) — `crates/rustasea-testing/src/browser/` (`Browser`, `ServerHandle`, `BrowserError`; feature `browser`, `fantoccini` + `rustls`): Dusk-style `visit`/`fill`/`click`/`select`/`check`/`press`/`wait_for`/`assert_see` helpers, an ephemeral axum server, and failure screenshots. Auto-skips when `WEBDRIVER_URL` is unreachable; live tests are `#[ignore]`d (`crates/rustasea-testing/tests/browser_e2e.rs`); `make:test --browser` emits `tests/browser/<slug>.rs` (`crates/rustasea-cli/src/generators/kinds/test.rs`); umbrella feature `browser` (`crates/rustasea/Cargo.toml`).
+- Docker dev stack (ADOPT-007, `laravel/sail` parity): `cargo xtask docker:up`/`docker:down`/`docker:logs` wrap the compose CLI with plugin/standalone detection (`xtask/src/docker.rs`), and `cargo rustasea new` emits a multi-stage `Dockerfile` + `docker-compose.yml` (`crates/rustasea-scaffold/src/templates/docker.rs`).
+- Interactive REPL (ADOPT-008, `laravel/tinker` parity): `cargo artisan tinker`: a `rustyline` shell over a booted application (`config`/container/route/command inspection, `help`); piped stdin scripts the session (`crates/rustasea-cli/src/commands/tinker.rs:43`).
+- Dev request profiler (ADOPT-009, `barryvdh/laravel-debugbar` parity): `crates/rustasea-debugbar` (`Profiler`, recorders, `from_fn` middleware): per-request SQL/cache/event capture into an in-memory ring buffer with a JSON/HTML surface behind the `debugbar` feature (`crates/rustasea-debugbar/src/{lib,middleware,recorders}.rs`, `crates/rustasea-app/src/routes/debugbar.rs`).
+- Dev/prod error renderers (ADOPT-010, `spatie/laravel-ignition` parity): `rustasea-http` application error type with a dev page + prod JSON envelope and panic catching with dev panic-location capture (`crates/rustasea-http/src/{error,panic}.rs`, `crates/rustasea-app/src/routes/errors.rs`).
+- OpenAPI generation (ADOPT-011, `dedoc/scramble` parity): `crates/rustasea-openapi` + `cargo artisan openapi:generate`: an OpenAPI 3.1 document built from the live route table (the same registry `route:list` renders) (`crates/rustasea-openapi/src/lib.rs`, `crates/rustasea-cli/src/commands/openapi.rs`).
+- Faker (ADOPT-012, `fakerphp/faker` parity): `rustasea-testing::faker` (`Faker`, `unique_*`): seeded deterministic, locale-aware fake data (`fake` 5.1, 14 locales) behind the `faker` feature (`crates/rustasea-testing/src/faker/`).
+- Testing fakes (ADOPT-013, `Illuminate\Support\Testing\Fakes` parity): `rustasea-testing::fakes` (`FakeQueue`, `FakeMailer`, `FakeDispatcher`, `FakeCache`): recording doubles that intercept side effects with `assert_*` helpers (`crates/rustasea-testing/src/fakes.rs`, `crates/rustasea-testing/src/fakes/`).
+- MCP knowledge server (ADOPT-015, `laravel/boost` parity): `cargo artisan mcp:serve` serves routes, docs, commands, and redacted config over MCP stdio behind the `mcp` feature (`crates/rustasea-cli/src/commands/mcp_serve.rs`).
+- Slug generation (ADOPT-016, `cviebrock/eloquent-sluggable` parity): `crates/rustasea-orm/src/sluggable.rs`: Unicode-aware `slugify`, deterministic `-2`/`-3` collision suffixing, `#[sluggable(...)]` derive opt-in, write-path hooks (`crates/rustasea-orm/src/model_ops/slug_hooks.rs`), and `find_by_slug`/`find_by_slug_or_fail` with `{post:slug}` route binding (`crates/rustasea-router/src/binding.rs`).
+- Composite-key relations (ADOPT-017, `awobaz/compoships` parity): composite `has_many`/`belongs_to`/`many_to_many` builders and `#[model(primary_key = ["a", "b"])]` models with a full create/update/delete round-trip (`crates/rustasea-orm/src/relation.rs`, `crates/rustasea-orm/src/model_ops/composite.rs`, `crates/rustasea-macros/src/model_primary_key.rs`).
+- Cascade soft deletes (ADOPT-018, `spatie/laravel-cascade-soft-deletes` parity): `#[cascade_soft_deletes("posts", ...)]` fans the delete/restore/force-delete out to the named relations in chunks (single level) (`crates/rustasea-orm/src/model_ops/cascade.rs`).
+- Model/query result caching (ADOPT-019, `spatie/laravel-model-caching` parity): `QueryBuilder::cache(ttl)`/`cache_forever()` store decoded rows through a process-wide `QueryCacheStore`, with O(1) per-table generation invalidation on write (`crates/rustasea-orm/src/cache.rs`, `crates/rustasea-orm/src/builder/cached.rs`, `crates/rustasea-orm/src/model_ops/cache_hooks.rs`).
+- Quality gate (ADOPT-030): toolchain and lint config as the CI gate: `rust-toolchain.toml`, `rustfmt.toml`, `clippy.toml`, `deny.toml`, `.cargo/audit.toml`, and the `.cargo/config.toml` alias to the `xtask` binary; `cargo xtask ci` runs fmt then clippy then `deps:check` then the cycle check (`xtask/src/main.rs:58`).
+- Workspace dependency management (ADOPT-031): the root `[workspace.dependencies]` table is the single source of truth for shared crate versions, and `cargo xtask deps:check` fails CI when a member manifest pins a managed version inline (`Cargo.toml:16`, `xtask/src/deps.rs:4`).
 
 **Partial (reason)**
 - Generated controllers leave route registration manual — `crates/rustasea-cli/src/generators/kinds/controller.rs:32` ("Register routes against these handlers in `routes/web.rs`").
@@ -263,7 +283,7 @@ route registration.
 **Missing**
 - Generator-to-route-registration automation.
 
-**Evidence:** `crates/rustasea-cli/src/commands/mod.rs:17-31`; `crates/rustasea-cli/src/commands/builtins.rs`; `crates/cargo-rustasea/src/main.rs:46-103`; `xtask/src/{main.rs:23-37,cycles.rs:32,migrate.rs}`; `crates/rustasea-testing/src/fixtures.rs:49`; `crates/rustasea/tests/feature/`; module registry + CLI gates `crates/rustasea-modules/tests/{registry,manifest}.rs`, `crates/rustasea-cli/tests/{make_module,module_compiles}.rs`, `crates/rustasea-scaffold/tests/modular.rs`; tasks `GAP-016`–`GAP-018`, `ADOPT-027`, `ADOPT-029`.
+**Evidence:** `crates/rustasea-cli/src/commands/mod.rs:17-31`; `crates/rustasea-cli/src/commands/builtins.rs`; `crates/cargo-rustasea/src/main.rs:46-103`; `xtask/src/{main.rs:23-37,cycles.rs:32,migrate.rs,deps.rs,docker.rs}`; `crates/rustasea-testing/src/fixtures.rs:49`; `crates/rustasea-testing/src/{faker,fakes}/`; `crates/rustasea/tests/feature/`; module registry + CLI gates `crates/rustasea-modules/tests/{registry,manifest}.rs`, `crates/rustasea-cli/tests/{make_module,module_compiles}.rs`, `crates/rustasea-scaffold/tests/modular.rs`; tasks `GAP-016`–`GAP-018`, `ADOPT-007`, `ADOPT-008`–`ADOPT-013`, `ADOPT-015`–`ADOPT-019`, `ADOPT-027`, `ADOPT-029`, `ADOPT-030`, `ADOPT-031`.
 
 **Next actions**
 - Automate route registration in generated controllers (or a route-table generator).
@@ -300,6 +320,8 @@ to a deterministic stub, and the in-process AI provider is kept for tests.
 - AI queueing (`GAP-015`) — `crates/rustasea-ai/src/queue.rs:41` (`AgentRunJob`), routed on connection `ai` / queue `agents`.
 - MCP client (`GAP-015`) — `crates/rustasea-ai/src/mcp/client.rs:40` (`McpClient`: connect/list/call), `crates/rustasea-ai/src/mcp/mod.rs:99` (`McpRegistry`).
 - pgvector-backed vector store (`GAP-012`) — `crates/rustasea-search/src/pgvector.rs:24` (`PgVectorStore`, feature `pgvector`); in-memory store remains the default.
+- Internationalization (ADOPT-005, `Illuminate\Translation` parity): `crates/rustasea-i18n`: `resources/lang/{locale}/*.toml`/`*.json` loading with dot-namespaced keys, active-locale-then-fallback resolution, interpolation, and pluralization, plus global `__`/`trans_choice` helpers (`crates/rustasea-i18n/src/{loader,translator,message,global}.rs`); `cargo artisan lang:check` reports missing/unused/duplicate entries (`crates/rustasea-cli/src/commands/langcheck.rs:106`).
+- Timezone mapping (ADOPT-006, `glhd/laravel-timezone-mapper` parity): `crates/rustasea-timezone`: IANA validation plus a deterministic user-timezone resolution chain (stored preference, session, request header, app default) and UTC/local formatting helpers (`crates/rustasea-timezone/src/{lib,mapper}.rs`).
 
 **Partial (reason)**
 - Gemini/Bedrock are not wired — `provider_from_env` rejects unknown names with `AiError::UnknownProvider` (`crates/rustasea-ai/src/providers/client.rs:223`).
@@ -311,7 +333,7 @@ to a deterministic stub, and the in-process AI provider is kept for tests.
 - Gemini/Bedrock adapters.
 - Real embedding-model integration (provider-backed `to_embeddings`).
 
-**Evidence:** `crates/rustasea-broadcast/{Cargo.toml,src/lib.rs}`; `crates/rustasea-storage/{Cargo.toml,src/manager.rs:56-171,src/facade.rs}`; `config/storage.toml`; `crates/rustasea-jsonapi/src/wire.rs:7`; `crates/rustasea-mail/`; `crates/rustasea-view/`; `crates/rustasea-ai/src/{providers,queue.rs,mcp,adapters.rs}`; `crates/rustasea-search/{src/pgvector.rs,src/embeddings.rs}`; `crates/rustasea-google/`; `crates/rustasea-config/src/services.rs`; tasks `GAP-012`, `GAP-014`, `GAP-015`, `GAP-020`, `ADOPT-026`.
+**Evidence:** `crates/rustasea-broadcast/{Cargo.toml,src/lib.rs}`; `crates/rustasea-storage/{Cargo.toml,src/manager.rs:56-171,src/facade.rs}`; `config/storage.toml`; `crates/rustasea-jsonapi/src/wire.rs:7`; `crates/rustasea-mail/`; `crates/rustasea-view/`; `crates/rustasea-ai/src/{providers,queue.rs,mcp,adapters.rs}`; `crates/rustasea-search/{src/pgvector.rs,src/embeddings.rs}`; `crates/rustasea-google/`; `crates/rustasea-config/src/services.rs`; `crates/rustasea-i18n/`; `crates/rustasea-timezone/`; tasks `GAP-012`, `GAP-014`, `GAP-015`, `GAP-020`, `ADOPT-005`, `ADOPT-006`, `ADOPT-026`.
 
 **Next actions**
 - Add Gemini/Bedrock adapters behind the existing provider abstraction.
